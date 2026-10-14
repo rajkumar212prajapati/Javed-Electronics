@@ -1,0 +1,6 @@
+{
+  "name": "Javed Electronics - Local E-Commerce Platform",
+  "description": "Production-ready local e-commerce platform for Javed Electronics with storefront, inventory, order lifecycle, WhatsApp checkout, dynamic QR codes, role dashboards, and delivery management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
