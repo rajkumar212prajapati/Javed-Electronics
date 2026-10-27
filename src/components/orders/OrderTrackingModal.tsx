@@ -15,8 +15,15 @@ import {
   MessageCircle,
   MapPin,
   Calendar,
+  ExternalLink,
+  Copy,
+  Check,
+  Banknote,
+  ShieldCheck,
+  PhoneCall,
 } from 'lucide-react';
 import { OrderStatus } from '../../types';
+import { LiveOrderTrackingMap } from './LiveOrderTrackingMap';
 
 export const OrderTrackingModal: React.FC = () => {
   const {
@@ -35,6 +42,7 @@ export const OrderTrackingModal: React.FC = () => {
   const [returnReason, setReturnReason] = useState('');
   const [showCancelBox, setShowCancelBox] = useState(false);
   const [showReturnBox, setShowReturnBox] = useState(false);
+  const [copiedAwb, setCopiedAwb] = useState(false);
 
   if (activeModal !== 'order_tracking') return null;
 
@@ -172,6 +180,8 @@ export const OrderTrackingModal: React.FC = () => {
                         ? 'bg-emerald-100 text-emerald-800'
                         : activeOrder.orderStatus === 'cancelled'
                         ? 'bg-rose-100 text-rose-800'
+                        : activeOrder.orderStatus === 'partially_cancelled'
+                        ? 'bg-amber-100 text-amber-900 border border-amber-300 font-extrabold'
                         : 'bg-blue-100 text-blue-800'
                     }`}
                   >
@@ -190,15 +200,58 @@ export const OrderTrackingModal: React.FC = () => {
               </div>
 
               <div className="text-left sm:text-right pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-200">
-                <span className="text-sm sm:text-base font-bold font-mono text-slate-900">
+                <span className="text-sm sm:text-base font-bold font-mono text-slate-900 block">
                   {formatINR(activeOrder.finalTotal)}
                 </span>
+                {activeOrder.originalTotal && activeOrder.originalTotal !== activeOrder.finalTotal && (
+                  <span className="text-[10px] text-slate-400 line-through font-mono block">
+                    Original: {formatINR(activeOrder.originalTotal)}
+                  </span>
+                )}
                 <span className="text-[11px] sm:text-xs text-slate-500 block">
                   {activeOrder.paymentMethod.replace(/_/g, ' ').toUpperCase()} (
                   {activeOrder.paymentStatus === 'verified_paid' ? 'Paid' : 'Pending'})
                 </span>
               </div>
             </div>
+
+            {/* Store Cancellation & Shortage/Damage Notification Callout */}
+            {activeOrder.cancellationDetails && (
+              <div className="p-3.5 bg-amber-50/90 border border-amber-300 rounded-xl space-y-1.5 text-xs text-amber-950 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold flex items-center gap-1.5 text-amber-900">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>
+                      {activeOrder.cancellationDetails.type === 'full'
+                        ? 'Store Order Cancellation Notice'
+                        : 'Partial Order Adjustment by Store'}
+                    </span>
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-200/80 text-amber-900 uppercase">
+                    {activeOrder.cancellationDetails.primaryReason.replace('_', ' ')}
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-amber-900/90 leading-relaxed">
+                  {activeOrder.cancellationDetails.generalNotes ||
+                    `During warehouse preparation, ${activeOrder.cancellationDetails.itemsCancelledCount} item unit(s) were short, damaged, or expired in store stock and have been removed.`}
+                </p>
+
+                {activeOrder.cancellationDetails.totalRefundAmount > 0 && (
+                  <div className="mt-2 pt-2 border-t border-amber-200/80 flex items-center justify-between text-[11px] font-semibold">
+                    <span>
+                      {activeOrder.paymentMethod === 'cod'
+                        ? 'Cash on Delivery Collection Adjusted:'
+                        : 'Refund Processed:'}
+                    </span>
+                    <span className="font-mono font-bold text-amber-950">
+                      {formatINR(activeOrder.cancellationDetails.totalRefundAmount)}
+                      {activeOrder.paymentMethod === 'cod' ? ' deducted from bill' : ' credited to payment source'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Stepper Progress Bar */}
             {currentStep > 0 && (
@@ -250,16 +303,216 @@ export const OrderTrackingModal: React.FC = () => {
               </div>
             )}
 
-            {/* Delivery Assignment Detail */}
-            {activeOrder.deliveryStaffName && (
-              <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-center justify-between">
+            {/* Live Interactive Map Tracking for Doorstep Deliveries */}
+            {activeOrder.deliveryType === 'delivery' && (
+              <div className="pt-1">
+                <LiveOrderTrackingMap
+                  order={activeOrder}
+                  onWhatsAppHelp={() => {
+                    const msg = `Hi Javed Electronics Support, I need live assistance with my Order #${activeOrder.id}`;
+                    window.open(getWhatsAppClickToChatUrl(settings.whatsappNumber, msg), '_blank');
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Express Delivery & Dispatch Details (Option 1: Rider vs Option 2: Shiprocket) */}
+            {activeOrder.dispatchDetails ? (
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-2xs">
+                {/* Header row */}
+                <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className={`p-2 rounded-xl text-white ${
+                      activeOrder.dispatchDetails.fulfillmentType === 'express_partner'
+                        ? 'bg-blue-600'
+                        : 'bg-indigo-600'
+                    }`}>
+                      <Truck className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block">
+                        Fulfillment & Dispatch Mode
+                      </span>
+                      <h4 className="text-xs sm:text-sm font-bold text-slate-900">
+                        {activeOrder.dispatchDetails.fulfillmentType === 'express_partner'
+                          ? `${activeOrder.dispatchDetails.carrier} Express Delivery`
+                          : 'In-House Lucknow Rider Delivery'}
+                      </h4>
+                    </div>
+                  </div>
+
+                  {/* Payment Type Badge */}
+                  {activeOrder.dispatchDetails.isCod ? (
+                    <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1.5 shrink-0">
+                      <Banknote className="w-3.5 h-3.5 text-amber-700" />
+                      <span>COD: Pay {formatINR(activeOrder.finalTotal)} at Doorstep</span>
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5 shrink-0">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Prepaid (Zero Due)</span>
+                    </span>
+                  )}
+                </div>
+
+                {/* Option 2: Express Shiprocket Partner Delivery Details */}
+                {activeOrder.dispatchDetails.fulfillmentType === 'express_partner' ? (
+                  <div className="space-y-3 text-xs">
+                    {/* AWB and Carrier Details */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-white p-3.5 rounded-xl border border-slate-200">
+                      <div>
+                        <span className="text-[10px] text-slate-500 font-medium block">Carrier Partner:</span>
+                        <span className="font-bold text-slate-900 text-xs">
+                          {activeOrder.dispatchDetails.carrier} Express Cargo
+                        </span>
+                        {activeOrder.dispatchDetails.estimatedDeliveryDate && (
+                          <span className="text-[11px] text-slate-500 block mt-0.5">
+                            ETA: {activeOrder.dispatchDetails.estimatedDeliveryDate}
+                          </span>
+                        )}
+                      </div>
+
+                      {activeOrder.dispatchDetails.awbNumber && (
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-medium block">
+                            Air Waybill (AWB ID):
+                          </span>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="font-mono font-black text-xs text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded border border-blue-200 tracking-wider">
+                              {activeOrder.dispatchDetails.awbNumber}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard?.writeText(activeOrder.dispatchDetails?.awbNumber || '');
+                                setCopiedAwb(true);
+                                setTimeout(() => setCopiedAwb(false), 2000);
+                              }}
+                              className="p-1 text-slate-400 hover:text-slate-700 rounded cursor-pointer"
+                              title="Copy AWB Number"
+                            >
+                              {copiedAwb ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Prominent Live Tracking Link Button */}
+                    {activeOrder.dispatchDetails.trackingUrl && (
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                        <div className="text-[11px] text-blue-900">
+                          <strong className="block font-bold">Real-Time Courier Tracking Active:</strong>
+                          <span className="text-blue-700">Track milestones from Lucknow warehouse to your doorstep.</span>
+                        </div>
+                        <a
+                          href={activeOrder.dispatchDetails.trackingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-2xs"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>🌐 Track on {activeOrder.dispatchDetails.carrier}</span>
+                        </a>
+                      </div>
+                    )}
+
+                    {/* COD Notice if applicable */}
+                    {activeOrder.dispatchDetails.isCod && (
+                      <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-[11px] text-amber-900 flex items-start gap-2">
+                        <Banknote className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                        <div>
+                          <strong>Cash on Delivery (COD) Instructions:</strong>
+                          <p className="mt-0.5 text-amber-800">
+                            Please keep <strong>{formatINR(activeOrder.finalTotal)}</strong> ready in cash or UPI. {activeOrder.dispatchDetails.carrier} executive will provide a digital receipt upon receiving payment.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Option 1: In-House Rider Delivery Details */
+                  <div className="space-y-3 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 bg-white p-3.5 rounded-xl border border-slate-200">
+                      <div>
+                        <span className="text-[10px] text-slate-500 font-medium block">Rider Name:</span>
+                        <span className="font-bold text-slate-900">{activeOrder.dispatchDetails.riderName || 'Store Courier'}</span>
+                      </div>
+
+                      {activeOrder.dispatchDetails.riderPhone && (
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-medium block">Rider Contact:</span>
+                          <a
+                            href={`tel:${activeOrder.dispatchDetails.riderPhone}`}
+                            className="font-mono font-bold text-blue-600 hover:underline flex items-center gap-1"
+                          >
+                            <PhoneCall className="w-3 h-3" />
+                            <span>{activeOrder.dispatchDetails.riderPhone}</span>
+                          </a>
+                        </div>
+                      )}
+
+                      {activeOrder.dispatchDetails.riderVehicleNo && (
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-medium block">Vehicle Number:</span>
+                          <span className="font-mono font-bold text-slate-800 uppercase">
+                            {activeOrder.dispatchDetails.riderVehicleNo}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Handover OTP */}
+                    {activeOrder.dispatchDetails.riderOtp && (
+                      <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-indigo-900 block">
+                            Secure Handover Delivery OTP
+                          </span>
+                          <span className="text-[11px] text-indigo-700">
+                            Share this 4-digit OTP with your rider upon receiving your package:
+                          </span>
+                        </div>
+                        <span className="text-base font-black font-mono tracking-widest text-indigo-950 bg-white px-3 py-1 rounded-lg border border-indigo-300">
+                          {activeOrder.dispatchDetails.riderOtp}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* COD Notice for Rider */}
+                    {activeOrder.dispatchDetails.isCod && (
+                      <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-[11px] text-amber-900 flex items-start gap-2">
+                        <Banknote className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                        <div>
+                          <strong>Cash on Delivery (COD) Amount Due:</strong>
+                          <p className="mt-0.5 text-amber-800">
+                            Please hand over <strong>{formatINR(activeOrder.finalTotal)}</strong> in cash or scan the rider's store UPI QR code at delivery.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : activeOrder.deliveryStaffName ? (
+              <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Truck className="w-4 h-4 text-blue-700" />
+                  <Truck className="w-4 h-4 text-blue-700 shrink-0" />
                   <span>
-                    Assigned Local Delivery Rider: <strong>{activeOrder.deliveryStaffName}</strong>
+                    Assigned Local Delivery Courier: <strong>{activeOrder.deliveryStaffName}</strong>
                   </span>
                 </div>
                 <span className="text-[11px] font-semibold text-blue-800">Lucknow Express Dispatch</span>
+              </div>
+            ) : (
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-slate-400" />
+                  <span>Preparing order at Lucknow fulfillment center. Dispatch tracking will appear shortly.</span>
+                </div>
+                <span className="text-[11px] font-mono text-slate-500">
+                  {activeOrder.paymentMethod === 'cod' ? 'COD Order' : 'Prepaid'}
+                </span>
               </div>
             )}
 
@@ -269,18 +522,71 @@ export const OrderTrackingModal: React.FC = () => {
                 Order Items ({activeOrder.items.length})
               </h4>
               <div className="space-y-2 border border-slate-200 rounded-xl p-3 divide-y divide-slate-100">
-                {activeOrder.items.map((item, idx) => (
-                  <div key={idx} className={`flex items-center justify-between gap-3 ${idx > 0 ? 'pt-2' : ''}`}>
-                    <div className="flex items-center gap-3">
-                      <img src={item.image} alt={item.productName} className="w-10 h-10 object-cover rounded bg-slate-100" />
-                      <div>
-                        <span className="text-xs font-semibold text-slate-900 block">{item.productName}</span>
-                        <span className="text-[11px] text-slate-500 font-mono">Qty: {item.quantity} × {formatINR(item.unitPrice)}</span>
+                {activeOrder.items.map((item, idx) => {
+                  const activeQty = item.activeQuantity !== undefined ? item.activeQuantity : item.quantity;
+                  const hasCancelled = (item.cancelledQuantity || 0) > 0;
+                  const isZero = activeQty === 0;
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 ${
+                        idx > 0 ? 'pt-2.5' : ''
+                      } ${isZero ? 'opacity-60' : ''}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={item.image}
+                          alt={item.productName}
+                          className="w-10 h-10 object-cover rounded bg-slate-100 shrink-0 border border-slate-200"
+                        />
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span
+                              className={`text-xs font-semibold block leading-tight ${
+                                isZero ? 'line-through text-slate-500' : 'text-slate-900'
+                              }`}
+                            >
+                              {item.productName}
+                            </span>
+                            {hasCancelled && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 border border-rose-200">
+                                {item.cancelledQuantity} Cancelled (
+                                {item.cancellationReason ? item.cancellationReason.replace('_', ' ') : 'Store Shortage'})
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                            <span>
+                              Active Qty: <strong>{activeQty}</strong> of {item.quantity}
+                            </span>
+                            <span> × {formatINR(item.unitPrice)}</span>
+                          </div>
+                          {item.cancellationNote && (
+                            <span className="text-[10px] text-rose-700 italic block mt-0.5">
+                              Note: {item.cancellationNote}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span
+                          className={`text-xs font-mono font-bold block ${
+                            isZero ? 'line-through text-slate-400' : 'text-slate-900'
+                          }`}
+                        >
+                          {formatINR(activeQty * item.unitPrice)}
+                        </span>
+                        {hasCancelled && (
+                          <span className="text-[10px] text-rose-600 font-mono">
+                            -{formatINR((item.cancelledQuantity || 0) * item.unitPrice)}
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <span className="text-xs font-mono font-bold text-slate-900">{formatINR(item.total)}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

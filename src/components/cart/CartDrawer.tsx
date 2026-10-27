@@ -12,6 +12,7 @@ import {
   Tag,
   Truck,
   MessageCircle,
+  Percent,
 } from 'lucide-react';
 
 export const CartDrawer: React.FC = () => {
@@ -23,6 +24,7 @@ export const CartDrawer: React.FC = () => {
     updateCartQuantity,
     cartSubtotal,
     cartCouponDiscount,
+    cartBulkDiscount,
     cartDeliveryFee,
     cartTaxAmount,
     cartFinalTotal,
@@ -101,6 +103,38 @@ export const CartDrawer: React.FC = () => {
                 style={{ width: `${freeDeliveryProgress}%` }}
               />
             </div>
+          </div>
+        )}
+
+        {/* Bulk Volume Discount Status & Upsell Banner */}
+        {cart.length > 0 && cartBulkDiscount.discountAmount > 0 && (
+          <div className="bg-indigo-50 px-4 py-2 border-b border-indigo-100 flex items-center justify-between text-xs animate-in fade-in">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+              <div className="truncate">
+                <span className="font-bold text-indigo-900 block truncate">
+                  Bulk Tier: {cartBulkDiscount.ruleName}
+                </span>
+                <span className="text-[10px] text-indigo-700">
+                  {cartBulkDiscount.eligibleItemCount} eligible items in cart
+                </span>
+              </div>
+            </div>
+            <span className="font-mono font-extrabold text-indigo-700 bg-white px-2 py-0.5 rounded border border-indigo-200 shrink-0">
+              -{formatINR(cartBulkDiscount.discountAmount)}
+            </span>
+          </div>
+        )}
+
+        {/* Next Tier Upsell Hint */}
+        {cart.length > 0 && cartBulkDiscount.nextTierHint && (
+          <div className="bg-amber-50 px-4 py-1.5 border-b border-amber-200/80 flex items-center justify-between text-[11px] text-amber-900">
+            <span className="flex items-center gap-1 font-semibold truncate">
+              <span>🔥 Add <strong>{cartBulkDiscount.nextTierHint.additionalUnitsNeeded} more item{cartBulkDiscount.nextTierHint.additionalUnitsNeeded > 1 ? 's' : ''}</strong> to unlock {cartBulkDiscount.nextTierHint.potentialDiscountPct}% Bulk Savings!</span>
+            </span>
+            <span className="font-bold text-amber-800 shrink-0 font-mono">
+              Save +{formatINR(cartBulkDiscount.nextTierHint.potentialSavings)}
+            </span>
           </div>
         )}
 
@@ -263,6 +297,16 @@ export const CartDrawer: React.FC = () => {
                 </div>
               )}
 
+              {cartBulkDiscount.discountAmount > 0 && (
+                <div className="flex justify-between text-indigo-700 font-bold bg-indigo-50 px-2 py-1 rounded">
+                  <span className="flex items-center gap-1">
+                    <Percent className="w-3 h-3 text-indigo-600" />
+                    <span>Bulk Order Discount:</span>
+                  </span>
+                  <span className="font-mono">-{formatINR(cartBulkDiscount.discountAmount)}</span>
+                </div>
+              )}
+
               <div className="flex justify-between text-slate-600">
                 <span>Estimated Local Delivery:</span>
                 <span className="font-mono">
@@ -283,6 +327,17 @@ export const CartDrawer: React.FC = () => {
                 <span>Total Amount:</span>
                 <span className="font-mono text-blue-700">{formatINR(cartFinalTotal)}</span>
               </div>
+            </div>
+
+            {/* Express Delivery & COD Guarantee Info */}
+            <div className="bg-indigo-50/70 border border-indigo-100 rounded-lg p-2.5 text-[11px] space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-indigo-950">
+                <Truck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <span>Express Shiprocket & Local Rider Delivery</span>
+              </div>
+              <p className="text-[10px] text-indigo-800 leading-tight">
+                Live AWB tracking on order confirmation. Both <strong>Prepaid</strong> &amp; <strong>Cash on Delivery (COD)</strong> supported with OTP verification.
+              </p>
             </div>
 
             {/* Proceed Actions */}

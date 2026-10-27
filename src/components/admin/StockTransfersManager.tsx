@@ -19,16 +19,17 @@ import {
 } from 'lucide-react';
 
 export const StockTransfersManager: React.FC = () => {
-  const { stockTransfers, requestStockTransfer, processStockTransfer, outlets, products, currentRole } = useStore();
+  const { stockTransfers, requestStockTransfer, processStockTransfer, outlets, activeOutlet, currentUser, products, currentRole } = useStore();
   const isSuperAdmin = currentRole === 'super_admin';
+  const myStoreId = currentUser.storeId || activeOutlet?.id || 'out_hazratganj';
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showRequestModal, setShowRequestModal] = useState(false);
 
   // Form states
-  const [sourceOutletId, setSourceOutletId] = useState(outlets[0]?.id || '');
-  const [destinationOutletId, setDestinationOutletId] = useState(outlets[1]?.id || '');
+  const [sourceOutletId, setSourceOutletId] = useState(outlets.find((o) => o.id !== myStoreId)?.id || outlets[0]?.id || '');
+  const [destinationOutletId, setDestinationOutletId] = useState(myStoreId || outlets[1]?.id || '');
   const [productId, setProductId] = useState(products[0]?.id || '');
   const [quantity, setQuantity] = useState(5);
   const [courierNote, setCourierNote] = useState('Urgent branch replenishment for weekend festive sale');
@@ -38,6 +39,9 @@ export const StockTransfersManager: React.FC = () => {
   const [actionStaffNote, setActionStaffNote] = useState('');
 
   const filteredTransfers = stockTransfers.filter((t) => {
+    if (!isSuperAdmin && t.sourceOutletId !== myStoreId && t.destinationOutletId !== myStoreId) {
+      return false;
+    }
     const matchesSearch =
       t.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       t.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -65,12 +69,15 @@ export const StockTransfersManager: React.FC = () => {
     }
   };
 
+  const [requestError, setRequestError] = useState<string | null>(null);
+
   const handleCreateRequest = (e: React.FormEvent) => {
     e.preventDefault();
     if (sourceOutletId === destinationOutletId) {
-      alert('Source and destination outlet cannot be identical.');
+      setRequestError('Source and destination outlet cannot be identical.');
       return;
     }
+    setRequestError(null);
 
     requestStockTransfer({
       sourceOutletId,
@@ -311,6 +318,11 @@ export const StockTransfersManager: React.FC = () => {
             </div>
 
             <form onSubmit={handleCreateRequest} className="space-y-3 text-xs">
+              {requestError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg font-medium">
+                  {requestError}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Source Outlet</label>

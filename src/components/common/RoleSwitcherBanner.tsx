@@ -1,10 +1,16 @@
 import React from 'react';
 import { useStore } from '../../context/StoreContext';
 import { Role } from '../../types';
-import { ShieldCheck, Store, Bike, User, ArrowRightLeft } from 'lucide-react';
+import { ShieldCheck, Store, Bike, User, ArrowRightLeft, Scan } from 'lucide-react';
 
 export const RoleSwitcherBanner: React.FC = () => {
-  const { currentRole, setCurrentRole } = useStore();
+  const { currentRole, setCurrentRole, isAuthenticated, currentUser, setActiveModal } = useStore();
+
+  // Strictly show multi-role preview switcher only for Super Admin accounts.
+  // Store Managers and Riders only see their own dedicated portals.
+  if (!isAuthenticated || currentUser.role !== 'super_admin') {
+    return null;
+  }
 
   const roles: {
     role: Role;
@@ -82,6 +88,18 @@ export const RoleSwitcherBanner: React.FC = () => {
               </button>
             );
           })}
+
+          {/* Quick POS Terminal Launch */}
+          {(currentRole === 'super_admin' || currentRole === 'store_manager') && (
+            <button
+              onClick={() => setActiveModal('pos_terminal')}
+              className="shrink-0 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all cursor-pointer min-h-[32px] ml-1 shadow-xs"
+              title="Open Store POS Counter Terminal"
+            >
+              <Scan className="w-3.5 h-3.5" />
+              <span>POS Terminal</span>
+            </button>
+          )}
         </div>
       </div>
     </aside>

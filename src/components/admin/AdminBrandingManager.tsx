@@ -121,6 +121,7 @@ export const AdminBrandingManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'editor' | 'preview' | 'history'>('editor');
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
   const [saveSuccessMsg, setSaveSuccessMsg] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [changeReason, setChangeReason] = useState('Updated theme styling, brand colors & contact parameters');
   const [copiedLink, setCopiedLink] = useState(false);
 
@@ -142,9 +143,10 @@ export const AdminBrandingManager: React.FC = () => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
-        alert('File size exceeds 2MB limit. Please select a smaller logo.');
+        setErrorMessage('File size exceeds 2MB limit. Please select a smaller logo.');
         return;
       }
+      setErrorMessage(null);
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
@@ -166,9 +168,10 @@ export const AdminBrandingManager: React.FC = () => {
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isSuperAdmin) {
-      alert('Only Super Admin is authorized to modify platform branding and legal information.');
+      setErrorMessage('Only Super Admin is authorized to modify platform branding and legal information.');
       return;
     }
+    setErrorMessage(null);
 
     const updatedSettings: Partial<BrandingSettings> = {
       brandName,
@@ -346,6 +349,18 @@ export const AdminBrandingManager: React.FC = () => {
         <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs sm:text-sm font-semibold flex items-center gap-2 shadow-xs animate-in fade-in duration-200">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>Branding settings published successfully! Theme colors, logo, and contact details are live across all storefront portals.</span>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs sm:text-sm font-semibold flex items-center justify-between gap-2 shadow-xs animate-in fade-in duration-200">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+          <button onClick={() => setErrorMessage(null)} className="text-rose-400 hover:text-rose-700 text-xs font-bold">
+            Dismiss
+          </button>
         </div>
       )}
 

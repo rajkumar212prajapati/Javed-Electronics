@@ -19,8 +19,10 @@ import {
 } from 'lucide-react';
 
 export const BarcodeCatalogManager: React.FC = () => {
-  const { barcodeRecords, registerBarcodeRecord, verifyBarcodeLookup, products, outlets, currentRole } = useStore();
+  const { barcodeRecords, registerBarcodeRecord, verifyBarcodeLookup, products, outlets, activeOutlet, currentUser, currentRole } = useStore();
   const isSuperAdmin = currentRole === 'super_admin';
+  const myStoreId = currentUser.storeId || activeOutlet?.id || 'out_hazratganj';
+  const myStoreOutlet = outlets.find((o) => o.id === myStoreId) || activeOutlet;
 
   const [scanInput, setScanInput] = useState('');
   const [scannedResult, setScannedResult] = useState<ProductBarcodeRecord | null | undefined>(undefined);
@@ -75,6 +77,9 @@ export const BarcodeCatalogManager: React.FC = () => {
   };
 
   const filteredBarcodes = barcodeRecords.filter((b) => {
+    if (!isSuperAdmin && !b.outletAvailability.includes(myStoreId)) {
+      return false;
+    }
     const matchesSearch =
       b.barcodeValue.toLowerCase().includes(searchTerm.toLowerCase()) ||
       b.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -150,8 +155,12 @@ export const BarcodeCatalogManager: React.FC = () => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-[10px] text-emerald-300 block">Available Across</span>
-                  <span className="font-bold text-white font-mono">{scannedResult.outletAvailability.length} Branches</span>
+                  <span className="text-[10px] text-emerald-300 block">
+                    {isSuperAdmin ? 'Available Across' : 'Store Status'}
+                  </span>
+                  <span className="font-bold text-white font-mono">
+                    {isSuperAdmin ? `${scannedResult.outletAvailability.length} Branches` : `${myStoreOutlet?.name || 'In Store'}`}
+                  </span>
                 </div>
               </div>
             ) : (
@@ -250,7 +259,13 @@ export const BarcodeCatalogManager: React.FC = () => {
                   )}
                 </td>
                 <td className="px-4 py-3 font-sans text-slate-600">
-                  <span className="font-semibold text-slate-800">{item.outletAvailability.length}</span> Outlets
+                  {isSuperAdmin ? (
+                    <>
+                      <span className="font-semibold text-slate-800">{item.outletAvailability.length}</span> Outlets
+                    </>
+                  ) : (
+                    <span className="font-semibold text-emerald-700">{myStoreOutlet?.name || 'Available in Store'}</span>
+                  )}
                 </td>
               </tr>
             ))}

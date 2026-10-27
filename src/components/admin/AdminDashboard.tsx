@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from '../../context/StoreContext';
 import { formatINR } from '../../utils/currency';
 import { Order, OrderStatus, Product, ProductCategory, StockMovement } from '../../types';
@@ -34,7 +34,24 @@ import {
   ArrowLeftRight,
   FileText,
   Palette,
+  KeyRound,
+  Receipt,
+  Percent,
+  PackageX,
+  LayoutTemplate,
+  Store,
+  Phone,
+  Mail,
+  QrCode,
+  Activity,
+  ExternalLink,
+  Banknote,
 } from 'lucide-react';
+import { AdminAuthenticatorQrModal } from './AdminAuthenticatorQrModal';
+import { AIProductAssistantModal } from './AIProductAssistantModal';
+import { ProductApprovalsQueueModal } from './ProductApprovalsQueueModal';
+import { MultiSellerPriceModal } from './MultiSellerPriceModal';
+import { UserAccount } from '../../types';
 import { OutletsManager } from './OutletsManager';
 import { OwnershipModelsManager } from './OwnershipModelsManager';
 import { CategoryApprovalManager } from './CategoryApprovalManager';
@@ -43,6 +60,21 @@ import { BarcodeCatalogManager } from './BarcodeCatalogManager';
 import { StockTransfersManager } from './StockTransfersManager';
 import { FranchiseAgreementsManager } from './FranchiseAgreementsManager';
 import { AdminBrandingManager } from './AdminBrandingManager';
+import { StoreStaffAuthManager } from './StoreStaffAuthManager';
+import { DeliveryZoneManager } from './DeliveryZoneManager';
+import { GstTaxationManager } from './GstTaxationManager';
+import { BulkDiscountManager } from './BulkDiscountManager';
+import { StoreOrderCancellationModal } from './StoreOrderCancellationModal';
+import { HomepageLayoutManager } from './HomepageLayoutManager';
+import { FestivalCampaignManager } from './campaigns/FestivalCampaignManager';
+import { PaymentGatewaysManager } from './PaymentGatewaysManager';
+import { POSTerminal } from './pos/POSTerminal';
+import { SopSlaMatrixSection } from './SopSlaMatrixSection';
+import { OrderDispatchModal } from './OrderDispatchModal';
+import { CodCollectionModal } from './CodCollectionModal';
+import { DeliveryPartnerManager } from './DeliveryPartnerManager';
+import { ProductVariantsAndDimensionsModal } from './ProductVariantsAndDimensionsModal';
+import { VolumetricWeightCalculatorModal } from '../common/VolumetricWeightCalculatorModal';
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -52,7 +84,9 @@ export const AdminDashboard: React.FC = () => {
     campaigns,
     coupons,
     settings,
+    currentUser,
     currentRole,
+    accounts,
     outlets,
     activeOutlet,
     businessCategories,
@@ -73,32 +107,154 @@ export const AdminDashboard: React.FC = () => {
     updateSettings,
     setSelectedOrderForModal,
     setActiveModal,
+    updateStoreStaffAccount,
+    riderRemittances,
+    approveRiderCashRemittance,
   } = useStore();
 
+  // Quick 8-Digit Rider Cash Deposit Code state in Admin/Store Overview
+  const [riderDepositCodeInput, setRiderDepositCodeInput] = useState('');
+  const [riderDepositFeedback, setRiderDepositFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
+  const pendingRiderDeposits = useMemo(() => {
+    return riderRemittances.filter((r) => r.status === 'pending_approval');
+  }, [riderRemittances]);
+
+  const handleApproveRiderDepositByCode = (e: React.FormEvent, codeOverride?: string) => {
+    e.preventDefault();
+    const cleanCode = (codeOverride ?? riderDepositCodeInput).trim().replace(/\s+/g, '');
+    if (!cleanCode) {
+      setRiderDepositFeedback({
+        type: 'error',
+        message: 'Please enter the 8-digit code created by the rider.',
+      });
+      return;
+    }
+    const approver = `${currentUser.name} (${currentRole.replace('_', ' ')})`;
+    const res = approveRiderCashRemittance(
+      cleanCode,
+      approver,
+      `8-digit code ${cleanCode} verified and cash approved by ${approver}`
+    );
+    setRiderDepositFeedback({
+      type: res.success ? 'success' : 'error',
+      message: res.message,
+    });
+    if (res.success) {
+      setRiderDepositCodeInput('');
+    }
+    setTimeout(() => setRiderDepositFeedback(null), 5000);
+  };
+
   const isSuperAdmin = currentRole === 'super_admin';
+
+  // Google Authenticator QR Registration Modal State
+  const [showAuthenticatorQrModal, setShowAuthenticatorQrModal] = useState(false);
+  const [authenticatorTargetAccount, setAuthenticatorTargetAccount] = useState<UserAccount | null>(null);
+
+  const currentAdminAccount = useMemo(() => {
+    return (
+      accounts.find((a) => a.email === currentUser.email) ||
+      accounts.find((a) => a.role === 'super_admin') ||
+      accounts[0]
+    );
+  }, [accounts, currentUser.email]);
+
+  // AI Product Assistant, Approvals & Multi-Seller States
+  const [showAiProductModal, setShowAiProductModal] = useState(false);
+  const [productForAiEdit, setProductForAiEdit] = useState<Product | null>(null);
+  const [showApprovalsModal, setShowApprovalsModal] = useState(false);
+  const [multiSellerModalProduct, setMultiSellerModalProduct] = useState<Product | null>(null);
+
+  // Product Variants, Dimensions & Volumetric Calculator States
+  const [showVariantsModal, setShowVariantsModal] = useState(false);
+  const [productForVariantsEdit, setProductForVariantsEdit] = useState<Product | null>(null);
+  const [showStandaloneVolumetricModal, setShowStandaloneVolumetricModal] = useState(false);
+
+  const pendingApprovalsCount = useMemo(() => {
+    return products.filter((p) => p.approvalStatus === 'pending').length;
+  }, [products]);
+
+  // Store-level outlet resolution for Store Manager (strictly bound to their own store)
+  const myStoreId = isSuperAdmin
+    ? activeOutlet?.id || 'out_hazratganj'
+    : currentUser.storeId || activeOutlet?.id || 'out_hazratganj';
+  const myStoreOutlet = outlets.find((o) => o.id === myStoreId) || activeOutlet || outlets[0];
 
   // Navigation tab
   const [activeTab, setActiveTab] = useState<
     | 'overview'
+    | 'pos'
+    | 'sop_sla'
+    | 'express_delivery'
+    | 'my_store'
     | 'outlets'
     | 'orders'
     | 'inventory'
     | 'stock_transfers'
     | 'barcodes'
     | 'products'
+    | 'ai_assistant'
+    | 'approvals_queue'
+    | 'volumetric_calc'
+    | 'authenticator_qr'
     | 'categories_mgmt'
     | 'payouts'
     | 'franchise'
     | 'ownership_models'
+    | 'gst_taxation'
+    | 'bulk_discounts'
     | 'delivery'
+    | 'payment_gateways'
     | 'campaigns'
+    | 'homepage_builder'
+    | 'store_logins'
     | 'branding'
     | 'settings'
   >('overview');
 
+  // Unified Admin & Store Search Bar + Tab Menu Group Filter
+  const [dashboardSearch, setDashboardSearch] = useState('');
+  const [menuGroupFilter, setMenuGroupFilter] = useState<
+    'all' | 'operations' | 'catalog' | 'logistics' | 'finance' | 'settings'
+  >('operations');
+
+  // Ensure Store Manager is never stranded on a Super Admin tab
+  useEffect(() => {
+    if (!isSuperAdmin) {
+      const storeAllowedTabs = [
+        'overview',
+        'pos',
+        'sop_sla',
+        'express_delivery',
+        'orders',
+        'inventory',
+        'products',
+        'ai_assistant',
+        'volumetric_calc',
+        'authenticator_qr',
+        'stock_transfers',
+        'barcodes',
+        'delivery',
+        'my_store',
+      ];
+      if (!storeAllowedTabs.includes(activeTab)) {
+        setActiveTab('overview');
+      }
+    }
+  }, [isSuperAdmin, activeTab]);
+
   // Orders tab filters
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>('all');
+  const [cancellingOrder, setCancellingOrder] = useState<Order | null>(null);
+
+  // Dispatch & COD Collection modal states
+  const [dispatchingOrder, setDispatchingOrder] = useState<Order | null>(null);
+  const [collectingCodOrder, setCollectingCodOrder] = useState<Order | null>(null);
 
   // Stock adjustment modal state
   const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(null);
@@ -114,6 +270,8 @@ export const AdminDashboard: React.FC = () => {
   const [newProdMrp, setNewProdMrp] = useState(0);
   const [newProdPrice, setNewProdPrice] = useState(0);
   const [newProdCost, setNewProdCost] = useState(0);
+  const [newProdGstRate, setNewProdGstRate] = useState<number>(18);
+  const [newProdHsnCode, setNewProdHsnCode] = useState<string>('8517');
   const [newProdStock, setNewProdStock] = useState(10);
   const [newProdImage, setNewProdImage] = useState('');
   const [newProdDesc, setNewProdDesc] = useState('');
@@ -133,17 +291,48 @@ export const AdminDashboard: React.FC = () => {
   const [freeShipEdit, setFreeShipEdit] = useState(settings.freeDeliveryThreshold);
   const [settingsSavedMsg, setSettingsSavedMsg] = useState(false);
 
-  // High-level Financial KPIs
+  // Store-scoped Orders, Stock Movements, Stock Transfers & Barcodes
+  const scopedOrders = useMemo(() => {
+    if (isSuperAdmin) return orders;
+    return orders.filter((o) => {
+      if (o.outletId) return o.outletId === myStoreId;
+      if (myStoreOutlet?.serviceablePincodes?.includes(o.customer.pincode)) return true;
+      return myStoreId === 'out_hazratganj';
+    });
+  }, [orders, isSuperAdmin, myStoreId, myStoreOutlet]);
+
+  const scopedStockMovements = useMemo(() => {
+    if (isSuperAdmin) return stockMovements;
+    return stockMovements.filter((sm) => {
+      if (sm.outletId) return sm.outletId === myStoreId;
+      if (sm.staffName.toLowerCase().includes('super admin')) return false;
+      return true;
+    });
+  }, [stockMovements, isSuperAdmin, myStoreId]);
+
+  const scopedStockTransfers = useMemo(() => {
+    if (isSuperAdmin) return stockTransfers;
+    return stockTransfers.filter(
+      (t) => t.sourceOutletId === myStoreId || t.destinationOutletId === myStoreId
+    );
+  }, [stockTransfers, isSuperAdmin, myStoreId]);
+
+  const scopedBarcodes = useMemo(() => {
+    if (isSuperAdmin) return barcodeRecords;
+    return barcodeRecords.filter((b) => b.outletAvailability.includes(myStoreId));
+  }, [barcodeRecords, isSuperAdmin, myStoreId]);
+
+  // High-level Financial KPIs (Scoped to Store for Store Managers)
   const metrics = useMemo(() => {
     let totalRevenue = 0;
     let cashCollected = 0;
     let cogs = 0;
-    let totalOrdersCount = orders.length;
+    let totalOrdersCount = scopedOrders.length;
     let pendingConfirmationsCount = 0;
     let packingQueueCount = 0;
     let outForDeliveryCount = 0;
 
-    orders.forEach((o) => {
+    scopedOrders.forEach((o) => {
       if (o.orderStatus !== 'cancelled') {
         totalRevenue += o.finalTotal;
         if (o.paymentStatus === 'verified_paid') {
@@ -199,11 +388,11 @@ export const AdminDashboard: React.FC = () => {
       lowStockCount,
       outOfStockCount,
     };
-  }, [orders, products]);
+  }, [scopedOrders, products]);
 
   // Filtered Orders
   const filteredOrders = useMemo(() => {
-    return orders.filter((o) => {
+    return scopedOrders.filter((o) => {
       if (orderStatusFilter !== 'all' && o.orderStatus !== orderStatusFilter) {
         return false;
       }
@@ -216,12 +405,12 @@ export const AdminDashboard: React.FC = () => {
       }
       return true;
     });
-  }, [orders, orderStatusFilter, orderSearch]);
+  }, [scopedOrders, orderStatusFilter, orderSearch]);
 
   // Export Orders to CSV
   const handleExportOrdersCsv = () => {
     const headers = ['Order ID', 'Date', 'Customer Name', 'Phone', 'Area', 'Payment Method', 'Payment Status', 'Order Status', 'Final Total (INR)'];
-    const rows = orders.map((o) => [
+    const rows = scopedOrders.map((o) => [
       o.id,
       new Date(o.createdAt).toLocaleDateString(),
       `"${o.customer.name}"`,
@@ -278,7 +467,8 @@ export const AdminDashboard: React.FC = () => {
       mrp: Number(newProdMrp) || Number(newProdPrice) * 1.2,
       regularPrice: Number(newProdPrice),
       purchaseCost: Number(newProdCost) || Math.round(Number(newProdPrice) * 0.8),
-      gstRate: 18,
+      gstRate: Number(newProdGstRate) || 18,
+      hsnCode: newProdHsnCode.trim() || undefined,
       isTaxInclusive: true,
       stock: {
         onHand: Number(newProdStock),
@@ -337,95 +527,516 @@ export const AdminDashboard: React.FC = () => {
     setTimeout(() => setSettingsSavedMsg(false), 2000);
   };
 
+  const allMenuTabs = isSuperAdmin
+    ? [
+        { id: 'overview', label: 'Overview & Analytics', group: 'operations', icon: <BarChart3 className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'pos', label: 'POS Register', group: 'operations', icon: <Scan className="w-3.5 h-3.5 shrink-0 text-emerald-500" /> },
+        { id: 'orders', label: `Orders (${orders.length})`, group: 'operations', icon: <Package className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'sop_sla', label: 'SOP & SLA Matrix', group: 'operations', icon: <Activity className="w-3.5 h-3.5 shrink-0 text-amber-500" /> },
+        { id: 'products', label: `Products (${products.length})`, group: 'catalog', icon: <DollarSign className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'ai_assistant', label: 'AI Product Assistant & Add', group: 'catalog', icon: <Sparkles className="w-3.5 h-3.5 shrink-0 text-purple-500" /> },
+        { id: 'approvals_queue', label: `Approvals Queue (${pendingApprovalsCount})`, group: 'catalog', icon: <ShieldCheck className="w-3.5 h-3.5 shrink-0 text-amber-500" /> },
+        { id: 'volumetric_calc', label: 'Volumetric Calculator', group: 'catalog', icon: <Layers className="w-3.5 h-3.5 shrink-0 text-blue-500" /> },
+        { id: 'categories_mgmt', label: `Categories (${businessCategories.length})`, group: 'catalog', icon: <FolderTree className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'inventory', label: 'Inventory & Stock', group: 'logistics', icon: <Layers className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'stock_transfers', label: `Stock Transfers (${stockTransfers.length})`, group: 'logistics', icon: <ArrowLeftRight className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'barcodes', label: `Barcodes & GTIN (${barcodeRecords.length})`, group: 'logistics', icon: <Scan className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'express_delivery', label: 'Express Delivery (Shiprocket)', group: 'logistics', icon: <Truck className="w-3.5 h-3.5 shrink-0 text-indigo-500" /> },
+        { id: 'delivery', label: 'Local Delivery Pincodes', group: 'logistics', icon: <MapPin className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'outlets', label: `Outlets & Branches (${outlets.length})`, group: 'logistics', icon: <Building2 className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'payouts', label: 'Payouts & Ledger', group: 'finance', icon: <CreditCard className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'gst_taxation', label: 'GST & Taxations', group: 'finance', icon: <Receipt className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'bulk_discounts', label: 'Bulk Discounts', group: 'finance', icon: <Percent className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'payment_gateways', label: 'Payment Gateways', group: 'finance', icon: <CreditCard className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'franchise', label: `Franchise Contracts (${franchiseAgreements.length})`, group: 'finance', icon: <FileText className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'ownership_models', label: 'Ownership Models', group: 'finance', icon: <Briefcase className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'campaigns', label: 'Festive Campaigns', group: 'settings', icon: <Sparkles className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'homepage_builder', label: 'Homepage Builder', group: 'settings', icon: <LayoutTemplate className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'store_logins', label: `Staff Logins (${accounts.length})`, group: 'settings', icon: <KeyRound className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'authenticator_qr', label: 'Google Authenticator QR', group: 'settings', icon: <QrCode className="w-3.5 h-3.5 shrink-0 text-emerald-500" /> },
+        { id: 'branding', label: 'Branding & Theme', group: 'settings', icon: <Palette className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'settings', label: 'Store Settings', group: 'settings', icon: <Settings className="w-3.5 h-3.5 shrink-0" /> },
+      ]
+    : [
+        { id: 'overview', label: 'Store Overview', group: 'operations', icon: <BarChart3 className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'pos', label: 'POS Register', group: 'operations', icon: <Scan className="w-3.5 h-3.5 shrink-0 text-emerald-500" /> },
+        { id: 'orders', label: `Store Orders (${scopedOrders.length})`, group: 'operations', icon: <Package className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'sop_sla', label: 'Store SOP & SLA', group: 'operations', icon: <Activity className="w-3.5 h-3.5 shrink-0 text-amber-500" /> },
+        { id: 'products', label: `Store Catalogue (${products.length})`, group: 'catalog', icon: <Tag className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'ai_assistant', label: 'AI Product Assistant & Add', group: 'catalog', icon: <Sparkles className="w-3.5 h-3.5 shrink-0 text-purple-500" /> },
+        { id: 'volumetric_calc', label: 'Volumetric Calculator', group: 'catalog', icon: <Layers className="w-3.5 h-3.5 shrink-0 text-blue-500" /> },
+        { id: 'inventory', label: 'Store Inventory & Stock', group: 'logistics', icon: <Layers className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'stock_transfers', label: `Stock Transfers (${scopedStockTransfers.length})`, group: 'logistics', icon: <ArrowLeftRight className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'barcodes', label: `Store Barcodes (${scopedBarcodes.length})`, group: 'logistics', icon: <Scan className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'express_delivery', label: 'Express Delivery (Shiprocket)', group: 'logistics', icon: <Truck className="w-3.5 h-3.5 shrink-0 text-indigo-500" /> },
+        { id: 'delivery', label: 'Store Delivery Pincodes', group: 'logistics', icon: <MapPin className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'my_store', label: 'My Store Details', group: 'settings', icon: <Store className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'authenticator_qr', label: 'Google Authenticator QR', group: 'settings', icon: <QrCode className="w-3.5 h-3.5 shrink-0 text-emerald-500" /> },
+      ];
+
+  const searchNormalized = dashboardSearch.trim().toLowerCase();
+
+  const visibleMenuTabs = allMenuTabs.filter((tab) => {
+    if (menuGroupFilter !== 'all' && tab.group !== menuGroupFilter) return false;
+    if (searchNormalized) {
+      return tab.label.toLowerCase().includes(searchNormalized) || tab.id.toLowerCase().includes(searchNormalized);
+    }
+    return true;
+  });
+
+  // If user typed a product or order query that doesn't match a tab name, still show all tabs in current group
+  const displayedMenuTabs = visibleMenuTabs.length > 0 ? visibleMenuTabs : allMenuTabs.filter((tab) => menuGroupFilter === 'all' || tab.group === menuGroupFilter);
+
+  const quickSearchMatchingProducts = searchNormalized
+    ? products
+        .filter(
+          (p) =>
+            p.name.toLowerCase().includes(searchNormalized) ||
+            p.sku.toLowerCase().includes(searchNormalized) ||
+            p.brand.toLowerCase().includes(searchNormalized) ||
+            (p.modelNumber && p.modelNumber.toLowerCase().includes(searchNormalized))
+        )
+        .slice(0, 4)
+    : [];
+
+  const quickSearchMatchingOrders = searchNormalized
+    ? scopedOrders
+        .filter(
+          (o) =>
+            o.id.toLowerCase().includes(searchNormalized) ||
+            o.customer.name.toLowerCase().includes(searchNormalized) ||
+            o.customer.phone.includes(searchNormalized)
+        )
+        .slice(0, 4)
+    : [];
+
+  const categorySummaries = useMemo(
+    () => [
+      {
+        id: 'operations' as const,
+        label: 'Operations & POS',
+        summary: 'Overview · POS · Orders · SLA',
+        icon: <Scan className="w-4 h-4 text-emerald-600 shrink-0" />,
+        activeBg: 'bg-linear-to-br from-emerald-50/90 via-white to-teal-50/60 border-emerald-300 ring-1 ring-emerald-200/70',
+        badgeColor: 'text-emerald-700',
+      },
+      {
+        id: 'catalog' as const,
+        label: 'Products & AI Studio',
+        summary: isSuperAdmin
+          ? 'Catalogue · AI Assist · Approvals · Volumetric'
+          : 'Catalogue · AI Assist · Volumetric Calc',
+        icon: <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />,
+        activeBg: 'bg-linear-to-br from-indigo-50/90 via-white to-violet-50/60 border-indigo-300 ring-1 ring-indigo-200/70',
+        badgeColor: 'text-indigo-700',
+      },
+      {
+        id: 'logistics' as const,
+        label: 'Stock & Logistics',
+        summary: 'Inventory · Transfers · Barcodes · Shiprocket',
+        icon: <Truck className="w-4 h-4 text-sky-600 shrink-0" />,
+        activeBg: 'bg-linear-to-br from-sky-50/90 via-white to-blue-50/60 border-sky-300 ring-1 ring-sky-200/70',
+        badgeColor: 'text-sky-700',
+      },
+      ...(isSuperAdmin
+        ? [
+            {
+              id: 'finance' as const,
+              label: 'Finance & Tax',
+              summary: 'Payouts · GST · Discounts · Gateways',
+              icon: <Receipt className="w-4 h-4 text-amber-600 shrink-0" />,
+              activeBg: 'bg-linear-to-br from-amber-50/90 via-white to-orange-50/60 border-amber-300 ring-1 ring-amber-200/70',
+              badgeColor: 'text-amber-700',
+            },
+          ]
+        : []),
+      {
+        id: 'settings' as const,
+        label: isSuperAdmin ? 'Storefront & Security' : 'Store & Security',
+        summary: isSuperAdmin
+          ? 'Campaigns · CMS · Logins · 2FA QR · Settings'
+          : 'My Store Details · 2FA Authenticator QR',
+        icon: <Settings className="w-4 h-4 text-slate-700 shrink-0" />,
+        activeBg: 'bg-linear-to-br from-slate-100/90 via-white to-blue-50/50 border-slate-300 ring-1 ring-slate-200/80',
+        badgeColor: 'text-slate-700',
+      },
+    ],
+    [isSuperAdmin]
+  );
+
+  // Sync active category group when activeTab changes programmatically
+  useEffect(() => {
+    const found = allMenuTabs.find((t) => t.id === activeTab);
+    if (found && menuGroupFilter !== 'all' && found.group !== menuGroupFilter) {
+      setMenuGroupFilter(found.group as any);
+    }
+  }, [activeTab]);
+
   return (
-    <div className="max-w-7xl mx-auto px-2.5 sm:px-4 py-4 sm:py-6 no-print w-full max-w-full min-w-0 box-border">
-      {/* Top Banner / Role Identity */}
-      <div className="bg-slate-900 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-white mb-4 sm:mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg border border-slate-800 w-full max-w-full min-w-0 box-border">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold uppercase tracking-wider bg-blue-600 text-white px-2 py-0.5 rounded">
-              {isSuperAdmin ? 'SUPER ADMIN CONSOLE' : 'STORE MANAGER PORTAL'}
-            </span>
+    <div className="max-w-7xl mx-auto px-2.5 sm:px-4 py-3 sm:py-5 no-print w-full max-w-full min-w-0 box-border">
+      {/* Lightweight Premium Category-Wise Tab Navigation & Search Panel */}
+      <div className="bg-linear-to-br from-slate-50/90 via-white to-indigo-50/35 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-xs p-3.5 sm:p-5 mb-4 sm:mb-6 space-y-3.5 w-full max-w-full min-w-0 box-border">
+        {/* Row 1: Search Bar + Active Branch + Category Overview Toggle */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+          <div className="relative flex-1 min-w-0">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={dashboardSearch}
+              onChange={(e) => {
+                setDashboardSearch(e.target.value);
+                if (activeTab === 'orders') {
+                  setOrderSearch(e.target.value);
+                }
+              }}
+              placeholder={
+                isSuperAdmin
+                  ? 'Search any menu tab, product, SKU, order ID, customer, or barcode...'
+                  : `Search ${myStoreOutlet?.name || 'store'} menus, products, SKUs, or orders...`
+              }
+              className="w-full pl-9 pr-9 py-2 bg-white/95 border border-slate-200/90 rounded-xl text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all"
+            />
+            {dashboardSearch && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDashboardSearch('');
+                  if (activeTab === 'orders') setOrderSearch('');
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {isSuperAdmin ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuGroupFilter('logistics');
+                  setActiveTab('outlets');
+                }}
+                className="px-3 py-2 rounded-xl bg-white/90 hover:bg-white text-slate-700 text-xs font-semibold flex items-center gap-1.5 border border-slate-200/90 shadow-2xs transition-all cursor-pointer"
+              >
+                <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                <span>{activeOutlet?.name || 'All Outlets'}</span>
+                <span className="text-slate-400">·</span>
+                <span className="font-mono text-[11px] text-slate-500">{outlets.length}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuGroupFilter('settings');
+                  setActiveTab('my_store');
+                }}
+                className="px-3 py-2 rounded-xl bg-white/90 hover:bg-white text-slate-700 text-xs font-semibold flex items-center gap-1.5 border border-slate-200/90 shadow-2xs transition-all cursor-pointer"
+              >
+                <Store className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{myStoreOutlet?.name}</span>
+                <span className="text-slate-400">·</span>
+                <span className="font-mono text-[11px] text-slate-500">{myStoreOutlet?.code}</span>
+              </button>
+            )}
+
             <button
-              onClick={() => setActiveTab('outlets')}
-              className="text-[11px] sm:text-xs text-blue-200 hover:text-white flex items-center gap-1 bg-slate-800 hover:bg-slate-700 px-2 py-0.5 rounded transition-colors cursor-pointer border border-slate-700"
+              type="button"
+              onClick={() =>
+                setMenuGroupFilter(menuGroupFilter === 'all' ? 'operations' : 'all')
+              }
+              className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs ${
+                menuGroupFilter === 'all'
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white/90 hover:bg-white text-slate-700 border-slate-200/90'
+              }`}
             >
-              <Building2 className="w-3 h-3 text-emerald-400" />
-              <span>Branch: <strong>{activeOutlet?.name || 'All Outlets'}</strong></span>
-              <span className="text-[10px] text-slate-400 font-mono">({outlets.length} total)</span>
+              {menuGroupFilter === 'all' ? 'Compact View' : `All Categories (${allMenuTabs.length})`}
             </button>
           </div>
-          <h1 className="text-lg sm:text-xl md:text-2xl font-black mt-1 tracking-tight text-white break-words">
-            {isSuperAdmin ? 'Multi-Outlet Business & Marketplace Operations' : `${activeOutlet?.name || 'Store'} Operations & Dispatch`}
-          </h1>
-          <p className="text-[11px] sm:text-xs text-slate-400 mt-1 break-words">
-            Real-time atomic inventory reservations, branch transfers, rider payouts, GS1 barcodes & franchise compliance.
-          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <button
-            onClick={handleExportOrdersCsv}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition-colors cursor-pointer min-h-[36px]"
-          >
-            <Download className="w-4 h-4" />
-            <span>Export CSV</span>
-          </button>
-          <button
-            onClick={() => setShowAddProductModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer min-h-[36px]"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Product</span>
-          </button>
-        </div>
-      </div>
+        {/* Instant Search Results Strip (when typing in Search Bar) */}
+        {searchNormalized && (quickSearchMatchingProducts.length > 0 || quickSearchMatchingOrders.length > 0) && (
+          <div className="p-2.5 bg-white/90 rounded-xl border border-slate-200/80 space-y-2 text-xs shadow-2xs">
+            {quickSearchMatchingProducts.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="font-semibold text-slate-500 text-[11px] mr-1">
+                  Matching Products:
+                </span>
+                {quickSearchMatchingProducts.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      setMenuGroupFilter('catalog');
+                      setActiveTab('products');
+                    }}
+                    className="px-2.5 py-1 bg-slate-50/90 hover:bg-blue-50/80 text-slate-800 border border-slate-200/80 rounded-lg font-medium flex items-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <span className="truncate max-w-[180px]">{p.name}</span>
+                    <span className="text-slate-300">·</span>
+                    <span className="font-mono text-blue-600 font-semibold">{formatINR(p.dealPrice || p.regularPrice)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {quickSearchMatchingOrders.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="font-semibold text-slate-500 text-[11px] mr-1">
+                  Matching Orders:
+                </span>
+                {quickSearchMatchingOrders.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => {
+                      setOrderSearch(o.id);
+                      setMenuGroupFilter('operations');
+                      setActiveTab('orders');
+                    }}
+                    className="px-2.5 py-1 bg-slate-50/90 hover:bg-emerald-50/80 text-slate-800 border border-slate-200/80 rounded-lg font-medium flex items-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <span className="font-mono font-semibold text-slate-900">{o.id}</span>
+                    <span className="text-slate-300">·</span>
+                    <span className="text-slate-500">{o.customer.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
-      {/* Navigation Tabs Bar */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 border-b border-slate-200 scrollbar-none mb-4 sm:mb-6 w-full max-w-full min-w-0">
-        {[
-          { id: 'overview', label: 'Overview & Analytics', icon: <BarChart3 className="w-3.5 h-3.5 shrink-0" /> },
-          { id: 'outlets', label: `Outlets & Branches (${outlets.length})`, icon: <Building2 className="w-3.5 h-3.5 shrink-0" /> },
-          { id: 'orders', label: `Orders (${orders.length})`, icon: <Package className="w-3.5 h-3.5 shrink-0" /> },
-          { id: 'inventory', label: 'Inventory & Movements', icon: <Layers className="w-3.5 h-3.5 shrink-0" /> },
-          { id: 'stock_transfers', label: `Stock Transfers (${stockTransfers.length})`, icon: <ArrowLeftRight className="w-3.5 h-3.5 shrink-0" /> },
-          { id: 'barcodes', label: `Barcodes & GTIN (${barcodeRecords.length})`, icon: <Scan className="w-3.5 h-3.5 shrink-0" /> },
-          { id: 'products', label: 'Products & Margins', icon: <DollarSign className="w-3.5 h-3.5 shrink-0" /> },
-          ...(isSuperAdmin
-            ? [
-                { id: 'categories_mgmt', label: `Category Approvals (${businessCategories.length})`, icon: <FolderTree className="w-3.5 h-3.5 shrink-0" /> },
-                { id: 'payouts', label: 'Payouts & Ledger', icon: <CreditCard className="w-3.5 h-3.5 shrink-0" /> },
-                { id: 'franchise', label: `Franchise Contracts (${franchiseAgreements.length})`, icon: <FileText className="w-3.5 h-3.5 shrink-0" /> },
-                { id: 'ownership_models', label: 'Ownership Models', icon: <Briefcase className="w-3.5 h-3.5 shrink-0" /> },
-              ]
-            : []),
-          { id: 'delivery', label: 'Local Delivery & Coverage', icon: <Truck className="w-3.5 h-3.5 shrink-0" /> },
-          { id: 'campaigns', label: 'Festive Campaigns', icon: <Sparkles className="w-3.5 h-3.5 shrink-0" /> },
-          ...(isSuperAdmin
-            ? [
-                { id: 'branding', label: 'Branding & Theme', icon: <Palette className="w-3.5 h-3.5 shrink-0" /> },
-                { id: 'settings', label: 'Store Settings', icon: <Settings className="w-3.5 h-3.5 shrink-0" /> },
-              ]
-            : []),
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer min-h-[36px] ${
-              activeTab === tab.id
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            {tab.icon}
-            <span>{tab.label}</span>
-          </button>
-        ))}
+        {/* Row 2: Category-Wise Summary Buttons (Lightweight Premium Cards) */}
+        <div
+          className={`grid grid-cols-2 sm:grid-cols-3 ${
+            isSuperAdmin ? 'lg:grid-cols-5' : 'lg:grid-cols-4'
+          } gap-2`}
+        >
+          {categorySummaries.map((cat) => {
+            const catTabs = allMenuTabs.filter((t) => t.group === cat.id);
+            const isCatSelected = menuGroupFilter === cat.id;
+            const hasActiveTabInside = catTabs.some((t) => t.id === activeTab);
+
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => {
+                  setMenuGroupFilter(cat.id);
+                  if (!catTabs.some((t) => t.id === activeTab) && catTabs[0]) {
+                    setActiveTab(catTabs[0].id as any);
+                  }
+                }}
+                className={`group text-left p-2.5 sm:p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
+                  isCatSelected
+                    ? `${cat.activeBg} shadow-xs`
+                    : hasActiveTabInside
+                    ? 'bg-white/95 border-blue-200/90 shadow-2xs hover:bg-white'
+                    : 'bg-white/75 hover:bg-white border-slate-200/75 shadow-2xs'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1.5 w-full">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-7 h-7 rounded-lg bg-white border border-slate-200/80 shadow-2xs flex items-center justify-center shrink-0">
+                      {cat.icon}
+                    </span>
+                    <span className="text-xs font-bold text-slate-900 truncate">
+                      {cat.label}
+                    </span>
+                  </div>
+                  <span className={`text-[10px] font-mono font-semibold shrink-0 ${cat.badgeColor}`}>
+                    {catTabs.length}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 truncate w-full pl-0.5">
+                  {cat.summary}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Row 3: Category-Scoped Sub-Tabs (or Grouped Category Cards when 'all' or searching) */}
+        {menuGroupFilter === 'all' || searchNormalized ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+            {categorySummaries.map((cat) => {
+              const catTabs = allMenuTabs.filter(
+                (t) =>
+                  t.group === cat.id &&
+                  (!searchNormalized ||
+                    t.label.toLowerCase().includes(searchNormalized) ||
+                    t.id.toLowerCase().includes(searchNormalized))
+              );
+              if (catTabs.length === 0) return null;
+
+              return (
+                <div
+                  key={cat.id}
+                  className="p-3 rounded-xl bg-white/85 border border-slate-200/80 shadow-2xs space-y-2"
+                >
+                  <div className="flex items-center justify-between text-xs border-b border-slate-100 pb-1.5">
+                    <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                      {cat.icon}
+                      <span>{cat.label}</span>
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      {catTabs.length} tabs
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {catTabs.map((tab) => {
+                      const isTabActive = activeTab === tab.id;
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => {
+                            setActiveTab(tab.id as any);
+                            setMenuGroupFilter(cat.id);
+                          }}
+                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer border ${
+                            isTabActive
+                              ? 'bg-linear-to-r from-blue-600 to-indigo-600 text-white border-blue-600 shadow-xs font-semibold'
+                              : 'bg-slate-50/70 hover:bg-white text-slate-700 hover:text-slate-900 border-slate-200/75 shadow-2xs'
+                          }`}
+                        >
+                          {tab.icon}
+                          <span>{tab.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="bg-slate-100/70 p-1.5 rounded-xl border border-slate-200/70 flex flex-wrap items-center gap-1.5">
+            {displayedMenuTabs.map((tab) => {
+              const isTabActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs transition-all cursor-pointer min-h-[36px] border ${
+                    isTabActive
+                      ? 'bg-white text-blue-700 border-blue-200/90 shadow-xs font-bold ring-1 ring-blue-500/10'
+                      : 'bg-white/60 hover:bg-white text-slate-600 hover:text-slate-900 border-transparent hover:border-slate-200/80 font-medium'
+                  }`}
+                >
+                  {tab.icon}
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* TAB 1: OVERVIEW & ANALYTICS */}
       {activeTab === 'overview' && (
         <div className="space-y-4 sm:space-y-6">
+          {/* Rider Cash Deposit (8-Digit Code) Verification & Approval Card for Store & Admin */}
+          <div className="bg-linear-to-r from-emerald-50/90 via-white to-indigo-50/50 rounded-2xl border border-emerald-200/90 p-4 sm:p-5 shadow-2xs space-y-3">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 font-mono font-black text-xs shadow-xs">
+                  8#
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-black text-slate-900">
+                      Rider Cash Deposit — Enter 8-Digit Code &amp; Approve Cash Collected
+                    </h3>
+                    {pendingRiderDeposits.length > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
+                        {pendingRiderDeposits.length} Pending Code{pendingRiderDeposits.length > 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Riders generate an 8-digit code for any specific amount in the Rider Portal. Enter the 8-digit code below to verify and approve cash collected.
+                  </p>
+                </div>
+              </div>
+
+              <form
+                onSubmit={(e) => handleApproveRiderDepositByCode(e)}
+                className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0"
+              >
+                <input
+                  type="text"
+                  value={riderDepositCodeInput}
+                  onChange={(e) => setRiderDepositCodeInput(e.target.value)}
+                  placeholder="Enter 8-digit code (e.g. 83921056)"
+                  className="w-full sm:w-56 px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-black text-slate-900 tracking-wider focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold rounded-xl shadow-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Approve Cash Collected</span>
+                </button>
+              </form>
+            </div>
+
+            {riderDepositFeedback && (
+              <div
+                className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between ${
+                  riderDepositFeedback.type === 'success'
+                    ? 'bg-emerald-100/90 border-emerald-300 text-emerald-950'
+                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                }`}
+              >
+                <span>{riderDepositFeedback.message}</span>
+                <button
+                  type="button"
+                  onClick={() => setRiderDepositFeedback(null)}
+                  className="text-slate-500 hover:text-slate-900 ml-2 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* Quick Pending 8-Digit Codes Pills */}
+            {pendingRiderDeposits.length > 0 && (
+              <div className="pt-2 border-t border-emerald-200/60 flex items-center gap-2 flex-wrap text-xs">
+                <span className="text-[11px] font-bold text-slate-500">
+                  Active Pending Rider Codes:
+                </span>
+                {pendingRiderDeposits.map((sub) => (
+                  <div
+                    key={sub.id}
+                    className="inline-flex items-center gap-2 bg-white px-2.5 py-1 rounded-xl border border-slate-200/90 shadow-2xs"
+                  >
+                    <span className="font-bold text-slate-800">{sub.riderName}:</span>
+                    <span className="font-mono font-black text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
+                      {sub.remittanceCode}
+                    </span>
+                    <span className="font-mono font-extrabold text-emerald-700">
+                      {formatINR(sub.amount)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        setRiderDepositCodeInput(sub.remittanceCode);
+                        handleApproveRiderDepositByCode(e, sub.remittanceCode);
+                      }}
+                      className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold cursor-pointer"
+                    >
+                      Approve
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Top KPI Cards Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-xs">
@@ -593,22 +1204,32 @@ export const AdminDashboard: React.FC = () => {
               />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-slate-500">Status:</span>
               <select
                 value={orderStatusFilter}
                 onChange={(e) => setOrderStatusFilter(e.target.value)}
                 className="text-xs px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 cursor-pointer"
               >
-                <option value="all">All Statuses ({orders.length})</option>
+                <option value="all">All Statuses ({scopedOrders.length})</option>
                 <option value="awaiting_whatsapp_confirmation">Awaiting WhatsApp</option>
                 <option value="confirmed">Confirmed</option>
                 <option value="packed">Packed</option>
                 <option value="assigned_to_delivery">Assigned to Rider</option>
                 <option value="out_for_delivery">Out for Delivery</option>
                 <option value="delivered">Delivered</option>
+                <option value="partially_cancelled">Partially Cancelled (Shortage/Damage)</option>
                 <option value="cancelled">Cancelled</option>
               </select>
+
+              <button
+                type="button"
+                onClick={handleExportOrdersCsv}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Export CSV</span>
+              </button>
             </div>
           </div>
 
@@ -620,8 +1241,8 @@ export const AdminDashboard: React.FC = () => {
                   <th className="py-3 px-3">Order ID</th>
                   <th className="py-3 px-3">Date</th>
                   <th className="py-3 px-3">Customer</th>
-                  <th className="py-3 px-3">Items</th>
-                  <th className="py-3 px-3">Total</th>
+                  <th className="py-3 px-3">Items & Fulfillment</th>
+                  <th className="py-3 px-3">Total & Refund</th>
                   <th className="py-3 px-3">Payment</th>
                   <th className="py-3 px-3">Status</th>
                   <th className="py-3 px-3 text-right">Actions</th>
@@ -644,13 +1265,44 @@ export const AdminDashboard: React.FC = () => {
                       <span className="text-[11px] text-slate-500">{order.customer.phone}</span>
                       <span className="text-[10px] text-slate-400 block">{order.customer.area}</span>
                     </td>
-                    <td className="py-3 px-3">
-                      <span className="font-medium text-slate-800">
-                        {order.items.map((i) => `${i.productName} (x${i.quantity})`).join(', ')}
-                      </span>
+                    <td className="py-3 px-3 max-w-xs">
+                      <div className="space-y-1">
+                        {order.items.map((i, idx) => {
+                          const active = i.activeQuantity !== undefined ? i.activeQuantity : i.quantity;
+                          const hasCancelled = (i.cancelledQuantity || 0) > 0;
+                          return (
+                            <div key={idx} className="flex items-center gap-1.5 flex-wrap text-xs">
+                              <span
+                                className={`font-medium ${
+                                  active === 0 ? 'line-through text-slate-400' : 'text-slate-800'
+                                }`}
+                              >
+                                {i.productName} ({active > 0 ? `x${active}` : '0 active'})
+                              </span>
+                              {hasCancelled && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 border border-rose-200">
+                                  -{i.cancelledQuantity} {i.cancellationReason ? `(${i.cancellationReason.replace('_', ' ')})` : 'cancelled'}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </td>
-                    <td className="py-3 px-3 font-mono font-bold text-slate-900">
-                      {formatINR(order.finalTotal)}
+                    <td className="py-3 px-3">
+                      <span className="font-mono font-bold text-slate-900 block">
+                        {formatINR(order.finalTotal)}
+                      </span>
+                      {order.originalTotal && order.originalTotal !== order.finalTotal && (
+                        <span className="text-[10px] text-slate-400 line-through font-mono block">
+                          Orig: {formatINR(order.originalTotal)}
+                        </span>
+                      )}
+                      {order.refundedAmount && order.refundedAmount > 0 && (
+                        <span className="text-[10px] text-rose-700 font-bold bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200 inline-block mt-0.5">
+                          Refund: {formatINR(order.refundedAmount)}
+                        </span>
+                      )}
                     </td>
                     <td className="py-3 px-3">
                       <span className="uppercase text-[10px] font-semibold block text-slate-700">
@@ -673,21 +1325,100 @@ export const AdminDashboard: React.FC = () => {
                             ? 'bg-emerald-100 text-emerald-800'
                             : order.orderStatus === 'cancelled'
                             ? 'bg-rose-100 text-rose-800'
+                            : order.orderStatus === 'partially_cancelled'
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
                             : order.orderStatus === 'awaiting_whatsapp_confirmation'
                             ? 'bg-amber-100 text-amber-800'
+                            : order.orderStatus === 'out_for_delivery'
+                            ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
                             : 'bg-blue-100 text-blue-800'
                         }`}
                       >
                         {order.orderStatus.replace(/_/g, ' ')}
                       </span>
-                      {order.deliveryStaffName && (
+
+                      {/* Express Courier / Shiprocket or In-House Rider Badge & AWB */}
+                      {order.dispatchDetails ? (
+                        <div className="mt-1 space-y-1 text-[10px]">
+                          {order.dispatchDetails.fulfillmentType === 'express_partner' ? (
+                            <div className="bg-indigo-50/80 border border-indigo-200 text-indigo-900 rounded-md p-1.5 shadow-2xs">
+                              <div className="font-bold flex items-center justify-between text-[10px]">
+                                <span className="flex items-center gap-1">
+                                  <Truck className="w-3 h-3 text-indigo-600" />
+                                  {order.dispatchDetails.carrier} Express
+                                </span>
+                                {order.dispatchDetails.trackingUrl && (
+                                  <a
+                                    href={order.dispatchDetails.trackingUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5 font-semibold text-[9px]"
+                                    title="Open Live Courier Tracking"
+                                  >
+                                    Track <ExternalLink className="w-2.5 h-2.5" />
+                                  </a>
+                                )}
+                              </div>
+                              <div className="font-mono text-[9px] text-slate-700 mt-0.5">
+                                AWB: <span className="font-bold text-slate-900">{order.dispatchDetails.awbNumber}</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="bg-emerald-50/80 border border-emerald-200 text-emerald-900 rounded-md p-1.5 shadow-2xs">
+                              <div className="font-bold flex items-center justify-between text-[10px]">
+                                <span className="flex items-center gap-1">
+                                  <Truck className="w-3 h-3 text-emerald-600" />
+                                  Rider: {order.dispatchDetails.riderName}
+                                </span>
+                                {order.dispatchDetails.riderOtp && (
+                                  <span className="font-mono font-bold text-amber-800 bg-amber-100 px-1 py-0.2 rounded text-[9px]">
+                                    OTP: {order.dispatchDetails.riderOtp}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[9px] text-slate-600 mt-0.5">
+                                Phone: {order.dispatchDetails.riderPhone}
+                              </div>
+                            </div>
+                          )}
+
+                          {order.dispatchDetails.isCod && (
+                            <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center justify-between ${
+                              order.dispatchDetails.codCollectedStatus === 'settled_to_admin'
+                                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                : order.dispatchDetails.codCollectedStatus === 'remitted'
+                                ? 'bg-blue-100 text-blue-900 border border-blue-300'
+                                : order.dispatchDetails.codCollectedStatus === 'collected'
+                                ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                : 'bg-slate-100 text-slate-700 border border-slate-300'
+                            }`}>
+                              <span>COD: {formatINR(order.dispatchDetails.codAmountToCollect || order.finalTotal)}</span>
+                              <span>
+                                {order.dispatchDetails.codCollectedStatus === 'settled_to_admin'
+                                  ? '✓ Bank Settled'
+                                  : order.dispatchDetails.codCollectedStatus === 'remitted'
+                                  ? '✓ Remitted to Store'
+                                  : order.dispatchDetails.codCollectedStatus === 'collected'
+                                  ? '✓ In Rider Hand'
+                                  : '⏳ Pending Doorstep'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      ) : order.deliveryStaffName ? (
                         <span className="text-[10px] text-slate-500 block mt-0.5">
                           Rider: {order.deliveryStaffName}
+                        </span>
+                      ) : null}
+
+                      {order.cancellationDetails && (
+                        <span className="text-[10px] text-rose-700 font-semibold block mt-0.5">
+                          {order.cancellationDetails.primaryReason.replace('_', ' ')}
                         </span>
                       )}
                     </td>
                     <td className="py-3 px-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
+                      <div className="flex items-center justify-end gap-1.5 flex-wrap">
                         {/* Quick state transitions */}
                         {order.orderStatus === 'awaiting_whatsapp_confirmation' && (
                           <button
@@ -721,26 +1452,86 @@ export const AdminDashboard: React.FC = () => {
                           </button>
                         )}
 
-                        {order.orderStatus === 'packed' && (
+                        {/* Dispatch Button: Rider vs Shiprocket Express Partner */}
+                        {(order.orderStatus === 'packed' || order.orderStatus === 'confirmed') && (
                           <button
-                            onClick={() =>
-                              assignDeliveryStaff(order.id, 'rider-1', 'Ramesh Kumar (Lucknow Rider)')
-                            }
-                            className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded font-bold text-[11px] cursor-pointer"
+                            onClick={() => setDispatchingOrder(order)}
+                            className="px-2.5 py-1 bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded font-bold text-[11px] cursor-pointer flex items-center gap-1 shadow-xs"
+                            title="Choose Option 1 (In-House Rider) or Option 2 (Express Shiprocket Delivery with AWB)"
                           >
-                            Assign Rider
+                            <Truck className="w-3.5 h-3.5" />
+                            <span>Dispatch (Rider / Shiprocket)</span>
                           </button>
                         )}
 
-                        {order.paymentStatus !== 'verified_paid' && (
+                        {/* Out for delivery actions */}
+                        {order.orderStatus === 'out_for_delivery' && (
+                          <>
+                            {/* Courier/AWB details button */}
+                            <button
+                              onClick={() => setDispatchingOrder(order)}
+                              className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded font-semibold text-[10px] cursor-pointer flex items-center gap-1"
+                              title="Update Courier / AWB tracking info"
+                            >
+                              <Truck className="w-3 h-3 text-blue-600" />
+                              <span>AWB / Rider</span>
+                            </button>
+
+                            {/* Collect COD Button for Doorstep Cash/UPI */}
+                            {(order.paymentMethod === 'cod' || order.dispatchDetails?.isCod) &&
+                              order.paymentStatus !== 'verified_paid' && (
+                                <button
+                                  onClick={() => setCollectingCodOrder(order)}
+                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-bold text-[11px] cursor-pointer flex items-center gap-1 shadow-xs"
+                                  title="Record Cash on Delivery collection by rider or courier partner"
+                                >
+                                  <Banknote className="w-3.5 h-3.5" />
+                                  <span>Collect COD</span>
+                                </button>
+                              )}
+
+                            {/* Mark Delivered if not COD or COD already received */}
+                            {order.paymentStatus === 'verified_paid' && (
+                              <button
+                                onClick={() =>
+                                  updateOrderStatus(
+                                    order.id,
+                                    'delivered',
+                                    'Order successfully handed over and completed',
+                                    'Delivery System'
+                                  )
+                                }
+                                className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-[10px] cursor-pointer"
+                              >
+                                Mark Delivered
+                              </button>
+                            )}
+                          </>
+                        )}
+
+                        {/* Store Full / Partial Item & Quantity Cancellation (Shortage/Damage/Expiry) */}
+                        {order.orderStatus !== 'cancelled' && order.orderStatus !== 'delivered' && (
                           <button
-                            onClick={() => verifyOrderPayment(order.id)}
-                            className="px-2 py-1 bg-slate-800 hover:bg-slate-900 text-white rounded font-bold text-[10px] cursor-pointer"
-                            title="Verify Payment"
+                            onClick={() => setCancellingOrder(order)}
+                            className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded font-bold text-[10px] cursor-pointer flex items-center gap-1 shadow-2xs transition-colors"
+                            title="Cancel whole order or specific SKU/quantity (Shortage, Damage, or Expiry)"
                           >
-                            Mark Paid
+                            <PackageX className="w-3.5 h-3.5 text-rose-600" />
+                            <span>Cancel / Short</span>
                           </button>
                         )}
+
+                        {order.paymentStatus !== 'verified_paid' &&
+                          order.paymentMethod !== 'cod' &&
+                          !order.dispatchDetails?.isCod && (
+                            <button
+                              onClick={() => verifyOrderPayment(order.id)}
+                              className="px-2 py-1 bg-slate-800 hover:bg-slate-900 text-white rounded font-bold text-[10px] cursor-pointer"
+                              title="Verify Payment"
+                            >
+                              Mark Paid
+                            </button>
+                          )}
 
                         {/* Print Invoice */}
                         <button
@@ -864,7 +1655,7 @@ export const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {stockMovements.map((sm) => (
+                  {scopedStockMovements.map((sm) => (
                     <tr key={sm.id} className="hover:bg-slate-50">
                       <td className="py-2.5 px-3 text-slate-500 text-[11px] font-mono">
                         {new Date(sm.timestamp).toLocaleTimeString('en-IN', {
@@ -900,21 +1691,64 @@ export const AdminDashboard: React.FC = () => {
       {/* TAB 4: PRODUCTS & MARGINS */}
       {activeTab === 'products' && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
-          <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+          <div className="p-4 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
-              <h3 className="text-sm font-bold text-slate-900">
-                Product Catalogue & Margin Protection
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900">
+                  {isSuperAdmin
+                    ? 'Product Catalogue & Multi-Seller Price Comparison'
+                    : `${myStoreOutlet?.name || 'Store'} — Product Catalogue & Stock`}
+                </h3>
+                {pendingApprovalsCount > 0 && isSuperAdmin && (
+                  <span className="text-[10px] font-bold bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full">
+                    {pendingApprovalsCount} Pending Review
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-slate-500">
-                Purchase cost and gross margins are strictly internal and never exposed to customers.
+                {isSuperAdmin
+                  ? 'Each catalogue item tracks how many stores/sellers offer it, along with their individual selling prices, stock, and margins.'
+                  : 'View selling prices, GST slabs, HSN codes, and available stock for your store.'}
               </p>
             </div>
-            <button
-              onClick={() => setShowAddProductModal(true)}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold cursor-pointer"
-            >
-              Add New Product
-            </button>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {isSuperAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setShowApprovalsModal(true)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                    pendingApprovalsCount > 0
+                      ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-300'
+                      : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                  }`}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Approvals Queue ({pendingApprovalsCount})</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowStandaloneVolumetricModal(true)}
+                className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
+                title="Open Volumetric (Dimensional) Weight Calculator for couriers"
+              >
+                <span>📐 Volumetric Calculator</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setProductForAiEdit(null);
+                  setShowAiProductModal(true);
+                }}
+                className="px-3.5 py-1.5 bg-linear-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>✨ AI Assist Upload</span>
+              </button>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -924,10 +1758,13 @@ export const AdminDashboard: React.FC = () => {
                   <th className="py-2.5 px-3">Product</th>
                   <th className="py-2.5 px-3">Category</th>
                   <th className="py-2.5 px-3 font-mono">MRP</th>
-                  <th className="py-2.5 px-3 font-mono">Selling Price</th>
+                  <th className="py-2.5 px-3 font-mono">Store Selling Price</th>
+                  <th className="py-2.5 px-3">Sellers & Store Offers</th>
+                  <th className="py-2.5 px-3">Status</th>
                   {isSuperAdmin && <th className="py-2.5 px-3 font-mono">Purchase Cost</th>}
                   {isSuperAdmin && <th className="py-2.5 px-3 font-mono">Gross Margin</th>}
                   <th className="py-2.5 px-3 text-center">Available Stock</th>
+                  <th className="py-2.5 px-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -936,11 +1773,44 @@ export const AdminDashboard: React.FC = () => {
                   const margin = currentPrice - p.purchaseCost;
                   const marginPct = Math.round((margin / currentPrice) * 100);
 
+                  const sellers = p.sellerListings && p.sellerListings.length > 0
+                    ? p.sellerListings
+                    : [
+                        {
+                          id: 'sl-default',
+                          sellerId: 'out_hazratganj',
+                          sellerName: 'Hazratganj Flagship Store',
+                          sellingPrice: currentPrice,
+                          mrp: p.mrp,
+                          purchaseCost: p.purchaseCost,
+                          stock: p.stock.onHand,
+                          isAvailable: true,
+                          deliveryPromiseHours: 4,
+                          lastUpdated: '',
+                        },
+                      ];
+
+                  const sellerPrices = sellers.map((s) => s.sellingPrice);
+                  const minSellerPrice = Math.min(...sellerPrices);
+                  const maxSellerPrice = Math.max(...sellerPrices);
+
                   return (
                     <tr key={p.id} className="hover:bg-slate-50">
                       <td className="py-3 px-3">
-                        <span className="font-semibold text-slate-900 block">{p.name}</span>
-                        <span className="text-[10px] text-slate-400 font-mono">SKU: {p.sku}</span>
+                        <div className="flex items-center gap-2">
+                          <img
+                            src={p.images[0] || 'https://images.unsplash.com/photo-1598327105666-5b89351aff97?auto=format&fit=crop&w=400&q=80'}
+                            alt={p.name}
+                            className="w-9 h-9 object-contain rounded-lg bg-slate-100 p-0.5 border border-slate-200 shrink-0"
+                          />
+                          <div>
+                            <span className="font-semibold text-slate-900 block line-clamp-1">{p.name}</span>
+                            <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
+                              <span>SKU: {p.sku}</span>
+                              {p.brand && <span className="font-sans font-bold text-slate-600">({p.brand})</span>}
+                            </div>
+                          </div>
+                        </div>
                       </td>
                       <td className="py-3 px-3 text-slate-600 capitalize">
                         {p.categoryId.replace(/_/g, ' ')}
@@ -951,6 +1821,71 @@ export const AdminDashboard: React.FC = () => {
                       <td className="py-3 px-3 font-mono font-bold text-slate-900">
                         {formatINR(currentPrice)}
                       </td>
+
+                      {/* Multi-Seller Breakdown Cell */}
+                      <td className="py-3 px-3">
+                        <button
+                          type="button"
+                          onClick={() => setMultiSellerModalProduct(p)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 font-bold rounded-lg text-[11px] border border-indigo-200/80 cursor-pointer transition-colors shadow-2xs group mb-1.5"
+                          title="Click to view all sellers, their individual selling prices and stock"
+                        >
+                          <Store className="w-3.5 h-3.5 text-indigo-600 group-hover:scale-110 transition-transform" />
+                          <span>
+                            {sellers.length} {sellers.length === 1 ? 'Seller' : 'Sellers'}
+                          </span>
+                          <span className="font-mono text-[10px] text-indigo-600 font-semibold">
+                            ({sellers.length > 1 ? `${formatINR(minSellerPrice)} - ${formatINR(maxSellerPrice)}` : formatINR(minSellerPrice)})
+                          </span>
+                        </button>
+
+                        {/* Inline list of each seller name and price */}
+                        <div className="space-y-1">
+                          {sellers.slice(0, 3).map((s) => (
+                            <div key={s.id} className="text-[10px] text-slate-600 flex items-center justify-between gap-1.5 max-w-[210px] bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200/60">
+                              <span className="truncate font-medium text-slate-700" title={s.sellerName}>
+                                {s.sellerName}
+                              </span>
+                              <span className="font-mono font-bold text-slate-900 shrink-0">
+                                {formatINR(s.sellingPrice)}
+                              </span>
+                            </div>
+                          ))}
+                          {sellers.length > 3 && (
+                            <button
+                              type="button"
+                              onClick={() => setMultiSellerModalProduct(p)}
+                              className="text-[9px] text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer block text-left"
+                            >
+                              +{sellers.length - 3} more sellers...
+                            </button>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Approval Status Cell */}
+                      <td className="py-3 px-3">
+                        {p.approvalStatus === 'pending' ? (
+                          <button
+                            type="button"
+                            onClick={() => setShowApprovalsModal(true)}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 cursor-pointer"
+                          >
+                            <Clock className="w-3 h-3 text-amber-600" />
+                            <span>Pending Review</span>
+                          </button>
+                        ) : p.approvalStatus === 'rejected' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                            <span>Rejected</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <span>Approved & Live</span>
+                          </span>
+                        )}
+                      </td>
+
                       {isSuperAdmin && (
                         <td className="py-3 px-3 font-mono text-slate-600">
                           {formatINR(p.purchaseCost)}
@@ -967,6 +1902,36 @@ export const AdminDashboard: React.FC = () => {
                       <td className="py-3 px-3 text-center font-mono font-bold">
                         {p.stock.onHand - p.stock.reserved}
                       </td>
+
+                      {/* Actions */}
+                      <td className="py-3 px-3 text-right">
+                        <div className="inline-flex items-center gap-1.5 justify-end">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProductForVariantsEdit(p);
+                              setShowVariantsModal(true);
+                            }}
+                            className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors inline-flex items-center gap-1"
+                            title="Edit physical dimensions, volumetric weight, color swatches, sizes and hardware modules"
+                          >
+                            <span>📐 Variants & Dimensions</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProductForAiEdit(p);
+                              setShowAiProductModal(true);
+                            }}
+                            className="px-2.5 py-1 bg-white hover:bg-slate-100 text-indigo-700 border border-indigo-200 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors inline-flex items-center gap-1"
+                            title="Modify and edit this product with AI assistant"
+                          >
+                            <Sparkles className="w-3 h-3 text-indigo-600" />
+                            <span>AI Edit</span>
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -978,132 +1943,11 @@ export const AdminDashboard: React.FC = () => {
 
       {/* TAB 5: LOCAL DELIVERY & COVERAGE */}
       {activeTab === 'delivery' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-emerald-600" />
-              Serviceable Lucknow PIN Codes
-            </h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Customers ordering outside these PIN codes will be notified to select Store Pickup at Hazratganj shop.
-            </p>
-
-            <div className="flex flex-wrap gap-2">
-              {settings.serviceablePincodes.map((pin) => (
-                <span
-                  key={pin}
-                  className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded font-mono text-xs font-bold text-slate-800"
-                >
-                  {pin}
-                </span>
-              ))}
-            </div>
-
-            <div className="pt-4 border-t border-slate-200 space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-600">Free Delivery Threshold:</span>
-                <span className="font-bold font-mono">{formatINR(settings.freeDeliveryThreshold)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600">Standard Delivery Fee:</span>
-                <span className="font-bold font-mono">{formatINR(settings.deliveryFee)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600">Same-Day Cutoff Time:</span>
-                <span className="font-bold font-mono">{settings.sameDayCutoffTime} (5:00 PM)</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Truck className="w-4 h-4 text-blue-600" />
-              Assigned Delivery Fleet
-            </h3>
-            <div className="space-y-3 text-xs">
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
-                <div>
-                  <span className="font-bold text-slate-900 block">Ramesh Kumar (Hazratganj Zone)</span>
-                  <span className="text-slate-500">Phone: +91 94150 99881 | Vehicle: Hero Electric</span>
-                </div>
-                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded">
-                  Active
-                </span>
-              </div>
-
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
-                <div>
-                  <span className="font-bold text-slate-900 block">Manoj Sharma (Gomti Nagar Zone)</span>
-                  <span className="text-slate-500">Phone: +91 98391 22334 | Vehicle: Honda Activa</span>
-                </div>
-                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded">
-                  Active
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <DeliveryZoneManager />
       )}
 
-      {/* TAB 6: FESTIVE CAMPAIGNS */}
-      {activeTab === 'campaigns' && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">Active Festive Campaigns</h3>
-                <p className="text-xs text-slate-500">
-                  Drive sales during Diwali, Eid, and holidays with custom countdown timers and promo codes.
-                </p>
-              </div>
-              <button
-                onClick={() => setShowAddCampaign(true)}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold cursor-pointer"
-              >
-                Create Campaign
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {campaigns.map((camp) => (
-                <div
-                  key={camp.id}
-                  className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
-                >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 text-sm">{camp.name}</span>
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
-                          camp.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
-                        }`}
-                      >
-                        {camp.isActive ? 'ACTIVE ON HOMEPAGE' : 'PAUSED'}
-                      </span>
-                    </div>
-                    <p className="text-slate-600 mt-1">{camp.bannerHeadline}</p>
-                    <span className="text-[11px] text-slate-400 font-mono mt-1 block">
-                      Coupon: {camp.couponCode || 'None'} | Ends:{' '}
-                      {new Date(camp.endDate).toLocaleDateString()}
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() => toggleCampaignStatus(camp.id)}
-                    className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition-colors cursor-pointer ${
-                      camp.isActive
-                        ? 'bg-amber-100 hover:bg-amber-200 text-amber-900'
-                        : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                    }`}
-                  >
-                    {camp.isActive ? 'Deactivate' : 'Activate Campaign'}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* TAB 6: FESTIVE CAMPAIGNS (SUPER ADMIN ONLY) */}
+      {activeTab === 'campaigns' && isSuperAdmin && <FestivalCampaignManager />}
 
       {/* TAB 7: SETTINGS (SUPER ADMIN ONLY) */}
       {activeTab === 'settings' && isSuperAdmin && (
@@ -1176,11 +2020,130 @@ export const AdminDashboard: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* Admin Google Authenticator (2FA) Security & Registration Card */}
+          <div className="mt-8 pt-6 border-t border-slate-200">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-slate-900">Admin Google Authenticator (2FA) Security</h4>
+                  <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                    <span>Active & Enforced</span>
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Connect your smartphone with Google Authenticator or Microsoft Authenticator to generate time-based 6-digit verification codes for login.
+                </p>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
+                <QrCode className="w-5 h-5" />
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-medium">Target Account:</span>
+                <span className="font-mono font-bold text-slate-900">{currentAdminAccount?.email || 'admin@javed-electronics.in'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-medium">OTP Protocol Standard:</span>
+                <span className="font-mono text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">RFC 6238 TOTP (30s Step)</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-medium">App Compatibility:</span>
+                <span className="text-slate-800 font-medium">Google Authenticator, MS Authenticator, 1Password, Authy</span>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthenticatorTargetAccount(currentAdminAccount);
+                  setShowAuthenticatorQrModal(true);
+                }}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs cursor-pointer flex items-center gap-2 shadow-xs transition-colors"
+              >
+                <QrCode className="w-4 h-4 text-emerald-300" />
+                <span>Open Google Authenticator QR Code</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('store_logins')}
+                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-xs cursor-pointer flex items-center gap-1.5 transition-colors border border-slate-200"
+              >
+                <KeyRound className="w-3.5 h-3.5 text-slate-500" />
+                <span>Manage All Staff 2FA Logins</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* TAB: OUTLETS & MULTI-BRANCH MANAGEMENT */}
-      {activeTab === 'outlets' && <OutletsManager />}
+      {/* TAB: MY STORE PROFILE (STORE MANAGER ONLY - STRICTLY OWN STORE) */}
+      {activeTab === 'my_store' && !isSuperAdmin && myStoreOutlet && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                <Store className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                    {myStoreOutlet.code}
+                  </span>
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 uppercase">
+                    {myStoreOutlet.status}
+                  </span>
+                </div>
+                <h2 className="text-lg font-extrabold text-slate-900 mt-1">{myStoreOutlet.name}</h2>
+                <p className="text-xs text-slate-500">{myStoreOutlet.address}, {myStoreOutlet.city} - {myStoreOutlet.pincode}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveTab('pos')}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer self-start sm:self-center"
+            >
+              <Scan className="w-4 h-4" />
+              <span>Open Counter POS</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <div className="font-bold text-slate-900 uppercase text-[11px] tracking-wider">Store Manager & Contact</div>
+              <div className="text-slate-700"><strong>Manager:</strong> {myStoreOutlet.managerName}</div>
+              <div className="text-slate-700 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-blue-600" /> {myStoreOutlet.managerPhone}</div>
+              <div className="text-slate-700 flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-blue-600" /> {myStoreOutlet.ownerEmail}</div>
+              <div className="text-slate-700"><strong>Active Staff:</strong> {myStoreOutlet.staffCount} members</div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <div className="font-bold text-slate-900 uppercase text-[11px] tracking-wider">Store Timings & Tax Registration</div>
+              <div className="text-slate-700"><strong>Hours:</strong> {myStoreOutlet.operatingHours.open} – {myStoreOutlet.operatingHours.close}</div>
+              <div className="text-slate-700"><strong>Days Open:</strong> {myStoreOutlet.operatingHours.daysOpen}</div>
+              <div className="text-slate-700 font-mono"><strong>GSTIN:</strong> {myStoreOutlet.gstin}</div>
+              <div className="text-slate-700"><strong>Delivery Radius:</strong> {myStoreOutlet.deliveryRadiusKm} km</div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <div className="font-bold text-slate-900 uppercase text-[11px] tracking-wider">Serviceable Pincodes ({myStoreOutlet.serviceablePincodes.length})</div>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {myStoreOutlet.serviceablePincodes.map((pin) => (
+                  <span key={pin} className="px-2 py-1 rounded bg-white border border-slate-200 font-mono font-bold text-slate-800 text-[11px]">
+                    {pin}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: OUTLETS & MULTI-BRANCH MANAGEMENT (SUPER ADMIN ONLY) */}
+      {activeTab === 'outlets' && isSuperAdmin && <OutletsManager />}
 
       {/* TAB: INTER-OUTLET STOCK TRANSFERS */}
       {activeTab === 'stock_transfers' && <StockTransfersManager />}
@@ -1200,8 +2163,351 @@ export const AdminDashboard: React.FC = () => {
       {/* TAB: OWNERSHIP MODELS (SUPER ADMIN) */}
       {activeTab === 'ownership_models' && isSuperAdmin && <OwnershipModelsManager />}
 
+      {/* TAB: GST & TAXATION COMPLIANCE (SUPER ADMIN) */}
+      {activeTab === 'gst_taxation' && isSuperAdmin && <GstTaxationManager />}
+
+      {/* TAB: BULK ORDER DISCOUNTS & RULES ENGINE (SUPER ADMIN) */}
+      {activeTab === 'bulk_discounts' && isSuperAdmin && <BulkDiscountManager />}
+
+      {/* TAB: STORE & STAFF LOGINS MANAGER (SUPER ADMIN) */}
+      {activeTab === 'store_logins' && isSuperAdmin && <StoreStaffAuthManager />}
+
       {/* TAB: BRANDING, THEME & IDENTITY MANAGER (SUPER ADMIN) */}
       {activeTab === 'branding' && isSuperAdmin && <AdminBrandingManager />}
+
+      {/* TAB: HOMEPAGE BUILDER & 9 SECTIONS CMS (SUPER ADMIN) */}
+      {activeTab === 'homepage_builder' && isSuperAdmin && <HomepageLayoutManager />}
+
+      {/* TAB: MULTIPLE PAYMENT GATEWAYS ORCHESTRATION & ACTIVATION (SUPER ADMIN) */}
+      {activeTab === 'payment_gateways' && isSuperAdmin && <PaymentGatewaysManager />}
+
+      {/* TAB: STORE POS COUNTER TERMINAL */}
+      {activeTab === 'pos' && <POSTerminal />}
+
+      {/* TAB: SOP & SLA OPERATIONS MATRIX */}
+      {activeTab === 'sop_sla' && <SopSlaMatrixSection />}
+
+      {/* TAB: EXPRESS DELIVERY & SHIPROCKET PARTNER MANAGER */}
+      {activeTab === 'express_delivery' && <DeliveryPartnerManager />}
+
+      {/* TAB: AI PRODUCT ASSISTANT & ADD PRODUCT */}
+      {activeTab === 'ai_assistant' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-purple-600" />
+                <span>AI Product Assistant &amp; Product Onboarding</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Auto-segregate product titles, generate SEO meta tags, configure physical dimensions, volumetric weight, and multi-variations.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setProductForAiEdit(null);
+                  setShowAiProductModal(true);
+                }}
+                className="px-4 py-2 bg-linear-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-amber-300" />
+                <span>Launch AI Product Studio</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAddProductModal(true)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Quick Manual Add</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {products
+              .filter(
+                (p) =>
+                  !searchNormalized ||
+                  p.name.toLowerCase().includes(searchNormalized) ||
+                  p.sku.toLowerCase().includes(searchNormalized) ||
+                  p.brand.toLowerCase().includes(searchNormalized)
+              )
+              .map((p) => (
+                <div
+                  key={p.id}
+                  className="p-3.5 rounded-xl border border-slate-200 hover:border-blue-300 bg-slate-50/60 flex flex-col justify-between gap-3"
+                >
+                  <div className="flex items-start gap-3">
+                    <img
+                      src={p.images[0]}
+                      alt={p.name}
+                      className="w-12 h-12 rounded-lg object-cover border border-slate-200 bg-white shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-mono text-slate-500 block">{p.sku}</span>
+                      <h4 className="text-xs font-bold text-slate-900 line-clamp-2">{p.name}</h4>
+                      <span className="text-xs font-mono font-bold text-blue-600 mt-0.5 block">
+                        {formatINR(p.dealPrice || p.regularPrice)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pt-2 border-t border-slate-200/80">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProductForAiEdit(p);
+                        setShowAiProductModal(true);
+                      }}
+                      className="flex-1 py-1.5 px-2.5 bg-white hover:bg-purple-50 text-purple-700 border border-purple-200 rounded-lg text-[11px] font-bold cursor-pointer"
+                    >
+                      ✨ AI Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProductForVariantsEdit(p);
+                        setShowVariantsModal(true);
+                      }}
+                      className="flex-1 py-1.5 px-2.5 bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-[11px] font-bold cursor-pointer"
+                    >
+                      📐 Variants &amp; Dim
+                    </button>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB: PRODUCT APPROVALS QUEUE (SUPER ADMIN) */}
+      {activeTab === 'approvals_queue' && isSuperAdmin && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-amber-600" />
+                <span>Store Product Submissions &amp; Approvals Queue</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Verify margins, HSN codes, GST rates, and SEO compliance for products uploaded by branch managers.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowApprovalsModal(true)}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-extrabold flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>Open Full Approvals Reviewer ({pendingApprovalsCount} Pending)</span>
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-100 text-slate-600 font-bold uppercase text-[10px] border-b border-slate-200">
+                  <th className="py-2.5 px-3">Product</th>
+                  <th className="py-2.5 px-3">Brand &amp; Category</th>
+                  <th className="py-2.5 px-3 font-mono">Price / MRP</th>
+                  <th className="py-2.5 px-3">Approval Status</th>
+                  <th className="py-2.5 px-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {products.map((p) => (
+                  <tr key={p.id} className="hover:bg-slate-50">
+                    <td className="py-3 px-3 font-bold text-slate-900">
+                      {p.name}
+                      <span className="block text-[10px] font-mono text-slate-400">{p.sku}</span>
+                    </td>
+                    <td className="py-3 px-3 text-slate-600">
+                      {p.brand} • <span className="capitalize">{p.categoryId.replace('_', ' ')}</span>
+                    </td>
+                    <td className="py-3 px-3 font-mono">
+                      <span className="font-bold text-slate-900">{formatINR(p.dealPrice || p.regularPrice)}</span>
+                      <span className="text-slate-400 line-through ml-1.5">{formatINR(p.mrp)}</span>
+                    </td>
+                    <td className="py-3 px-3">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          p.approvalStatus === 'pending'
+                            ? 'bg-amber-100 text-amber-800'
+                            : p.approvalStatus === 'rejected'
+                            ? 'bg-rose-100 text-rose-800'
+                            : 'bg-emerald-100 text-emerald-800'
+                        }`}
+                      >
+                        {p.approvalStatus || 'approved'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProductForAiEdit(p);
+                          setShowAiProductModal(true);
+                        }}
+                        className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[11px] font-semibold cursor-pointer"
+                      >
+                        Inspect / Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: VOLUMETRIC WEIGHT CALCULATOR & PRODUCT DIMENSIONS */}
+      {activeTab === 'volumetric_calc' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Layers className="w-4 h-4 text-blue-600" />
+                <span>Volumetric Weight Calculator &amp; Package Dimensions Matrix</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Courier dimensional weight formula (L × W × H / 5000) vs Dead Weight for accurate Shiprocket &amp; express freight billing.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowStandaloneVolumetricModal(true)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <span>📐 Open Interactive 3D Volumetric Calculator</span>
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-100 text-slate-600 font-bold uppercase text-[10px] border-b border-slate-200">
+                  <th className="py-2.5 px-3">Product &amp; Model</th>
+                  <th className="py-2.5 px-3 font-mono">Dimensions (L × W × H)</th>
+                  <th className="py-2.5 px-3 font-mono">Dead Weight</th>
+                  <th className="py-2.5 px-3 font-mono">Volumetric (÷5000)</th>
+                  <th className="py-2.5 px-3 font-mono">Billable Weight</th>
+                  <th className="py-2.5 px-3">Variants</th>
+                  <th className="py-2.5 px-3 text-right">Manage</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {products.map((p) => {
+                  const l = p.lengthCm || 18;
+                  const w = p.widthCm || 12;
+                  const h = p.heightCm || 6;
+                  const dead = p.deadWeightKg || p.weightKg || 0.35;
+                  const vol = Number(((l * w * h) / 5000).toFixed(3));
+                  const billable = Math.max(dead, vol);
+                  return (
+                    <tr key={p.id} className="hover:bg-slate-50">
+                      <td className="py-3 px-3">
+                        <span className="font-bold text-slate-900 block">{p.name}</span>
+                        <span className="text-[10px] font-mono text-slate-500">
+                          SKU: {p.sku} {p.modelNumber ? `• Model: ${p.modelNumber}` : ''}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 font-mono text-slate-700">
+                        {l} × {w} × {h} cm
+                      </td>
+                      <td className="py-3 px-3 font-mono text-slate-700">{dead} kg</td>
+                      <td className="py-3 px-3 font-mono text-blue-700 font-semibold">{vol} kg</td>
+                      <td className="py-3 px-3 font-mono">
+                        <span
+                          className={`px-2 py-0.5 rounded font-bold ${
+                            vol > dead
+                              ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                              : 'bg-emerald-100 text-emerald-900'
+                          }`}
+                        >
+                          {billable} kg {vol > dead ? '(Volumetric)' : '(Dead Wt)'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-[11px] text-slate-600">
+                        {p.colorVariants?.length || 0} Colors • {p.sizeVariants?.length || 0} Sizes
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProductForVariantsEdit(p);
+                            setShowVariantsModal(true);
+                          }}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                        >
+                          📐 Edit Dim &amp; Variants
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: GOOGLE AUTHENTICATOR 2FA QR */}
+      {activeTab === 'authenticator_qr' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <QrCode className="w-4 h-4 text-emerald-600" />
+                <span>Google Authenticator 2FA QR Security Setup</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Scan the TOTP QR code in Google Authenticator or Microsoft Authenticator to enable 6-digit two-factor verification.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setAuthenticatorTargetAccount(currentAdminAccount);
+                setShowAuthenticatorQrModal(true);
+              }}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <QrCode className="w-4 h-4" />
+              <span>Open My 2FA Authenticator QR</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {(isSuperAdmin ? accounts : [currentAdminAccount]).filter(Boolean).map((acc) => (
+              <div
+                key={acc.id}
+                className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-slate-900 block truncate">{acc.name}</span>
+                  <span className="text-[11px] text-slate-500 block truncate">{acc.email}</span>
+                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-blue-100 text-blue-800 inline-block mt-1">
+                    {acc.role.replace('_', ' ')}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthenticatorTargetAccount(acc);
+                    setShowAuthenticatorQrModal(true);
+                  }}
+                  className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold shrink-0 cursor-pointer"
+                >
+                  Show QR
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Stock Adjustment Modal */}
       {adjustingProduct && (
@@ -1305,7 +2611,7 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className={`grid ${isSuperAdmin ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
                 <div>
                   <label className="font-semibold text-slate-700 block mb-1">MRP (₹) *</label>
                   <input
@@ -1326,15 +2632,17 @@ export const AdminDashboard: React.FC = () => {
                     required
                   />
                 </div>
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Purchase Cost (₹)</label>
-                  <input
-                    type="number"
-                    value={newProdCost}
-                    onChange={(e) => setNewProdCost(Number(e.target.value))}
-                    className="w-full p-2 border rounded font-mono"
-                  />
-                </div>
+                {isSuperAdmin && (
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Purchase Cost (₹)</label>
+                    <input
+                      type="number"
+                      value={newProdCost}
+                      onChange={(e) => setNewProdCost(Number(e.target.value))}
+                      className="w-full p-2 border rounded font-mono"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1355,6 +2663,33 @@ export const AdminDashboard: React.FC = () => {
                     value={newProdSku}
                     onChange={(e) => setNewProdSku(e.target.value)}
                     placeholder="e.g. JE-AU-BUDS-01"
+                    className="w-full p-2 border rounded font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">GST Tax Rate *</label>
+                  <select
+                    value={newProdGstRate}
+                    onChange={(e) => setNewProdGstRate(Number(e.target.value))}
+                    className="w-full p-2 border rounded bg-white font-mono"
+                  >
+                    <option value={0}>0% (Exempt / Nil)</option>
+                    <option value={5}>5% GST</option>
+                    <option value={12}>12% GST</option>
+                    <option value={18}>18% GST (Standard)</option>
+                    <option value={28}>28% GST (Luxury)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">HSN / SAC Code</label>
+                  <input
+                    type="text"
+                    value={newProdHsnCode}
+                    onChange={(e) => setNewProdHsnCode(e.target.value)}
+                    placeholder="e.g. 8517, 8518, 8504"
                     className="w-full p-2 border rounded font-mono"
                   />
                 </div>
@@ -1457,6 +2792,108 @@ export const AdminDashboard: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Store Full / Partial Order Cancellation Modal */}
+      {cancellingOrder && (
+        <StoreOrderCancellationModal
+          order={cancellingOrder}
+          onClose={() => setCancellingOrder(null)}
+          onSuccess={() => setCancellingOrder(null)}
+        />
+      )}
+
+      {/* Google Authenticator Registration QR Modal */}
+      {showAuthenticatorQrModal && authenticatorTargetAccount && (
+        <AdminAuthenticatorQrModal
+          account={authenticatorTargetAccount}
+          isOpen={showAuthenticatorQrModal}
+          onClose={() => setShowAuthenticatorQrModal(false)}
+          onUpdateAccount={(accId, updates) => {
+            updateStoreStaffAccount(accId, updates);
+          }}
+        />
+      )}
+
+      {/* AI Product Assistant Studio Modal (Upload / Modify / Segregate) */}
+      {showAiProductModal && (
+        <AIProductAssistantModal
+          isOpen={showAiProductModal}
+          productToEdit={productForAiEdit}
+          onClose={() => {
+            setShowAiProductModal(false);
+            setProductForAiEdit(null);
+          }}
+          onSuccess={() => {
+            setShowAiProductModal(false);
+            setProductForAiEdit(null);
+          }}
+        />
+      )}
+
+      {/* Product Approvals Queue Modal (Super Admin Review) */}
+      {showApprovalsModal && (
+        <ProductApprovalsQueueModal
+          isOpen={showApprovalsModal}
+          onClose={() => setShowApprovalsModal(false)}
+          onEditProduct={(p) => {
+            setProductForAiEdit(p);
+            setShowAiProductModal(true);
+          }}
+        />
+      )}
+
+      {/* Multi-Seller Price & Offers Modal */}
+      {multiSellerModalProduct && (
+        <MultiSellerPriceModal
+          product={multiSellerModalProduct}
+          isOpen={Boolean(multiSellerModalProduct)}
+          onClose={() => setMultiSellerModalProduct(null)}
+        />
+      )}
+
+      {/* Order Dispatch Modal: Option 1 (In-House Rider) vs Option 2 (Express Shiprocket Carrier) */}
+      {dispatchingOrder && (
+        <OrderDispatchModal
+          order={dispatchingOrder}
+          isOpen={Boolean(dispatchingOrder)}
+          onClose={() => setDispatchingOrder(null)}
+          onSuccess={() => setDispatchingOrder(null)}
+        />
+      )}
+
+      {/* Doorstep COD Cash / UPI QR Collection Modal */}
+      {collectingCodOrder && (
+        <CodCollectionModal
+          order={collectingCodOrder}
+          isOpen={Boolean(collectingCodOrder)}
+          onClose={() => setCollectingCodOrder(null)}
+          onSuccess={() => setCollectingCodOrder(null)}
+        />
+      )}
+
+      {/* Product Dimensions, Volumetric Weight & Variations Modal */}
+      {showVariantsModal && productForVariantsEdit && (
+        <ProductVariantsAndDimensionsModal
+          product={productForVariantsEdit}
+          isOpen={showVariantsModal}
+          onClose={() => {
+            setShowVariantsModal(false);
+            setProductForVariantsEdit(null);
+          }}
+          onSuccess={() => {
+            setShowVariantsModal(false);
+            setProductForVariantsEdit(null);
+          }}
+        />
+      )}
+
+      {/* Standalone Volumetric Weight Calculator Tool */}
+      {showStandaloneVolumetricModal && (
+        <VolumetricWeightCalculatorModal
+          isOpen={showStandaloneVolumetricModal}
+          onClose={() => setShowStandaloneVolumetricModal(false)}
+        />
       )}
     </div>
   );

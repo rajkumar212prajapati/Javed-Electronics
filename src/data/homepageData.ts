@@ -1,0 +1,520 @@
+import { HomepageMasterSettings, HomepageSection } from '../types';
+
+export const INITIAL_HOMEPAGE_SECTIONS: HomepageSection[] = [
+  {
+    id: 'festive_base',
+    title: 'Festive Dhamaka & Celebration Specials',
+    subtitle: 'Grand festival savings, gift hampers & complimentary gift wrapping',
+    badge: 'FESTIVE UTSAV',
+    isEnabled: true,
+    order: 1,
+  },
+  {
+    id: 'sale_base',
+    title: 'Flash Sale & Mega Deals',
+    subtitle: 'Limited-time drops with extra Lucknow store discounts • Ending soon!',
+    badge: 'FLASH SALE',
+    isEnabled: true,
+    order: 2,
+  },
+  {
+    id: 'category_based',
+    title: 'Explore Categories',
+    subtitle: 'Handpicked gadgets & smart home gear with genuine Lucknow warranty',
+    badge: 'ALL CATEGORIES',
+    isEnabled: true,
+    order: 3,
+  },
+  {
+    id: 'price_sale_base',
+    title: 'Budget Store - Shop By Price',
+    subtitle: 'Curated pocket-friendly electronics under your exact budget',
+    badge: 'BUDGET CORNER',
+    isEnabled: true,
+    order: 4,
+  },
+  {
+    id: 'brand_base',
+    title: 'Shop By Top Brands',
+    subtitle: 'Authorised retail partner for official manufacturer warranties',
+    badge: '100% GENUINE',
+    isEnabled: true,
+    order: 5,
+  },
+  {
+    id: 'combo_base',
+    title: 'Value Combos & Super Bundles',
+    subtitle: 'Pair companion gadgets together and unlock instant mega savings',
+    badge: 'COMBO SAVINGS',
+    isEnabled: true,
+    order: 6,
+  },
+  {
+    id: 'offer_base',
+    title: 'Bank Offers & Instant Cashbacks',
+    subtitle: 'Card discounts, instant UPI cashback & free express delivery perks',
+    badge: 'BANK DEALS',
+    isEnabled: true,
+    order: 7,
+  },
+  {
+    id: 'activity_based',
+    title: 'Shop By Activity & Lifestyle',
+    subtitle: 'Tailored tech setups for fitness, office, gaming, travel and home',
+    badge: 'LIFESTYLE PICKS',
+    isEnabled: true,
+    order: 8,
+  },
+  {
+    id: 'like_based',
+    title: 'Customer Favorites & Hall of Fame',
+    subtitle: 'Top-rated, most-loved and repeatedly purchased by Lucknow shoppers',
+    badge: 'MOST LOVED',
+    isEnabled: true,
+    order: 9,
+  },
+];
+
+export const INITIAL_HOMEPAGE_SETTINGS: HomepageMasterSettings = {
+  sections: INITIAL_HOMEPAGE_SECTIONS,
+
+  // 1. Festive Base Settings
+  festiveConfig: {
+    festivalName: 'Diwali Tech Utsav & Mega Electronics Dhamaka',
+    greeting: '✨ Shubh Deepawali & Grand Festive Greetings from Javed Electronics Lucknow!',
+    bannerHeadline: 'Diwali Tech Utsav: Flat 15% Extra Savings & Free Gift Hampers',
+    bannerSubtext: 'Celebrate the festival of lights with genuine smartphones, Dolby soundbars, smartwatches and instant 4-hour Lucknow delivery.',
+    badge: 'DIWALI SPECIAL',
+    themeStyle: 'diwali',
+    couponCode: 'DIWALI2026',
+    discountPercentage: 15,
+    minSpend: 1999,
+    giftPackagingAvailable: true,
+    giftPackNote: 'Complimentary festive gold-embossed gift wrapping and greeting card included on request!',
+    featuredProductIds: ['prod-001', 'prod-002', 'prod-004', 'prod-006', 'prod-009'],
+  },
+
+  // 2. Sale Base Settings
+  saleConfig: {
+    headline: 'Lightning Flash Deals & Clearance Corner',
+    subtext: 'Exclusive prices refreshed daily. Limited stock reserved for Lucknow walk-in & online buyers.',
+    badge: 'DEALS OF THE DAY',
+    endTime: new Date(Date.now() + 1000 * 60 * 60 * 18).toISOString(), // 18 hours from now
+    discountBadgeText: 'UP TO 55% OFF',
+    urgencyBannerText: '🔥 Selling fast! Over 128 orders placed in Lucknow today.',
+    featuredProductIds: ['prod-002', 'prod-003', 'prod-005', 'prod-009', 'prod-011'],
+  },
+
+  // 3. Category Based Settings
+  categoryItems: [
+    {
+      categoryId: 'smartphones',
+      displayName: 'Smartphones & 5G',
+      startingPrice: 6999,
+      badge: 'TOP SELLER',
+      tagline: '5G flagships, foldables & reliable budget daily drivers',
+      imageUrl: 'https://images.unsplash.com/photo-1598327105666-5b89351aff97?auto=format&fit=crop&w=400&q=80',
+      popularSubcategories: ['5G Phones', 'AMOLED 120Hz', 'Flagship Cameras', 'Long Battery'],
+      isActive: true,
+    },
+    {
+      categoryId: 'audio',
+      displayName: 'Earphones & Speakers',
+      startingPrice: 699,
+      badge: 'TRENDING',
+      tagline: 'TWS earbuds, ANC headphones & heavy bass party speakers',
+      imageUrl: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=400&q=80',
+      popularSubcategories: ['TWS Earbuds', 'Noise Cancellation', 'Bluetooth Speakers', 'Neckbands'],
+      isActive: true,
+    },
+    {
+      categoryId: 'chargers_cables',
+      displayName: 'Chargers & Power Banks',
+      startingPrice: 299,
+      badge: 'ESSENTIAL',
+      tagline: 'GaN ultra-fast adapters, braided cords & 20000mAh banks',
+      imageUrl: 'https://images.unsplash.com/photo-1622445262464-84b1456045b6?auto=format&fit=crop&w=400&q=80',
+      popularSubcategories: ['65W GaN', 'Type-C Braided', 'Power Banks', 'Car Chargers'],
+      isActive: true,
+    },
+    {
+      categoryId: 'smartwatches',
+      displayName: 'Smartwatches & Fit Bands',
+      startingPrice: 1299,
+      badge: 'POPULAR',
+      tagline: 'Bluetooth calling, AMOLED displays & SpO2 health monitors',
+      imageUrl: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80',
+      popularSubcategories: ['AMOLED Display', 'Bluetooth Calling', 'Fitness Trackers', 'Metallic Straps'],
+      isActive: true,
+    },
+    {
+      categoryId: 'computer_accessories',
+      displayName: 'Computer & Office Gear',
+      startingPrice: 499,
+      badge: 'PRO TOOLS',
+      tagline: 'Mechanical keyboards, ergonomic mice & high-speed USB hubs',
+      imageUrl: 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=400&q=80',
+      popularSubcategories: ['Wireless Mouse', 'Gaming Keyboards', 'Multi-Port Hubs', 'Webcams'],
+      isActive: true,
+    },
+    {
+      categoryId: 'tvs_accessories',
+      displayName: 'Smart TVs & Media',
+      startingPrice: 1999,
+      badge: 'HOME CINEMA',
+      tagline: '4K streaming sticks, HDMI 2.1 cords & soundbar audio',
+      imageUrl: 'https://images.unsplash.com/photo-1593784991095-a205069470b6?auto=format&fit=crop&w=400&q=80',
+      popularSubcategories: ['4K Streaming', 'Soundbars', 'Wall Mounts', 'HDMI 2.1'],
+      isActive: true,
+    },
+  ],
+
+  // 4. Price Sale Base Settings
+  priceSlabs: [
+    {
+      id: 'slab-499',
+      label: 'Under ₹499',
+      maxPrice: 499,
+      minPrice: 0,
+      badge: 'POCKET FRIENDLY',
+      tagline: 'Cables, OTG connectors, screen protectors & phone stands',
+      isActive: true,
+    },
+    {
+      id: 'slab-999',
+      label: 'Under ₹999',
+      maxPrice: 999,
+      minPrice: 499,
+      badge: 'SWEET SPOT',
+      tagline: 'Fast chargers, wired headsets, compact power banks & stylus',
+      isActive: true,
+    },
+    {
+      id: 'slab-1999',
+      label: 'Under ₹1,999',
+      maxPrice: 1999,
+      minPrice: 999,
+      badge: 'BEST VALUE',
+      tagline: 'True wireless earbuds, smart fitness bands & Bluetooth speakers',
+      isActive: true,
+    },
+    {
+      id: 'slab-4999',
+      label: 'Under ₹4,999',
+      maxPrice: 4999,
+      minPrice: 1999,
+      badge: 'PREMIUM TECH',
+      tagline: 'AMOLED calling watches, ANC audio & 65W GaN multi-chargers',
+      isActive: true,
+    },
+    {
+      id: 'slab-above',
+      label: 'Flagships & Phones (₹5,000+)',
+      maxPrice: 200000,
+      minPrice: 5000,
+      badge: 'TOP TIER',
+      tagline: '5G smartphones, premium active noise cancelling headphones & tablets',
+      isActive: true,
+    },
+  ],
+
+  // 5. Brand Base Settings
+  brands: [
+    {
+      id: 'brand-apple',
+      name: 'Apple',
+      tagline: 'Official Lucknow partner for iPhones, AirPods & genuine MagSafe gear',
+      badge: 'AUTHORISED',
+      discountTag: 'Save up to ₹8,000',
+      productCount: 3,
+      featuredCategory: 'smartphones',
+      isActive: true,
+    },
+    {
+      id: 'brand-samsung',
+      name: 'Samsung',
+      tagline: 'Galaxy AI flagships, AMOLED smartwatches & fast wireless chargers',
+      badge: 'TOP SELLER',
+      discountTag: 'Up to 35% Off',
+      productCount: 4,
+      featuredCategory: 'smartphones',
+      isActive: true,
+    },
+    {
+      id: 'brand-oneplus',
+      name: 'OnePlus',
+      tagline: 'Fast & Smooth Nord series, Warp chargers & Bullets Wireless',
+      badge: 'POPULAR',
+      discountTag: 'Instant ₹1,500 Off',
+      productCount: 3,
+      featuredCategory: 'smartphones',
+      isActive: true,
+    },
+    {
+      id: 'brand-boat',
+      name: 'boAt',
+      tagline: 'India’s #1 audio brand: Heavy bass Airdopes, Rockerz & Stone party speakers',
+      badge: 'BESTSELLER',
+      discountTag: 'Flat 50% Off',
+      productCount: 5,
+      featuredCategory: 'audio',
+      isActive: true,
+    },
+    {
+      id: 'brand-xiaomi',
+      name: 'Xiaomi',
+      tagline: 'Redmi Note series, high-capacity power banks & smart home sensors',
+      badge: 'VALUE KING',
+      discountTag: 'Up to 30% Off',
+      productCount: 4,
+      featuredCategory: 'smartphones',
+      isActive: true,
+    },
+    {
+      id: 'brand-sony',
+      name: 'Sony',
+      tagline: 'Industry-leading noise cancellation, LDAC Hi-Res audio & headphones',
+      badge: 'HI-RES AUDIO',
+      discountTag: 'Special Cashbacks',
+      productCount: 2,
+      featuredCategory: 'audio',
+      isActive: true,
+    },
+    {
+      id: 'brand-noise',
+      name: 'Noise',
+      tagline: 'Smart Bluetooth calling watches with vibrant AMOLED displays',
+      badge: 'TRENDING',
+      discountTag: 'Starts ₹1,499',
+      productCount: 3,
+      featuredCategory: 'smartwatches',
+      isActive: true,
+    },
+    {
+      id: 'brand-realme',
+      name: 'Realme',
+      tagline: 'Periscope camera phones, SuperVOOC chargers & buds',
+      badge: 'FRESH DROPS',
+      discountTag: 'Min 20% Off',
+      productCount: 3,
+      featuredCategory: 'smartphones',
+      isActive: true,
+    },
+  ],
+
+  // 6. Combo Base Settings
+  comboBundles: [
+    {
+      id: 'combo-1',
+      title: 'Power & Protection Smartphone Duo',
+      badge: 'MOST POPULAR COMBO',
+      productIds: ['prod-001', 'prod-003'],
+      productNames: ['Redmi Note 13 Pro 5G', 'Portronics 65W GaN Fast Charger'],
+      regularTotal: 25498,
+      comboPrice: 23999,
+      savings: 1499,
+      tagline: 'Get high-speed 65W multi-device charging paired with your 200MP phone.',
+      description: 'Includes 1x Redmi Note 13 Pro 5G and 1x Portronics 65W GaN Turbo Charger with dual Type-C ports.',
+      imageUrl: 'https://images.unsplash.com/photo-1598327105666-5b89351aff97?auto=format&fit=crop&w=400&q=80',
+      isPopular: true,
+      isActive: true,
+    },
+    {
+      id: 'combo-2',
+      title: 'Ultimate boAt Audio Party Pack',
+      badge: 'SUPER SAVER BUNDLE',
+      productIds: ['prod-002', 'prod-009'],
+      productNames: ['boAt Airdopes 141 (42H Playtime)', 'boAt Stone 650 10W Bluetooth Speaker'],
+      regularTotal: 3198,
+      comboPrice: 2499,
+      savings: 699,
+      tagline: 'Personal TWS earbuds for on-the-go plus a waterproof room party speaker.',
+      description: 'Never miss a beat! Enjoy crystal-clear individual wireless earbuds and room-filling 10W stereo bass sound.',
+      imageUrl: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=400&q=80',
+      isPopular: true,
+      isActive: true,
+    },
+    {
+      id: 'combo-3',
+      title: 'Active Lifestyle & Fitness Duo',
+      badge: 'HEALTH & WORKOUT',
+      productIds: ['prod-004', 'prod-002'],
+      productNames: ['Noise ColorFit Ultra 3 AMOLED Watch', 'boAt Airdopes 141 IPX4 Earbuds'],
+      regularTotal: 4498,
+      comboPrice: 3599,
+      savings: 899,
+      tagline: 'Track your daily steps & heart rate while listening to workout beats uninterrupted.',
+      description: 'Full Bluetooth calling watch with metallic finish paired with sweatproof gaming and workout earbuds.',
+      imageUrl: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80',
+      isPopular: false,
+      isActive: true,
+    },
+  ],
+
+  // 7. Offer Base Settings
+  bankOffers: [
+    {
+      id: 'offer-hdfc',
+      bankName: 'HDFC Bank',
+      cardType: 'Credit & Debit Cards',
+      discountText: '10% Instant Discount up to ₹1,500',
+      code: 'HDFC1500',
+      minSpend: 4999,
+      badge: 'BANK OFFER',
+      terms: 'Applicable on HDFC Bank Credit & Debit Cards. Valid once per customer this month.',
+      bgColorClass: 'from-blue-900 to-indigo-950 text-white',
+      isActive: true,
+    },
+    {
+      id: 'offer-icici',
+      bankName: 'ICICI Bank',
+      cardType: 'Net Banking & EMI',
+      discountText: 'Flat ₹750 Off on No-Cost EMI',
+      code: 'ICICINCE',
+      minSpend: 9999,
+      badge: 'NO COST EMI',
+      terms: 'Valid on 3 and 6 months EMI tenures on ICICI Credit Cards.',
+      bgColorClass: 'from-orange-700 to-amber-900 text-white',
+      isActive: true,
+    },
+    {
+      id: 'offer-upi',
+      bankName: 'Instant UPI Cashback',
+      cardType: 'GPay / PhonePe / Paytm / BHIM',
+      discountText: 'Flat ₹50 Instant Cashback on QR',
+      code: 'LKOUP50',
+      minSpend: 499,
+      badge: 'INSTANT REWARD',
+      terms: 'Scan Dynamic Store QR code at checkout. Credited directly to your linked bank account.',
+      bgColorClass: 'from-emerald-800 to-teal-950 text-white',
+      isActive: true,
+    },
+    {
+      id: 'offer-express',
+      bankName: 'Lucknow 4-Hour Express',
+      cardType: 'All Orders Above ₹499',
+      discountText: 'Zero Delivery Fee • 4-Hour Doorstep Delivery',
+      code: 'LUCKNOWFREE',
+      minSpend: 499,
+      badge: 'LOCAL PERK',
+      terms: 'Guaranteed 4-hour delivery within Hazratganj, Gomti Nagar, Alambagh, Chowk, Indiranagar.',
+      bgColorClass: 'from-purple-900 to-slate-900 text-white',
+      isActive: true,
+    },
+  ],
+
+  // 8. Activity Based Settings
+  activities: [
+    {
+      id: 'act-fitness',
+      name: 'Workout & Fitness',
+      tagline: 'Sweatproof audio, sports smartwatches & durable hydration gear',
+      badge: 'HIGH STAMINA',
+      iconName: 'Activity',
+      categoryFilter: 'smartwatches',
+      keywords: ['watch', 'airdrop', 'fitness', 'sweat', 'sport'],
+      bgGradient: 'from-rose-500 to-orange-500',
+      isActive: true,
+    },
+    {
+      id: 'act-work',
+      name: 'Work From Home & Office',
+      tagline: 'Noise-cancelling headsets, fast charging hubs & mechanical keyboards',
+      badge: 'PRODUCTIVITY',
+      iconName: 'Briefcase',
+      categoryFilter: 'computer_accessories',
+      keywords: ['charger', 'headphone', 'laptop', 'mouse', 'hub', 'keyboard'],
+      bgGradient: 'from-blue-600 to-cyan-600',
+      isActive: true,
+    },
+    {
+      id: 'act-gaming',
+      name: 'Gaming & Streaming',
+      tagline: 'Ultra-low latency audio, cooling pads & braided lightning cords',
+      badge: 'ZERO LAG',
+      iconName: 'Gamepad2',
+      categoryFilter: 'audio',
+      keywords: ['gaming', 'latency', 'headset', 'bass'],
+      bgGradient: 'from-purple-600 to-violet-800',
+      isActive: true,
+    },
+    {
+      id: 'act-cinema',
+      name: 'Home Cinema & Music',
+      tagline: 'Deep bass soundbars, smart TV remotes & 4K streaming sticks',
+      badge: 'DOLBY AUDIO',
+      iconName: 'Tv',
+      categoryFilter: 'tvs_accessories',
+      keywords: ['speaker', 'soundbar', 'tv', 'stone', 'dolby'],
+      bgGradient: 'from-amber-500 to-red-600',
+      isActive: true,
+    },
+    {
+      id: 'act-travel',
+      name: 'Travel & Daily Commute',
+      tagline: 'High-capacity power banks, dual car chargers & travel organizers',
+      badge: 'NEVER RUN OUT',
+      iconName: 'Compass',
+      categoryFilter: 'chargers_cables',
+      keywords: ['power bank', 'charger', 'car', 'cable', 'battery'],
+      bgGradient: 'from-emerald-600 to-teal-700',
+      isActive: true,
+    },
+  ],
+
+  // 9. Like Based Settings
+  likeConfig: {
+    headline: 'Most Loved & Customer Favorites',
+    subtext: 'Verified 4.8+ star electronics backed by over 2,400+ satisfied Lucknow buyers.',
+    badge: 'COMMUNITY FAVORITES',
+    minRating: 4.5,
+    showLikeCounter: true,
+    featuredQuotes: [
+      {
+        productId: 'prod-002',
+        quote: 'Amazing sound quality and battery life! Received in Hazratganj within 3 hours.',
+        customerName: 'Mohd. Imran',
+        verifiedLocation: 'Hazratganj, Lucknow',
+      },
+      {
+        productId: 'prod-001',
+        quote: 'Camera is unmatched for this price. Best local customer support from Javed Electronics.',
+        customerName: 'Priya Srivastava',
+        verifiedLocation: 'Gomti Nagar, Lucknow',
+      },
+      {
+        productId: 'prod-003',
+        quote: 'Charges my phone and laptop simultaneously without getting warm. GaN tech is superb!',
+        customerName: 'Alok Verma',
+        verifiedLocation: 'Alambagh, Lucknow',
+      },
+    ],
+  },
+};
+
+export const HOMEPAGE_SETTINGS_STORAGE_KEY = 'je_homepage_builder_settings_v1';
+export const HOMEPAGE_LIKES_STORAGE_KEY = 'je_homepage_product_likes_v1';
+
+export function loadStoredHomepageSettings(): HomepageMasterSettings {
+  try {
+    const raw = localStorage.getItem(HOMEPAGE_SETTINGS_STORAGE_KEY);
+    if (!raw) return INITIAL_HOMEPAGE_SETTINGS;
+    const parsed = JSON.parse(raw);
+    return {
+      ...INITIAL_HOMEPAGE_SETTINGS,
+      ...parsed,
+      sections: parsed.sections || INITIAL_HOMEPAGE_SECTIONS,
+    };
+  } catch (err) {
+    console.warn('Failed to parse saved homepage settings, using defaults', err);
+    return INITIAL_HOMEPAGE_SETTINGS;
+  }
+}
+
+export function saveStoredHomepageSettings(settings: HomepageMasterSettings): void {
+  try {
+    localStorage.setItem(HOMEPAGE_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  } catch (err) {
+    console.error('Failed to save homepage settings to storage', err);
+  }
+}

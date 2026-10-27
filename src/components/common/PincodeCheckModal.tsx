@@ -7,6 +7,8 @@ export const PincodeCheckModal: React.FC = () => {
     activeModal,
     setActiveModal,
     checkPincodeServiceable,
+    getDeliveryZoneForPincode,
+    deliveryZones,
     settings,
     outlets,
     activeOutlet,
@@ -15,6 +17,7 @@ export const PincodeCheckModal: React.FC = () => {
   } = useStore();
   const [pinInput, setPinInput] = useState('');
   const [result, setResult] = useState<'serviceable' | 'unserviceable' | null>(null);
+  const [matchedZone, setMatchedZone] = useState<any>(null);
 
   if (activeModal !== 'pincode_check') return null;
 
@@ -22,6 +25,8 @@ export const PincodeCheckModal: React.FC = () => {
     e.preventDefault();
     if (!pinInput.trim()) return;
     const isOk = checkPincodeServiceable(pinInput);
+    const zone = getDeliveryZoneForPincode(pinInput);
+    setMatchedZone(zone || null);
     setResult(isOk ? 'serviceable' : 'unserviceable');
   };
 
@@ -69,14 +74,31 @@ export const PincodeCheckModal: React.FC = () => {
         </form>
 
         {result === 'serviceable' && (
-          <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs space-y-1">
+          <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs space-y-1.5 animate-in fade-in">
             <div className="flex items-center gap-1.5 font-bold text-emerald-800">
-              <CheckCircle className="w-4 h-4 text-emerald-600" />
-              <span>PIN Code {pinInput} is Serviceable!</span>
+              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>PIN Code {pinInput} is Serviceable for Express Delivery!</span>
             </div>
-            <p className="text-emerald-700 text-[11px]">
-              Same-day local delivery available! Orders placed before 5:00 PM are delivered today. Free delivery above ₹{settings.freeDeliveryThreshold}.
-            </p>
+
+            {matchedZone ? (
+              <div className="space-y-1 text-emerald-900 text-[11px]">
+                <div className="bg-emerald-100/60 p-2 rounded-lg">
+                  <div className="font-semibold text-emerald-950">
+                    Covered Localities: {matchedZone.areaName}
+                  </div>
+                  <div className="text-emerald-800 text-[10px] mt-0.5">
+                    Dispatched from: <strong>{matchedZone.outletName || 'Nearest Store'}</strong> • Speed: <strong>{matchedZone.estimatedHours || 3} Hours Express</strong>
+                  </div>
+                </div>
+                <p className="text-emerald-700">
+                  Cutoff: Orders before {matchedZone.cutoffTime || '5:00 PM'} delivered today. Free delivery above ₹{matchedZone.freeDeliveryThreshold ?? settings.freeDeliveryThreshold}.
+                </p>
+              </div>
+            ) : (
+              <p className="text-emerald-700 text-[11px]">
+                Same-day local delivery available! Orders placed before 5:00 PM are delivered today. Free delivery above ₹{settings.freeDeliveryThreshold}.
+              </p>
+            )}
           </div>
         )}
 

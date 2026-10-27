@@ -16,6 +16,12 @@ import {
   Copy,
   Check,
   MessageCircle,
+  LogOut,
+  KeyRound,
+  Truck,
+  ExternalLink,
+  Banknote,
+  ShieldCheck,
 } from 'lucide-react';
 
 export const CustomerAccountModal: React.FC = () => {
@@ -30,10 +36,12 @@ export const CustomerAccountModal: React.FC = () => {
     setSelectedOrderForModal,
     setSelectedProductForDetail,
     settings,
+    logoutUser,
   } = useStore();
 
   const [activeTab, setActiveTab] = useState<'orders' | 'referrals' | 'wishlist' | 'coupons' | 'profile'>('orders');
   const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedCouponCode, setCopiedCouponCode] = useState<string | null>(null);
 
   if (activeModal !== 'customer_account') return null;
 
@@ -71,12 +79,33 @@ export const CustomerAccountModal: React.FC = () => {
               <span className="text-xs text-slate-500 font-mono block">{currentUser.phone}</span>
             </div>
           </div>
-          <button
-            onClick={() => setActiveModal(null)}
-            className="p-1.5 text-slate-400 hover:text-slate-700 rounded-md cursor-pointer shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={() => setActiveModal('auth')}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 font-semibold cursor-pointer transition-colors"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Switch Account</span>
+            </button>
+
+            <button
+              onClick={() => {
+                logoutUser();
+                setActiveModal(null);
+              }}
+              title="Sign Out"
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => setActiveModal(null)}
+              className="p-1.5 text-slate-400 hover:text-slate-700 rounded-md cursor-pointer shrink-0"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Tab Navigation */}
@@ -113,51 +142,102 @@ export const CustomerAccountModal: React.FC = () => {
                   You haven't placed any orders yet.
                 </div>
               ) : (
-                myOrders.map((order) => (
-                  <div
-                    key={order.id}
-                    className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono font-bold text-slate-900">{order.id}</span>
-                      <span className="font-bold text-emerald-800 bg-emerald-100 text-[10px] px-2 py-0.5 rounded uppercase">
-                        {order.orderStatus.replace(/_/g, ' ')}
-                      </span>
-                    </div>
+                myOrders.map((order) => {
+                  const isCod = order.paymentMethod === 'cod';
+                  const dispatch = order.dispatchDetails;
 
-                    <div className="text-slate-600">
-                      {order.items.map((i) => `${i.productName} (x${i.quantity})`).join(', ')}
-                    </div>
+                  return (
+                    <div
+                      key={order.id}
+                      className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2.5"
+                    >
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-slate-900">{order.id}</span>
+                          {/* Payment Type Badge */}
+                          {isCod ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                              <Banknote className="w-3 h-3 text-amber-700" />
+                              <span>COD ({order.paymentStatus === 'verified_paid' ? 'Paid' : 'Due at Doorstep'})</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                              <span>Prepaid</span>
+                            </span>
+                          )}
+                        </div>
 
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-200 font-mono">
-                      <span className="text-slate-500">
-                        Total: <strong>{formatINR(order.finalTotal)}</strong>
-                      </span>
+                        <span className="font-bold text-slate-700 bg-white border border-slate-200 text-[10px] px-2 py-0.5 rounded uppercase font-mono">
+                          {order.orderStatus.replace(/_/g, ' ')}
+                        </span>
+                      </div>
 
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => {
-                            setSelectedOrderForModal(order);
-                            setActiveModal('order_tracking');
-                          }}
-                          className="px-2.5 py-1 bg-blue-600 text-white rounded font-semibold text-[11px] cursor-pointer"
-                        >
-                          Track
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSelectedOrderForModal(order);
-                            setActiveModal('invoice');
-                          }}
-                          className="px-2.5 py-1 bg-slate-900 text-white rounded font-semibold text-[11px] cursor-pointer flex items-center gap-1"
-                        >
-                          <Printer className="w-3 h-3" />
-                          <span>Invoice</span>
-                        </button>
+                      <div className="text-slate-600 line-clamp-1">
+                        {order.items.map((i) => `${i.productName} (x${i.quantity})`).join(', ')}
+                      </div>
+
+                      {/* Dispatch & AWB badge if available */}
+                      {dispatch && (
+                        <div className="p-2.5 bg-white border border-slate-200 rounded-lg flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <Truck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                            {dispatch.fulfillmentType === 'express_partner' ? (
+                              <span className="text-[11px] text-slate-800">
+                                <strong>{dispatch.carrier} Express</strong> • AWB:{' '}
+                                <span className="font-mono font-bold text-blue-700">{dispatch.awbNumber || 'Pending'}</span>
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-slate-800">
+                                <strong>In-House Rider:</strong> {dispatch.riderName || 'Store Courier'}
+                              </span>
+                            )}
+                          </div>
+
+                          {dispatch.trackingUrl && (
+                            <a
+                              href={dispatch.trackingUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              <span>Live Courier Tracking</span>
+                            </a>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-200 font-mono">
+                        <span className="text-slate-600">
+                          Total: <strong className="text-slate-900 font-black">{formatINR(order.finalTotal)}</strong>
+                        </span>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedOrderForModal(order);
+                              setActiveModal('order_tracking');
+                            }}
+                            className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-[11px] cursor-pointer"
+                          >
+                            Track Shipment
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedOrderForModal(order);
+                              setActiveModal('invoice');
+                            }}
+                            className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded font-semibold text-[11px] cursor-pointer flex items-center gap-1"
+                          >
+                            <Printer className="w-3 h-3" />
+                            <span>Invoice</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}
@@ -267,11 +347,16 @@ export const CustomerAccountModal: React.FC = () => {
                   <button
                     onClick={() => {
                       navigator.clipboard?.writeText(c.code);
-                      alert(`Coupon ${c.code} copied!`);
+                      setCopiedCouponCode(c.code);
+                      setTimeout(() => setCopiedCouponCode(null), 2500);
                     }}
-                    className="px-3 py-1 bg-slate-200 hover:bg-slate-300 rounded font-semibold text-slate-800 cursor-pointer"
+                    className={`px-3 py-1 rounded font-semibold text-xs transition-colors cursor-pointer ${
+                      copiedCouponCode === c.code
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-200 hover:bg-slate-300 text-slate-800'
+                    }`}
                   >
-                    Copy
+                    {copiedCouponCode === c.code ? 'Copied!' : 'Copy'}
                   </button>
                 </div>
               ))}

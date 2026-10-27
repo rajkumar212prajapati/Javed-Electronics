@@ -9,10 +9,18 @@ export function generateWhatsAppOrderMessage(order: Order): string {
     .map((item) => `• ${item.productName}${item.variant ? ` (${item.variant})` : ''} × ${item.quantity} - ${formatINR(item.total)}`)
     .join('\n');
 
-  const paymentLabel = 
-    order.paymentMethod === 'cod' ? 'Cash on Delivery (COD)' :
-    order.paymentMethod === 'upi_qr' ? 'UPI / QR Code' :
-    order.paymentMethod === 'online_razorpay' ? 'Online / Razorpay' : 'Store Pickup Pay';
+  const paymentLabels: Record<string, string> = {
+    upi_qr: 'Direct Dynamic UPI / QR Code',
+    razorpay: 'Razorpay Gateway (Cards/Netbanking/UPI)',
+    online_razorpay: 'Razorpay Gateway (Cards/Netbanking/UPI)',
+    phonepe: 'PhonePe PG (1-Tap UPI Intent)',
+    paytm: 'Paytm Gateway (Wallet & Postpaid)',
+    cashfree: 'Cashfree Payments (Auto-Collect)',
+    stripe: 'Stripe International (Global Cards)',
+    cod: 'Cash on Delivery (COD)',
+    store_pickup_pay: 'Store Counter Pickup Pay',
+  };
+  const paymentLabel = paymentLabels[order.paymentMethod] || order.paymentMethod.replace(/_/g, ' ');
 
   const deliveryTypeLabel = order.deliveryType === 'store_pickup' 
     ? '🏪 Store Pickup' 
