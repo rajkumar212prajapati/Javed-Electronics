@@ -27,22 +27,10 @@ export const FestivalFeaturedProducts: React.FC<Props> = ({ campaign }) => {
 
   return (
     <section className="w-full max-w-7xl mx-auto px-2.5 sm:px-4 mt-6 sm:mt-10 box-border">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 mb-4">
-        <div>
-          <div className="flex items-center gap-1.5 mb-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-800 px-2 py-0.5 rounded flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-rose-600" />
-              EXCLUSIVE FESTIVAL CATALOG
-            </span>
-          </div>
-          <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
-            Curated {campaign.festival_name} Deals & Bestsellers
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-500">
-            Selected tech products eligible for instant festival coupons and same-day Lucknow delivery
-          </p>
-        </div>
+      <div className="mb-4">
+        <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
+          {campaign.festival_name} Deals
+        </h2>
       </div>
 
       {/* Products Grid */}

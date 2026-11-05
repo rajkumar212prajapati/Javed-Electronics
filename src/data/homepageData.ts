@@ -81,9 +81,9 @@ export const INITIAL_HOMEPAGE_SETTINGS: HomepageMasterSettings = {
   // 1. Festive Base Settings
   festiveConfig: {
     festivalName: 'Diwali Tech Utsav & Mega Electronics Dhamaka',
-    greeting: '✨ Shubh Deepawali & Grand Festive Greetings from Javed Electronics Lucknow!',
+    greeting: '✨ Shubh Deepawali & Grand Festive Greetings from Javed Electronics Nalasopara!',
     bannerHeadline: 'Diwali Tech Utsav: Flat 15% Extra Savings & Free Gift Hampers',
-    bannerSubtext: 'Celebrate the festival of lights with genuine smartphones, Dolby soundbars, smartwatches and instant 4-hour Lucknow delivery.',
+    bannerSubtext: 'Celebrate the festival of lights with genuine smartphones, Dolby soundbars, smartwatches and express delivery across Nalasopara, Vasai & Virar.',
     badge: 'DIWALI SPECIAL',
     themeStyle: 'diwali',
     couponCode: 'DIWALI2026',
@@ -97,11 +97,11 @@ export const INITIAL_HOMEPAGE_SETTINGS: HomepageMasterSettings = {
   // 2. Sale Base Settings
   saleConfig: {
     headline: 'Lightning Flash Deals & Clearance Corner',
-    subtext: 'Exclusive prices refreshed daily. Limited stock reserved for Lucknow walk-in & online buyers.',
+    subtext: 'Exclusive prices refreshed daily. Limited stock reserved for Nalasopara & Mumbai MMR walk-in & online buyers.',
     badge: 'DEALS OF THE DAY',
     endTime: new Date(Date.now() + 1000 * 60 * 60 * 18).toISOString(), // 18 hours from now
     discountBadgeText: 'UP TO 55% OFF',
-    urgencyBannerText: '🔥 Selling fast! Over 128 orders placed in Lucknow today.',
+    urgencyBannerText: '🔥 Selling fast! Over 128 orders placed in Nalasopara & Vasai-Virar today.',
     featuredProductIds: ['prod-002', 'prod-003', 'prod-005', 'prod-009', 'prod-011'],
   },
 
@@ -391,13 +391,13 @@ export const INITIAL_HOMEPAGE_SETTINGS: HomepageMasterSettings = {
     },
     {
       id: 'offer-express',
-      bankName: 'Lucknow 4-Hour Express',
+      bankName: 'Nalasopara & MMR Express',
       cardType: 'All Orders Above ₹499',
-      discountText: 'Zero Delivery Fee • 4-Hour Doorstep Delivery',
-      code: 'LUCKNOWFREE',
+      discountText: 'Zero Delivery Fee • Same-Day Doorstep Delivery',
+      code: 'MMRFREE',
       minSpend: 499,
       badge: 'LOCAL PERK',
-      terms: 'Guaranteed 4-hour delivery within Hazratganj, Gomti Nagar, Alambagh, Chowk, Indiranagar.',
+      terms: 'Guaranteed express delivery across 45 locations in Nalasopara, Vasai, Virar & Palghar Mumbai MMR.',
       bgColorClass: 'from-purple-900 to-slate-900 text-white',
       isActive: true,
     },
@@ -465,28 +465,28 @@ export const INITIAL_HOMEPAGE_SETTINGS: HomepageMasterSettings = {
   // 9. Like Based Settings
   likeConfig: {
     headline: 'Most Loved & Customer Favorites',
-    subtext: 'Verified 4.8+ star electronics backed by over 2,400+ satisfied Lucknow buyers.',
+    subtext: 'Verified 4.8+ star electronics backed by over 2,400+ satisfied Nalasopara, Vasai & Virar buyers.',
     badge: 'COMMUNITY FAVORITES',
     minRating: 4.5,
     showLikeCounter: true,
     featuredQuotes: [
       {
         productId: 'prod-002',
-        quote: 'Amazing sound quality and battery life! Received in Hazratganj within 3 hours.',
+        quote: 'Amazing sound quality and battery life! Received in Vijaynagar, Nalasopara East within 1 hour.',
         customerName: 'Mohd. Imran',
-        verifiedLocation: 'Hazratganj, Lucknow',
+        verifiedLocation: 'Vijaynagar, Nalasopara East (401209)',
       },
       {
         productId: 'prod-001',
         quote: 'Camera is unmatched for this price. Best local customer support from Javed Electronics.',
         customerName: 'Priya Srivastava',
-        verifiedLocation: 'Gomti Nagar, Lucknow',
+        verifiedLocation: 'Global City, Virar West (401303)',
       },
       {
         productId: 'prod-003',
         quote: 'Charges my phone and laptop simultaneously without getting warm. GaN tech is superb!',
         customerName: 'Alok Verma',
-        verifiedLocation: 'Alambagh, Lucknow',
+        verifiedLocation: 'Ambadi Road, Vasai West (401202)',
       },
     ],
   },

@@ -387,19 +387,14 @@ export const HomepageLayoutManager: React.FC = () => {
       {activeSubTab === 'festive' && (
         <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
           <div className="flex items-center justify-between border-b pb-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">
-                Festive Dhamaka & Festival Campaign Settings
-              </h3>
-              <p className="text-xs text-slate-500">
-                Change festival theme, headline, coupon discount and gift packaging.
-              </p>
-            </div>
+            <h3 className="text-sm font-bold text-slate-900">
+              Festive Campaign Settings
+            </h3>
             <button
               onClick={() => {
                 triggerSaveNotification();
               }}
-              className="px-3.5 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors cursor-pointer flex items-center gap-1"
+              className="px-3.5 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors cursor-pointer flex items-center gap-1"
             >
               <Save className="w-3.5 h-3.5" />
               <span>Save Changes</span>
@@ -409,7 +404,7 @@ export const HomepageLayoutManager: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Active Festival Theme Style
+                Festival Theme
               </label>
               <select
                 value={homepageSettings.festiveConfig.themeStyle}
@@ -424,18 +419,18 @@ export const HomepageLayoutManager: React.FC = () => {
                 }}
                 className="w-full text-xs p-2 rounded-lg border border-slate-300 bg-white"
               >
-                <option value="diwali">Diwali (Golden / Deep Maroon / Diya Glow)</option>
-                <option value="eid">Eid Mubarak (Emerald Green / Gold / Crescent)</option>
-                <option value="holi">Holi Color Fest (Vibrant Pink / Orange / Cyan)</option>
-                <option value="navratri">Navratri Dhamaka (Fiery Red / Saffron / Gold)</option>
-                <option value="new_year">New Year Grand Sale (Electric Sky Blue / Midnight)</option>
-                <option value="royal_gold">Royal Gold Luxe (Universal Festive)</option>
+                <option value="diwali">Diwali</option>
+                <option value="eid">Eid</option>
+                <option value="holi">Holi</option>
+                <option value="navratri">Navratri</option>
+                <option value="new_year">New Year</option>
+                <option value="royal_gold">Royal Gold</option>
               </select>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Section Badge Label
+                Badge Label
               </label>
               <input
                 type="text"
@@ -483,7 +478,7 @@ export const HomepageLayoutManager: React.FC = () => {
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Festive Coupon Code
+                Coupon Code
               </label>
               <input
                 type="text"
@@ -530,15 +525,10 @@ export const HomepageLayoutManager: React.FC = () => {
               </div>
             </div>
 
-            <div className="md:col-span-2 flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-lg">
-              <div>
-                <span className="text-xs font-bold text-amber-900 block">
-                  Enable Complimentary Gift Packaging
-                </span>
-                <span className="text-[11px] text-amber-700">
-                  Adds gift box checkbox to festive section for shoppers.
-                </span>
-              </div>
+            <label className="md:col-span-2 flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg cursor-pointer">
+              <span className="text-xs font-bold text-slate-800">
+                Complimentary Gift Packaging
+              </span>
               <input
                 type="checkbox"
                 checked={homepageSettings.festiveConfig.giftPackagingAvailable}
@@ -551,9 +541,9 @@ export const HomepageLayoutManager: React.FC = () => {
                   });
                   triggerSaveNotification();
                 }}
-                className="w-5 h-5 text-amber-600 rounded"
+                className="w-4 h-4 text-slate-900 rounded"
               />
-            </div>
+            </label>
           </div>
         </div>
       )}

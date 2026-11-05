@@ -47,6 +47,7 @@ export const PayoutsLedgerManager: React.FC = () => {
   // Modal for Payout Detail / Approval
   const [selectedPayout, setSelectedPayout] = useState<PayoutItem | null>(null);
   const [txnRefInput, setTxnRefInput] = useState('');
+  const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
 
   // Modal for New Payout Run
   const [showNewRunModal, setShowNewRunModal] = useState(false);
@@ -472,10 +473,13 @@ export const PayoutsLedgerManager: React.FC = () => {
           <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 p-4 sm:p-6 space-y-4">
             <div className="flex items-start justify-between">
               <div>
-                <span className="text-xs font-mono font-bold text-blue-700">{selectedPayout.payoutId}</span>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-mono font-bold text-blue-700">{selectedPayout.payoutId}</span>
+                  {getStatusBadge(selectedPayout.status)}
+                </div>
                 <h3 className="font-bold text-slate-900 text-lg">{selectedPayout.participantName}</h3>
                 <span className="text-xs text-slate-500">
-                  {selectedPayout.outletName || 'Central Platform'} • {selectedPayout.periodStart} to {selectedPayout.periodEnd}
+                  {selectedPayout.outletName || 'Shop 09 Sai Dham Apt Vijaynagar Nalasopara East 401209'} • {selectedPayout.periodStart} to {selectedPayout.periodEnd}
                 </span>
               </div>
               <button
@@ -485,6 +489,14 @@ export const PayoutsLedgerManager: React.FC = () => {
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
+
+            {/* In-Modal Feedback Alert */}
+            {actionSuccessMessage && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2 text-xs font-semibold text-emerald-800 animate-in fade-in duration-200">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{actionSuccessMessage}</span>
+              </div>
+            )}
 
             <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200 space-y-2 text-xs">
               <div className="flex justify-between">
@@ -514,7 +526,7 @@ export const PayoutsLedgerManager: React.FC = () => {
                   type="text"
                   value={txnRefInput}
                   onChange={(e) => setTxnRefInput(e.target.value)}
-                  placeholder="e.g. HDFC-NEFT-20261014-998811"
+                  placeholder="e.g. TXN-NEFT-889024"
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -524,11 +536,20 @@ export const PayoutsLedgerManager: React.FC = () => {
               {isSuperAdmin && selectedPayout.status === 'pending_verification' && (
                 <button
                   onClick={() => {
-                    updatePayoutStatus(selectedPayout.payoutId, 'approved');
-                    setSelectedPayout(null);
+                    const targetId = selectedPayout.id || selectedPayout.payoutId;
+                    updatePayoutStatus(targetId, 'approved');
+                    const updated = {
+                      ...selectedPayout,
+                      status: 'approved' as PayoutStatus,
+                      approvedBy: 'Super Admin',
+                      approvedAt: new Date().toISOString(),
+                    };
+                    setSelectedPayout(updated);
+                    setActionSuccessMessage(`Approved for Bank Dispatch! Status updated to 'Approved'.`);
                   }}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg transition-colors cursor-pointer"
+                  className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg transition-colors cursor-pointer shadow-xs flex items-center gap-1.5"
                 >
+                  <ShieldCheck className="w-3.5 h-3.5" />
                   Approve for Bank Dispatch
                 </button>
               )}
@@ -536,18 +557,31 @@ export const PayoutsLedgerManager: React.FC = () => {
               {isSuperAdmin && (selectedPayout.status === 'approved' || selectedPayout.status === 'scheduled') && (
                 <button
                   onClick={() => {
-                    updatePayoutStatus(selectedPayout.payoutId, 'paid', txnRefInput);
-                    setSelectedPayout(null);
+                    const targetId = selectedPayout.id || selectedPayout.payoutId;
+                    const refCode = txnRefInput.trim() || 'TXN-NEFT-889024';
+                    updatePayoutStatus(targetId, 'paid', refCode);
+                    const updated = {
+                      ...selectedPayout,
+                      status: 'paid' as PayoutStatus,
+                      transactionReference: refCode,
+                      paidAt: new Date().toISOString(),
+                    };
+                    setSelectedPayout(updated);
+                    setActionSuccessMessage(`Bank Transfer confirmed & posted to financial subledger!`);
                   }}
-                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-lg transition-colors cursor-pointer"
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-lg transition-colors cursor-pointer shadow-xs flex items-center gap-1.5"
                 >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
                   Confirm Bank Transfer & Post to Ledger
                 </button>
               )}
 
               <button
-                onClick={() => setSelectedPayout(null)}
-                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-lg transition-colors cursor-pointer"
+                onClick={() => {
+                  setSelectedPayout(null);
+                  setActionSuccessMessage(null);
+                }}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-lg transition-colors cursor-pointer"
               >
                 Close
               </button>

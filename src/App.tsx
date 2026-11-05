@@ -25,6 +25,11 @@ import { OfflineIndicator } from './components/common/OfflineIndicator';
 import { MobileBottomNav } from './components/common/MobileBottomNav';
 import { POSTerminal } from './components/admin/pos/POSTerminal';
 import { GoogleMapsWrapper } from './components/common/GoogleMapsWrapper';
+import { PromotionalHomepageSlot } from './components/storefront/PromotionalHomepageSlots';
+import { PromotionalLandingPageModal } from './components/storefront/PromotionalLandingPageModal';
+import { MahaSaleModal } from './components/storefront/MahaSaleModal';
+import { CategoryPills } from './components/storefront/CategoryPills';
+import { FullScreenCategoryModal } from './components/storefront/FullScreenCategoryModal';
 
 const AppContent: React.FC = () => {
   const {
@@ -45,7 +50,7 @@ const AppContent: React.FC = () => {
     !searchQuery.trim() && selectedCategory === 'all' && activeBudgetFilter === null;
 
   return (
-    <div className="min-h-screen flex flex-col bg-white text-slate-900 font-sans w-full max-w-full overflow-x-hidden pb-14 md:pb-0">
+    <div className={`min-h-screen flex flex-col bg-white text-slate-900 font-sans w-full max-w-full overflow-x-hidden ${isDashboardView ? 'pb-0' : 'pb-16'}`}>
       {/* Role Preview Switcher Banner - Strictly for Super Admin accounts */}
       {isAuthenticated && currentUser.role === 'super_admin' && <RoleSwitcherBanner />}
 
@@ -62,6 +67,9 @@ const AppContent: React.FC = () => {
           )
         ) : (
           <>
+            {/* TOP HOMEPAGE PROMOTIONAL SPACE (Announcement Bar / Banner / Badge) */}
+            <PromotionalHomepageSlot position="top" />
+
             {previewFestivalCampaign ? (
               <FestivalHomepage
                 activeCampaign={previewFestivalCampaign}
@@ -72,9 +80,22 @@ const AppContent: React.FC = () => {
               showHeroBanner && <HeroBanner />
             )}
 
+            {/* STOREFRONT ALL CATEGORIES SECTION (Click any category to view all items in full screen) */}
+            <CategoryPills />
+
+            {/* MIDDLE HOMEPAGE PROMOTIONAL SPACE (Interactive Cards / Deals / Sale Grids) */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-2 mb-4">
+              <PromotionalHomepageSlot position="middle" />
+            </div>
+
             {/* Clean Product Catalog Grid */}
             <div id="products-section" className="scroll-mt-4">
               <ProductGrid />
+            </div>
+
+            {/* BOTTOM HOMEPAGE PROMOTIONAL SPACE (Showcase / Mega Banner / Festival Teaser) */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
+              <PromotionalHomepageSlot position="bottom" />
             </div>
           </>
         )}
@@ -83,11 +104,13 @@ const AppContent: React.FC = () => {
       {/* Customer Storefront Footer - Hidden on Admin, Store, Rider & Management Dashboards */}
       {!isDashboardView && <Footer />}
 
-      {/* Mobile Fixed 5-Tab Bottom Navigation Bar (Home, Play, Categories, Account, Cart) */}
+      {/* Mobile Fixed 5-Tab Bottom Navigation Bar (Home, Maha Sale, Categories, Account, Cart) */}
       {!isDashboardView && <MobileBottomNav />}
 
       {/* Modals & Dialogs */}
+      <FullScreenCategoryModal />
       <ProductDetailModal />
+      <MahaSaleModal />
       <CartDrawer />
       <CheckoutModal />
       <OrderConfirmationModal />
@@ -98,6 +121,7 @@ const AppContent: React.FC = () => {
       <QuickQRModal />
       <PolicyModal />
       <AuthModal />
+      <PromotionalLandingPageModal />
       {!isDashboardView && <CustomerSupportChatbot />}
       <OfflineIndicator />
       {activeModal === 'pos_terminal' && (

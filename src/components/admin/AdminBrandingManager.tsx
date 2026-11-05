@@ -31,6 +31,7 @@ import {
   Heart,
   Star,
   MessageCircle,
+  X,
 } from 'lucide-react';
 
 const CURATED_PALETTES = [
@@ -120,6 +121,7 @@ export const AdminBrandingManager: React.FC = () => {
   // Navigation and view tabs
   const [activeTab, setActiveTab] = useState<'editor' | 'preview' | 'history'>('editor');
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
+  const [showLivePreview, setShowLivePreview] = useState(true);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [changeReason, setChangeReason] = useState('Updated theme styling, brand colors & contact parameters');
@@ -692,7 +694,7 @@ export const AdminBrandingManager: React.FC = () => {
                       rows={2}
                       value={businessAddress}
                       onChange={(e) => setBusinessAddress(e.target.value)}
-                      placeholder="Shop #14, Ground Floor, Janpath Market, Hazratganj, Lucknow, UP - 226001"
+                      placeholder="Shop 09, Sai Dham Apt, Vijaynagar, Nalasopara East, Palghar, Mumbai, Maharashtra - 401209"
                       className="w-full text-xs pl-8 pr-3 py-2 border border-slate-300 rounded-lg text-slate-900"
                     />
                   </div>
@@ -810,39 +812,65 @@ export const AdminBrandingManager: React.FC = () => {
 
             {/* Right 5 Columns: Real-Time Interactive Live Preview */}
             <div className="lg:col-span-5 space-y-4">
-              <div className="sticky top-20 bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              {!showLivePreview ? (
+                <div className="sticky top-20 bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Eye className="w-4 h-4 text-blue-600" />
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                      Real-Time Storefront Preview
-                    </span>
+                    <span className="text-xs font-bold text-slate-700">Live Storefront Preview Hidden</span>
                   </div>
-                  <div className="flex bg-slate-100 p-0.5 rounded text-[11px]">
-                    <button
-                      type="button"
-                      onClick={() => setPreviewDevice('desktop')}
-                      className={`px-2 py-1 rounded cursor-pointer ${
-                        previewDevice === 'desktop' ? 'bg-white shadow-xs font-bold text-blue-700' : 'text-slate-600'
-                      }`}
-                    >
-                      <Monitor className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPreviewDevice('mobile')}
-                      className={`px-2 py-1 rounded cursor-pointer ${
-                        previewDevice === 'mobile' ? 'bg-white shadow-xs font-bold text-blue-700' : 'text-slate-600'
-                      }`}
-                    >
-                      <Smartphone className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowLivePreview(true)}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold cursor-pointer"
+                  >
+                    Show Preview
+                  </button>
                 </div>
+              ) : (
+                <div className="sticky top-20 bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <Eye className="w-4 h-4 text-blue-600" />
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                        Real-Time Storefront Preview
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex bg-slate-100 p-0.5 rounded text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewDevice('desktop')}
+                          className={`px-2 py-1 rounded cursor-pointer ${
+                            previewDevice === 'desktop' ? 'bg-white shadow-xs font-bold text-blue-700' : 'text-slate-600'
+                          }`}
+                        >
+                          <Monitor className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewDevice('mobile')}
+                          className={`px-2 py-1 rounded cursor-pointer ${
+                            previewDevice === 'mobile' ? 'bg-white shadow-xs font-bold text-blue-700' : 'text-slate-600'
+                          }`}
+                        >
+                          <Smartphone className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowLivePreview(false)}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[11px] font-bold cursor-pointer transition-colors"
+                        title="Close Live Preview"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        <span>Close</span>
+                      </button>
+                    </div>
+                  </div>
 
-                <p className="text-[11px] text-slate-500">
-                  Changes made in the editor render here instantly on every keystroke:
-                </p>
+                  <p className="text-[11px] text-slate-500">
+                    Changes made in the editor render here instantly on every keystroke:
+                  </p>
 
                 {/* Viewport Card Container */}
                 <div
@@ -963,7 +991,19 @@ export const AdminBrandingManager: React.FC = () => {
                     </div>
                   </div>
                 </div>
+
+                <div className="pt-1 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowLivePreview(false)}
+                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>Close Preview</span>
+                  </button>
+                </div>
               </div>
+              )}
             </div>
           </div>
         </form>
@@ -984,15 +1024,17 @@ export const AdminBrandingManager: React.FC = () => {
                 Full-width rendering of the brand header, announcement bar, hero section, and footer as customers will see it.
               </p>
             </div>
-            <div className="flex items-center gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="font-mono bg-slate-100 px-2.5 py-1 rounded font-bold text-slate-700">
                 Font: {fontFamily}
               </span>
               <button
+                type="button"
                 onClick={() => setActiveTab('editor')}
-                className="px-3 py-1 bg-blue-50 text-blue-700 font-semibold rounded hover:bg-blue-100 transition-colors cursor-pointer"
+                className="flex items-center gap-1 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg transition-colors cursor-pointer shadow-xs"
               >
-                Back to Editor
+                <X className="w-3.5 h-3.5" />
+                <span>Close Preview</span>
               </button>
             </div>
           </div>
@@ -1085,6 +1127,17 @@ export const AdminBrandingManager: React.FC = () => {
                 <span>Address: {businessAddress}</span>
                 <span>GSTIN: {gstin}</span>
               </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setActiveTab('editor')}
+                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+                <span>Close Preview</span>
+              </button>
             </div>
           </div>
         </div>

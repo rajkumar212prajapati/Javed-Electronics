@@ -70,7 +70,7 @@ interface POSTerminalProps {
   isFullScreenMode?: boolean;
 }
 
-export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenMode = false }) => {
+export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenMode = true }) => {
   const {
     products,
     outlets,
@@ -85,6 +85,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
     adjustStock,
     barcodeRecords,
     orders,
+    categories,
   } = useStore();
   const isSuperAdmin = currentRole === 'super_admin';
 
@@ -836,30 +837,30 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
   return (
     <div
-      className={`bg-slate-900 text-slate-100 flex flex-col font-sans select-none ${
-        isFullScreen ? 'fixed inset-0 z-50 overflow-hidden' : 'rounded-2xl border border-slate-800 shadow-2xl h-[88vh] min-h-[640px] overflow-hidden'
+      className={`bg-slate-50 text-slate-900 flex flex-col font-sans select-none ${
+        isFullScreen ? 'fixed inset-0 z-50 overflow-hidden' : 'rounded-2xl border border-slate-200 shadow-2xl h-[88vh] min-h-[640px] overflow-hidden'
       }`}
     >
       {/* 1. TOP POS REGISTER BAR */}
-      <div className="bg-slate-950 px-3 sm:px-5 py-2.5 border-b border-slate-800 flex items-center justify-between gap-3 shrink-0">
+      <div className="bg-white px-3 sm:px-5 py-2.5 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-black text-white shrink-0 shadow-md">
+          <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-950 border-2 border-yellow-300 flex items-center justify-center font-black shrink-0 shadow-2xs">
             JE
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="font-extrabold text-sm sm:text-base tracking-tight text-white truncate">
+              <span className="font-extrabold text-sm sm:text-base tracking-tight text-slate-900 truncate">
                 Store POS Terminal
               </span>
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-900/60 text-blue-300 border border-blue-700/50">
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-sky-100 text-sky-950 border-2 border-yellow-300">
                 {shiftSession.registerId}
               </span>
             </div>
-            <div className="text-[11px] text-slate-400 flex items-center gap-1.5 truncate">
-              <Store className="w-3 h-3 text-emerald-400 shrink-0" />
+            <div className="text-[11px] text-slate-600 flex items-center gap-1.5 truncate">
+              <Store className="w-3 h-3 text-emerald-600 shrink-0" />
               <span>{activeOutlet?.name || 'Hazratganj Flagship'}</span>
               <span>•</span>
-              <span className="text-slate-300">Cashier: {currentUser.name || 'Store Staff'}</span>
+              <span className="text-slate-700">Cashier: {currentUser.name || 'Store Staff'}</span>
             </div>
           </div>
         </div>
@@ -870,7 +871,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
             <select
               value={activeOutletId}
               onChange={(e) => setActiveOutletId(e.target.value)}
-              className="hidden md:block bg-slate-800 text-slate-200 text-xs px-2.5 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+              className="hidden md:block bg-white text-slate-800 text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-1 focus:ring-sky-500 cursor-pointer"
             >
               {outlets.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -879,8 +880,8 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
               ))}
             </select>
           ) : (
-            <div className="hidden md:flex items-center gap-1.5 bg-slate-900 text-emerald-300 text-xs font-bold px-2.5 py-1.5 rounded-lg border border-emerald-800/60">
-              <Store className="w-3.5 h-3.5 text-emerald-400" />
+            <div className="hidden md:flex items-center gap-1.5 bg-sky-50 text-sky-950 text-xs font-bold px-2.5 py-1.5 rounded-lg border-2 border-yellow-300">
+              <Store className="w-3.5 h-3.5 text-emerald-600" />
               <span>{activeOutlet?.name || 'Assigned Store'}</span>
             </div>
           )}
@@ -888,13 +889,13 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
           {/* Recent Invoices / Receipts Drawer */}
           <button
             onClick={() => setShowRecentReceiptsModal(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg border border-slate-700 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-sky-100 hover:bg-sky-200 text-sky-950 text-xs font-bold rounded-lg border-2 border-yellow-300 transition-all cursor-pointer shadow-2xs"
             title="View Recent Invoices & Re-print / WhatsApp"
           >
-            <History className="w-3.5 h-3.5 text-blue-400" />
+            <History className="w-3.5 h-3.5 text-sky-800" />
             <span className="hidden sm:inline">Recent Bills</span>
             {recentReceipts.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-blue-600 text-white text-[10px] font-mono">
+              <span className="px-1.5 py-0.2 rounded-full bg-sky-200 text-sky-950 border border-yellow-400 text-[10px] font-mono font-bold">
                 {recentReceipts.length}
               </span>
             )}
@@ -903,12 +904,12 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
           {/* Shift / Cash Drawer Button */}
           <button
             onClick={() => setShowShiftModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg border border-slate-700 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-100 hover:bg-sky-200 text-sky-950 text-xs font-bold rounded-lg border-2 border-yellow-300 transition-all cursor-pointer shadow-2xs"
             title="Cash Drawer & Shift Reconciliation"
           >
-            <Banknote className="w-3.5 h-3.5 text-amber-400" />
+            <Banknote className="w-3.5 h-3.5 text-amber-600" />
             <span className="hidden sm:inline">Shift / Cash Drawer</span>
-            <span className="font-mono text-amber-300 text-[11px]">
+            <span className="font-mono text-sky-900 font-bold text-[11px]">
               {formatINR(shiftSession.openingFloat + shiftSession.cashSales)}
             </span>
           </button>
@@ -916,7 +917,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
           {/* Fullscreen Toggle */}
           <button
             onClick={() => setIsFullScreen(!isFullScreen)}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+            className="p-1.5 text-sky-950 bg-sky-100 hover:bg-sky-200 border-2 border-yellow-300 rounded-lg transition-all cursor-pointer shadow-2xs"
             title={isFullScreen ? 'Exit Fullscreen' : 'Fullscreen POS Mode'}
           >
             {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -926,7 +927,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
           {onClose && (
             <button
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+              className="p-1.5 text-sky-950 bg-sky-100 hover:bg-sky-200 border-2 border-yellow-300 rounded-lg transition-all cursor-pointer shadow-2xs"
               title="Close POS"
             >
               <X className="w-4 h-4" />
@@ -936,15 +937,15 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
       </div>
 
       {/* MODULE SWITCHER TABS: Terminal, Dashboard, Returns, Quotations, Hardware */}
-      <div className="bg-slate-950/90 px-3 sm:px-5 py-2 border-b border-slate-800 flex items-center justify-between gap-2 overflow-x-auto scrollbar-none shrink-0">
+      <div className="bg-slate-100/90 px-3 sm:px-5 py-2 border-b border-slate-200 flex items-center justify-between gap-2 overflow-x-auto scrollbar-none shrink-0">
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
             onClick={() => setActivePosModule('terminal')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
               activePosModule === 'terminal'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                ? 'bg-sky-200 text-sky-950 border-2 border-yellow-400 font-black shadow-xs'
+                : 'bg-sky-50 hover:bg-sky-100 text-sky-900 border-2 border-yellow-200/80 font-bold'
             }`}
           >
             <Scan className="w-3.5 h-3.5" />
@@ -954,53 +955,53 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
           <button
             type="button"
             onClick={() => setActivePosModule('dashboard')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
               activePosModule === 'dashboard'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                ? 'bg-sky-200 text-sky-950 border-2 border-yellow-400 font-black shadow-xs'
+                : 'bg-sky-50 hover:bg-sky-100 text-sky-900 border-2 border-yellow-200/80 font-bold'
             }`}
           >
-            <LayoutDashboard className="w-3.5 h-3.5 text-amber-400" />
+            <LayoutDashboard className="w-3.5 h-3.5 text-amber-600" />
             <span>POS Dashboard</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActivePosModule('returns')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
               activePosModule === 'returns'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                ? 'bg-sky-200 text-sky-950 border-2 border-yellow-400 font-black shadow-xs'
+                : 'bg-sky-50 hover:bg-sky-100 text-sky-900 border-2 border-yellow-200/80 font-bold'
             }`}
           >
-            <RotateCcw className="w-3.5 h-3.5 text-rose-400" />
+            <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
             <span>Returns & Exchanges</span>
           </button>
 
           <button
             type="button"
             onClick={() => setShowQuotationModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-50 hover:bg-sky-100 text-sky-900 border-2 border-yellow-200/80 transition-all cursor-pointer"
           >
-            <FileText className="w-3.5 h-3.5 text-purple-400" />
+            <FileText className="w-3.5 h-3.5 text-purple-600" />
             <span>Quotations ({quotations.length})</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActivePosModule('hardware')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
               activePosModule === 'hardware'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                ? 'bg-sky-200 text-sky-950 border-2 border-yellow-400 font-black shadow-xs'
+                : 'bg-sky-50 hover:bg-sky-100 text-sky-900 border-2 border-yellow-200/80 font-bold'
             }`}
           >
-            <Cpu className="w-3.5 h-3.5 text-emerald-400" />
+            <Cpu className="w-3.5 h-3.5 text-emerald-600" />
             <span>Hardware & Peripherals</span>
           </button>
         </div>
 
-        <div className="hidden md:flex items-center gap-2 text-[11px] text-slate-400 shrink-0 font-mono">
+        <div className="hidden md:flex items-center gap-2 text-[11px] text-slate-500 shrink-0 font-mono">
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span>Register Online</span>
@@ -1040,15 +1041,15 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
       {activePosModule === 'terminal' && (
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {/* Mobile/Tablet Screen Tab Switcher (Visible on < lg screens to eliminate overlapping) */}
-          <div className="lg:hidden bg-slate-950 px-3 py-2 border-b border-slate-800 flex items-center justify-between gap-2 shrink-0">
-            <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-xl border border-slate-800 w-full">
+          <div className="lg:hidden bg-slate-100 px-3 py-2 border-b border-slate-200 flex items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 w-full">
               <button
                 type="button"
                 onClick={() => setActivePane('catalog')}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold text-center transition-all cursor-pointer ${
                   activePane === 'catalog'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-sky-200 text-sky-950 border-2 border-yellow-400 font-black shadow-2xs'
+                    : 'bg-sky-50 text-sky-900 border-2 border-yellow-200/80 font-bold'
                 }`}
               >
                 🛍️ Catalog & Items ({filteredProducts.length})
@@ -1058,45 +1059,45 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                 onClick={() => setActivePane('cart')}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold text-center transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                   activePane === 'cart'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-sky-200 text-sky-950 border-2 border-yellow-400 font-black shadow-2xs'
+                    : 'bg-sky-50 text-sky-900 border-2 border-yellow-200/80 font-bold'
                 }`}
               >
                 <span>🛒 Active Bill ({cartItems.reduce((acc, i) => acc + i.quantity, 0)})</span>
-                {finalTotal > 0 && <span className="font-mono text-emerald-300 font-black">({formatINR(finalTotal)})</span>}
+                {finalTotal > 0 && <span className="font-mono text-slate-900 font-black">({formatINR(finalTotal)})</span>}
               </button>
             </div>
           </div>
 
           <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
             {/* LEFT COLUMN: SCANNER & VISUAL QUICK PICK */}
-            <div className={`${activePane === 'catalog' ? 'flex' : 'hidden lg:flex'} flex-1 flex-col min-w-0 border-b lg:border-b-0 lg:border-r border-slate-800 overflow-hidden bg-slate-900/60 h-full`}>
+            <div className={`${activePane === 'catalog' ? 'flex' : 'hidden lg:flex'} flex-1 flex-col min-w-0 border-b lg:border-b-0 lg:border-r border-slate-200 overflow-hidden bg-slate-50 h-full`}>
               {/* Top Barcode & Search Controls */}
-              <div className="p-3 sm:p-4 border-b border-slate-800 bg-slate-900 space-y-2.5 shrink-0">
+              <div className="p-3 sm:p-4 border-b border-slate-200 bg-white space-y-2.5 shrink-0">
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
                   {/* Barcode Scanner Input with Camera Toggle */}
                   <form onSubmit={handleBarcodeSubmit} className="relative sm:col-span-7">
-                    <Scan className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-400" />
+                    <Scan className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-sky-700" />
                     <input
                       ref={barcodeInputRef}
                       type="text"
                       value={barcodeInput}
                       onChange={(e) => setBarcodeInput(e.target.value)}
                       placeholder="Scan Barcode / SKU / GTIN (F4)..."
-                      className="w-full pl-9 pr-24 py-2 bg-slate-950 text-white placeholder:text-slate-500 rounded-xl border border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-mono font-bold"
+                      className="w-full pl-9 pr-24 py-2 bg-slate-50 text-slate-900 placeholder:text-slate-400 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white text-xs font-mono font-bold"
                     />
                     <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
                       <button
                         type="button"
                         onClick={() => setShowCameraScanner(true)}
-                        className="p-1 hover:bg-slate-800 text-blue-400 rounded-lg transition-colors cursor-pointer"
+                        className="p-1 bg-sky-100 hover:bg-sky-200 text-sky-950 border-2 border-yellow-300 rounded-lg transition-colors cursor-pointer shadow-2xs"
                         title="Scan using Device Camera / Webcam"
                       >
                         <Camera className="w-3.5 h-3.5" />
                       </button>
                       <button
                         type="submit"
-                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold cursor-pointer"
+                        className="px-2.5 py-1 bg-sky-200 hover:bg-sky-300 text-sky-950 border-2 border-yellow-400 rounded-lg text-[10px] font-black cursor-pointer shadow-2xs"
                       >
                         Enter
                       </button>
@@ -1112,12 +1113,12 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search Products by Name (F2)..."
-                      className="w-full pl-9 pr-8 py-2 bg-slate-950 text-white placeholder:text-slate-500 rounded-xl border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
+                      className="w-full pl-9 pr-8 py-2 bg-slate-50 text-slate-900 placeholder:text-slate-400 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white text-xs"
                     />
                     {searchQuery && (
                       <button
                         onClick={() => setSearchQuery('')}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -1130,22 +1131,15 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                   <div className="flex items-center gap-1.5 shrink-0">
                   {[
                     { id: 'all', label: 'All Items' },
-                    { id: 'smartphones', label: 'Smartphones' },
-                    { id: 'audio', label: 'Audio & Sound' },
-                    { id: 'chargers_cables', label: 'Chargers & Cables' },
-                    { id: 'smartwatches', label: 'Smartwatches' },
-                    { id: 'tvs_accessories', label: 'Smart TVs' },
-                    { id: 'computer_accessories', label: 'Computers & IT' },
-                    { id: 'home_electronics', label: 'Home Appliances' },
-                    { id: 'small_appliances', label: 'Small Appliances' },
+                    ...categories.map((c) => ({ id: c.id, label: c.name })),
                   ].map((tab) => (
                     <button
                       key={tab.id}
                       onClick={() => setSelectedCategory(tab.id as any)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
+                      className={`px-3 py-1.5 rounded-lg text-xs whitespace-nowrap transition-all cursor-pointer shrink-0 ${
                         selectedCategory === tab.id
-                          ? 'bg-blue-600 text-white shadow-xs'
-                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                          ? 'bg-sky-200 text-sky-950 border-2 border-yellow-400 font-black shadow-xs'
+                          : 'bg-sky-50 hover:bg-sky-100 text-sky-900 border-2 border-yellow-200/80 font-bold'
                       }`}
                     >
                       {tab.label}
@@ -1157,21 +1151,21 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                   <button
                     type="button"
                     onClick={() => setShowCustomItemModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-900/60 hover:bg-purple-800 text-purple-200 border border-purple-700/60 whitespace-nowrap transition-colors cursor-pointer shrink-0"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-100 hover:bg-sky-200 text-sky-950 border-2 border-yellow-300 whitespace-nowrap transition-all cursor-pointer shrink-0 shadow-2xs"
                     title="Add Custom Product or Repair/Service Charge"
                   >
-                    <Wrench className="w-3.5 h-3.5 text-purple-300" />
+                    <Wrench className="w-3.5 h-3.5 text-sky-800" />
                     <span>+ Custom / Service</span>
                   </button>
                 </div>
               </div>
 
               {/* Visual Product Grid */}
-              <div className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0">
+              <div className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0 bg-slate-50">
                 {filteredProducts.length === 0 ? (
-                  <div className="h-64 flex flex-col items-center justify-center text-center p-6 bg-slate-950/40 rounded-2xl border border-dashed border-slate-800">
-                    <Package className="w-12 h-12 text-slate-600 mb-2 stroke-[1.5]" />
-                    <div className="text-sm font-bold text-slate-300">No products found</div>
+                  <div className="h-64 flex flex-col items-center justify-center text-center p-6 bg-white rounded-2xl border border-dashed border-slate-300">
+                    <Package className="w-12 h-12 text-slate-400 mb-2 stroke-[1.5]" />
+                    <div className="text-sm font-bold text-slate-800">No products found</div>
                     <p className="text-xs text-slate-500 max-w-xs mt-1">
                       {searchQuery
                         ? `No products matching "${searchQuery}".`
@@ -1183,7 +1177,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                         setSearchQuery('');
                         setSelectedCategory('all');
                       }}
-                      className="mt-3 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold cursor-pointer"
+                      className="mt-3 px-3.5 py-1.5 bg-sky-200 hover:bg-sky-300 text-sky-950 border-2 border-yellow-400 rounded-lg text-xs font-bold cursor-pointer"
                     >
                       Clear Search & Filters
                     </button>
@@ -1201,12 +1195,12 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                           onClick={() => addProductToCart(p)}
                           className={`p-2.5 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
                             isOutOfStock
-                              ? 'opacity-40 bg-slate-900 border-slate-800 cursor-not-allowed'
-                              : 'bg-slate-950/80 hover:bg-slate-800/80 border-slate-800 hover:border-blue-500 shadow-sm'
+                              ? 'opacity-40 bg-slate-100 border-slate-200 cursor-not-allowed'
+                              : 'bg-white hover:bg-sky-50/40 border-slate-200 hover:border-yellow-400 shadow-2xs hover:shadow-xs'
                           }`}
                         >
                           <div className="w-full">
-                            <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-slate-900 mb-2">
+                            <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-slate-100 mb-2 border border-slate-200">
                               <img
                                 src={p.images[0] || 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9'}
                                 alt={p.name}
@@ -1219,26 +1213,26 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                               <span
                                 className={`absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-bold ${
                                   p.stock.onHand > 5
-                                    ? 'bg-emerald-900/90 text-emerald-300'
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                                     : p.stock.onHand > 0
-                                    ? 'bg-amber-900/90 text-amber-300'
-                                    : 'bg-rose-900/90 text-rose-300'
+                                    ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                    : 'bg-rose-100 text-rose-800 border border-rose-200'
                                 }`}
                               >
                                 Stock: {p.stock.onHand}
                               </span>
                             </div>
 
-                            <div className="text-[10px] text-blue-400 font-bold uppercase truncate">{p.brand}</div>
-                            <div className="text-xs font-bold text-white truncate" title={p.name}>
+                            <div className="text-[10px] text-sky-800 font-bold uppercase truncate">{p.brand}</div>
+                            <div className="text-xs font-bold text-slate-900 truncate" title={p.name}>
                               {p.name}
                             </div>
                             <div className="text-[10px] font-mono text-slate-500 truncate">SKU: {p.sku}</div>
                           </div>
 
-                          <div className="mt-2 pt-2 border-t border-slate-800/80 flex items-center justify-between w-full">
-                            <span className="font-mono font-bold text-sm text-emerald-400">{formatINR(price)}</span>
-                            <span className="w-6 h-6 rounded-md bg-blue-600/30 text-blue-400 flex items-center justify-center font-bold text-xs">
+                          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between w-full">
+                            <span className="font-mono font-black text-sm text-slate-900">{formatINR(price)}</span>
+                            <span className="w-6 h-6 rounded-md bg-sky-100 hover:bg-sky-200 text-sky-950 border-2 border-yellow-300 flex items-center justify-center font-black text-xs shadow-2xs">
                               +
                             </span>
                           </div>
@@ -1251,19 +1245,19 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
               {/* Mobile Quick Review / Floating bottom bar when cart has items */}
               {cartItems.length > 0 && (
-                <div className="lg:hidden p-2.5 bg-slate-950 border-t border-slate-800 flex items-center justify-between shrink-0">
+                <div className="lg:hidden p-2.5 bg-white border-t border-slate-200 flex items-center justify-between shrink-0 shadow-sm">
                   <div className="min-w-0">
-                    <div className="text-[11px] text-slate-400">
+                    <div className="text-[11px] text-slate-500">
                       {cartItems.reduce((a, b) => a + b.quantity, 0)} items in bill
                     </div>
-                    <div className="text-sm font-black text-emerald-400 font-mono truncate">
+                    <div className="text-sm font-black text-slate-900 font-mono truncate">
                       {formatINR(finalTotal)}
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => setActivePane('cart')}
-                    className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-lg cursor-pointer"
+                    className="px-3.5 py-1.5 bg-sky-200 hover:bg-sky-300 text-sky-950 border-2 border-yellow-400 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-xs cursor-pointer"
                   >
                     <span>Review Bill & Pay</span>
                     <ArrowRight className="w-3.5 h-3.5" />
@@ -1273,23 +1267,23 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
             </div>
 
             {/* RIGHT COLUMN: ACTIVE CART & REGISTER */}
-            <div className={`${activePane === 'cart' ? 'flex' : 'hidden lg:flex'} w-full lg:w-[420px] xl:w-[460px] flex-col bg-slate-950 shrink-0 h-full border-t lg:border-t-0 border-slate-800`}>
+            <div className={`${activePane === 'cart' ? 'flex' : 'hidden lg:flex'} w-full lg:w-[420px] xl:w-[460px] flex-col bg-white shrink-0 h-full border-t lg:border-t-0 border-slate-200`}>
           {/* Customer Bar */}
-          <div className="p-3 border-b border-slate-800 bg-slate-900/90 flex items-center justify-between gap-2 shrink-0">
+          <div className="p-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-2 shrink-0">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 rounded-full bg-blue-600/30 text-blue-400 flex items-center justify-center shrink-0">
+              <div className="w-7 h-7 rounded-full bg-sky-100 text-sky-800 border border-yellow-300 flex items-center justify-center shrink-0">
                 <User className="w-4 h-4" />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-white truncate">{customer.name}</span>
+                  <span className="text-xs font-bold text-slate-900 truncate">{customer.name}</span>
                   {customer.isB2B && (
-                    <span className="text-[9px] font-bold bg-purple-900 text-purple-300 px-1 rounded">
+                    <span className="text-[9px] font-bold bg-sky-100 text-sky-950 border border-yellow-300 px-1 rounded">
                       B2B GST
                     </span>
                   )}
                 </div>
-                <div className="text-[10px] text-slate-400">
+                <div className="text-[10px] text-slate-500">
                   {customer.phone || 'Cash Sale'} • {customer.rewardPoints} pts
                 </div>
               </div>
@@ -1304,7 +1298,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                   setCustomerBusinessInput(customer.businessName || '');
                   setShowCustomerModal(true);
                 }}
-                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 cursor-pointer"
+                className="px-2.5 py-1 bg-sky-100 hover:bg-sky-200 text-sky-950 text-xs font-bold rounded-lg border-2 border-yellow-300 transition-all cursor-pointer shadow-2xs"
               >
                 Change
               </button>
@@ -1312,15 +1306,15 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
           </div>
 
           {/* Cart Items List */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-white">
             {cartItems.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500">
-                <Scan className="w-12 h-12 text-slate-700 stroke-[1.5] mb-2 animate-pulse" />
-                <div className="text-xs font-bold text-slate-400">POS Register Empty</div>
-                <p className="text-[11px] text-slate-600 max-w-xs mt-1">
+                <Scan className="w-12 h-12 text-slate-300 stroke-[1.5] mb-2 animate-pulse" />
+                <div className="text-xs font-bold text-slate-700">POS Register Empty</div>
+                <p className="text-[11px] text-slate-500 max-w-xs mt-1">
                   Scan barcode with physical scanner or click items from left quick-pick grid to start bill.
                 </p>
-                <div className="mt-3 text-[10px] text-slate-500 font-mono">
+                <div className="mt-3 text-[10px] text-slate-400 font-mono">
                   Shortcuts: F4 (Barcode) • F2 (Search) • F10 (Tender)
                 </div>
               </div>
@@ -1328,23 +1322,23 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
               cartItems.map((item, index) => (
                 <div
                   key={item.id}
-                  className="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1.5"
+                  className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-2 min-w-0">
                       <img
                         src={item.product.images[0] || 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9'}
                         alt={item.product.name}
-                        className="w-9 h-9 object-cover rounded-md bg-slate-950 shrink-0"
+                        className="w-9 h-9 object-cover rounded-md bg-white border border-slate-200 shrink-0"
                       />
                       <div className="min-w-0">
-                        <div className="text-xs font-bold text-white truncate" title={item.product.name}>
+                        <div className="text-xs font-bold text-slate-900 truncate" title={item.product.name}>
                           {item.product.name}
                         </div>
-                        <div className="text-[10px] text-slate-400 flex items-center gap-1.5">
+                        <div className="text-[10px] text-slate-500 flex items-center gap-1.5">
                           <span>{formatINR(item.unitPrice)} each</span>
                           {item.selectedVariant && (
-                            <span className="text-blue-400">({item.selectedVariant})</span>
+                            <span className="text-sky-800 font-semibold">({item.selectedVariant})</span>
                           )}
                         </div>
                       </div>
@@ -1352,7 +1346,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
                     <button
                       onClick={() => removeItem(index)}
-                      className="text-slate-500 hover:text-rose-400 p-1 cursor-pointer"
+                      className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"
                       title="Remove Item"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -1360,20 +1354,20 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                   </div>
 
                   {/* Quantity Stepper & Line Total */}
-                  <div className="flex items-center justify-between pt-1 border-t border-slate-800/80">
-                    <div className="flex items-center gap-1 bg-slate-950 rounded-lg p-0.5 border border-slate-800">
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-200">
+                    <div className="flex items-center gap-1 bg-white rounded-lg p-0.5 border border-slate-300">
                       <button
                         onClick={() => updateItemQuantity(index, item.quantity - 1)}
-                        className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
+                        className="w-6 h-6 rounded flex items-center justify-center bg-sky-100 hover:bg-sky-200 text-sky-950 border border-yellow-300 font-bold cursor-pointer"
                       >
                         <Minus className="w-3 h-3" />
                       </button>
-                      <span className="w-8 text-center text-xs font-mono font-bold text-white">
+                      <span className="w-8 text-center text-xs font-mono font-bold text-slate-900">
                         {item.quantity}
                       </span>
                       <button
                         onClick={() => updateItemQuantity(index, item.quantity + 1)}
-                        className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
+                        className="w-6 h-6 rounded flex items-center justify-center bg-sky-100 hover:bg-sky-200 text-sky-950 border border-yellow-300 font-bold cursor-pointer"
                       >
                         <Plus className="w-3 h-3" />
                       </button>
@@ -1386,13 +1380,13 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                           setLineDiscountPercent(item.discountValue);
                           setLineSerialInput(item.serialNumberOrImei || '');
                         }}
-                        className="text-[10px] text-blue-400 hover:underline cursor-pointer flex items-center gap-0.5"
+                        className="text-[10px] text-sky-950 bg-sky-100 hover:bg-sky-200 border border-yellow-300 px-1.5 py-0.5 rounded font-bold cursor-pointer flex items-center gap-0.5 shadow-2xs"
                       >
                         <Tag className="w-3 h-3" />
                         <span>Serial/Disc</span>
                       </button>
 
-                      <span className="font-mono font-bold text-xs text-white">
+                      <span className="font-mono font-bold text-xs text-slate-900">
                         {formatINR(item.total)}
                       </span>
                     </div>
@@ -1400,8 +1394,8 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
                   {/* Serial / IMEI tag if attached */}
                   {item.serialNumberOrImei && (
-                    <div className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-900/60 flex items-center gap-1">
-                      <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                    <div className="text-[10px] font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3 text-emerald-600" />
                       <span>S/N: {item.serialNumberOrImei}</span>
                     </div>
                   )}
@@ -1411,14 +1405,14 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
           </div>
 
           {/* Parked Tickets & Register Actions Bar */}
-          <div className="px-3 py-2 bg-slate-900 border-t border-slate-800 flex items-center justify-between gap-2 shrink-0">
+          <div className="px-3 py-2 bg-slate-100 border-t border-slate-200 flex items-center justify-between gap-2 shrink-0">
             <button
               disabled={cartItems.length === 0}
               onClick={handleParkTicket}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 cartItems.length === 0
-                  ? 'opacity-40 text-slate-500 bg-slate-800/40 cursor-not-allowed'
-                  : 'bg-amber-600/30 text-amber-300 hover:bg-amber-600/50 border border-amber-600/40'
+                  ? 'opacity-40 text-slate-400 bg-slate-200 border border-slate-300 cursor-not-allowed'
+                  : 'bg-sky-100 hover:bg-sky-200 text-sky-950 border-2 border-yellow-300 shadow-2xs'
               }`}
               title="Park / Hold current ticket to attend next customer (F7)"
             >
@@ -1429,10 +1423,10 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
             <button
               disabled={cartItems.length === 0}
               onClick={handleSaveAsQuotation}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 cartItems.length === 0
-                  ? 'opacity-40 text-slate-500 bg-slate-800/40 cursor-not-allowed'
-                  : 'bg-purple-600/30 text-purple-300 hover:bg-purple-600/50 border border-purple-600/40'
+                  ? 'opacity-40 text-slate-400 bg-slate-200 border border-slate-300 cursor-not-allowed'
+                  : 'bg-sky-100 hover:bg-sky-200 text-sky-950 border-2 border-yellow-300 shadow-2xs'
               }`}
               title="Save current cart as Quotation (Proforma invoice)"
             >
@@ -1442,13 +1436,13 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
             <button
               onClick={() => setShowHeldModal(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg border border-slate-700 cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-sky-100 hover:bg-sky-200 text-sky-950 text-xs font-bold rounded-lg border-2 border-yellow-300 transition-all cursor-pointer shadow-2xs"
               title="Recall Parked Tickets (F8)"
             >
-              <Play className="w-3.5 h-3.5 text-blue-400" />
+              <Play className="w-3.5 h-3.5 text-sky-800" />
               <span>Recall (F8)</span>
               {heldTickets.length > 0 && (
-                <span className="bg-amber-500 text-slate-950 text-[10px] font-black px-1.5 py-0.2 rounded-full">
+                <span className="bg-sky-200 text-sky-950 border border-yellow-400 text-[10px] font-black px-1.5 py-0.2 rounded-full">
                   {heldTickets.length}
                 </span>
               )}
@@ -1457,17 +1451,17 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
             <button
               disabled={cartItems.length === 0}
               onClick={() => setShowClearConfirm(true)}
-              className="text-xs text-rose-400 hover:text-rose-300 px-2 py-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border-2 border-rose-200 rounded-lg px-2 py-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Clear
             </button>
           </div>
 
           {/* Financial Totals Recap */}
-          <div className="p-3.5 bg-slate-900/90 border-t border-slate-800 space-y-1.5 text-xs shrink-0">
-            <div className="flex justify-between text-slate-400">
+          <div className="p-3.5 bg-slate-50 border-t border-slate-200 space-y-1.5 text-xs shrink-0 text-slate-700">
+            <div className="flex justify-between text-slate-600">
               <span>Gross Items Subtotal:</span>
-              <span className="font-mono text-slate-200">{formatINR(subtotal)}</span>
+              <span className="font-mono text-slate-900 font-bold">{formatINR(subtotal)}</span>
             </div>
 
             {/* Bill-Level Discount Toggle */}
@@ -1475,13 +1469,13 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
               <button
                 type="button"
                 onClick={() => setShowDiscountModal(true)}
-                className="text-blue-400 hover:text-blue-300 flex items-center gap-1 cursor-pointer font-bold"
+                className="text-sky-900 hover:text-sky-950 font-bold flex items-center gap-1 cursor-pointer"
               >
                 <Percent className="w-3 h-3" />
                 <span>{cartDiscountAmount > 0 ? 'Edit Bill Discount' : '+ Add Bill Discount'}</span>
               </button>
               {cartDiscountAmount > 0 && (
-                <div className="flex items-center gap-1.5 text-emerald-400 font-bold font-mono">
+                <div className="flex items-center gap-1.5 text-emerald-700 font-bold font-mono">
                   <span>
                     -{formatINR(cartDiscountAmount)}
                     {cartDiscountType === 'percentage' && ` (${cartDiscountValue}%)`}
@@ -1491,7 +1485,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                       setCartDiscountType('none');
                       setCartDiscountValue(0);
                     }}
-                    className="text-slate-500 hover:text-rose-400 p-0.5"
+                    className="text-slate-400 hover:text-rose-600 p-0.5"
                     title="Remove Bill Discount"
                   >
                     <X className="w-3 h-3" />
@@ -1501,28 +1495,28 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
             </div>
 
             {discountTotal > 0 && (
-              <div className="flex justify-between text-emerald-400 font-bold">
+              <div className="flex justify-between text-emerald-700 font-bold">
                 <span>Total Savings & Discounts:</span>
                 <span className="font-mono">-{formatINR(discountTotal)}</span>
               </div>
             )}
 
-            <div className="flex justify-between text-slate-400 text-[11px]">
+            <div className="flex justify-between text-slate-500 text-[11px]">
               <span>Tax Included (CGST 9% + SGST 9%):</span>
-              <span className="font-mono">{formatINR(totalTax)}</span>
+              <span className="font-mono text-slate-700">{formatINR(totalTax)}</span>
             </div>
 
             {/* Total Payable */}
-            <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+            <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
               <div>
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
                   Total Payable
                 </span>
                 <span className="text-[10px] text-slate-500 font-mono">
                   {cartItems.reduce((acc, i) => acc + i.quantity, 0)} items in bill
                 </span>
               </div>
-              <span className="text-xl sm:text-2xl font-black text-emerald-400 font-mono">
+              <span className="text-xl sm:text-2xl font-black text-slate-900 font-mono">
                 {formatINR(finalTotal)}
               </span>
             </div>
@@ -1531,10 +1525,10 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
             <button
               disabled={cartItems.length === 0}
               onClick={handleOpenTender}
-              className={`w-full py-3.5 px-4 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition-all shadow-lg cursor-pointer mt-2 ${
+              className={`w-full py-3.5 px-4 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer mt-2 tracking-wide ${
                 cartItems.length === 0
-                  ? 'opacity-40 bg-slate-800 text-slate-500 cursor-not-allowed'
-                  : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/40 hover:scale-[1.01]'
+                  ? 'opacity-40 bg-slate-200 text-slate-400 border-2 border-slate-300 cursor-not-allowed'
+                  : 'bg-sky-200 hover:bg-sky-300 text-sky-950 border-2 border-yellow-400 hover:scale-[1.01]'
               }`}
             >
               <CreditCard className="w-4 h-4" />
@@ -1549,7 +1543,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
   {/* POS DASHBOARD VIEW */}
   {activePosModule === 'dashboard' && (
-    <div className="flex-1 overflow-y-auto bg-slate-900">
+    <div className="flex-1 overflow-y-auto bg-slate-50">
       <POSDashboardView
         shiftSession={shiftSession}
         recentReceipts={recentReceipts}
@@ -1563,7 +1557,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
   {/* POS RETURNS & EXCHANGES VIEW */}
   {activePosModule === 'returns' && (
-    <div className="flex-1 overflow-y-auto p-4 bg-slate-900">
+    <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
       <POSReturnsModal
         recentReceipts={recentReceipts}
         onCompleteReturn={(returnRecord) => {
@@ -1583,155 +1577,155 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
   {/* POS HARDWARE & PERIPHERALS WORKBENCH */}
   {activePosModule === 'hardware' && (
-    <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-900 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+    <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
         <div>
-          <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
-            <Cpu className="w-5 h-5 text-emerald-400" />
+          <h2 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+            <Cpu className="w-5 h-5 text-emerald-600" />
             <span>Hardware & POS Peripherals Diagnostics</span>
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             Verify physical cash drawer kick, 80mm ESC/POS thermal receipt printing, USB/Bluetooth barcode scanners, and customer displays.
           </p>
         </div>
         <button
           onClick={() => setActivePosModule('terminal')}
-          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold self-start cursor-pointer"
+          className="px-3.5 py-1.5 bg-sky-100 hover:bg-sky-200 text-sky-950 border-2 border-yellow-300 rounded-xl text-xs font-bold self-start cursor-pointer transition-all shadow-2xs"
         >
           Back to Terminal
         </button>
       </div>
 
       {hardwareTestMessage && (
-        <div className="p-3 bg-blue-950/80 border border-blue-700/60 rounded-xl text-blue-200 text-xs font-mono flex items-center gap-2 animate-fade-in">
-          <Info className="w-4 h-4 text-blue-400 shrink-0" />
+        <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl text-sky-900 text-xs font-mono flex items-center gap-2 animate-fade-in">
+          <Info className="w-4 h-4 text-sky-700 shrink-0" />
           <span>{hardwareTestMessage}</span>
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* 1. Thermal Receipt Printer */}
-        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col justify-between space-y-3">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col justify-between space-y-3 shadow-xs">
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-white font-bold text-sm">
-                <Printer className="w-4 h-4 text-blue-400" />
+              <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                <Printer className="w-4 h-4 text-sky-600" />
                 <span>80mm Thermal Receipt Printer</span>
               </div>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                 Ready
               </span>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500">
               Standard ESC/POS 203 DPI thermal printer over USB / LAN / Bluetooth. Auto-cutter enabled.
             </p>
           </div>
           <button
             type="button"
             onClick={() => handleTestHardware('thermalPrinter')}
-            className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold border border-slate-700 transition-colors cursor-pointer"
+            className="w-full py-2 bg-sky-100 hover:bg-sky-200 text-sky-950 rounded-lg text-xs font-bold border-2 border-yellow-300 transition-colors cursor-pointer shadow-2xs"
           >
             Print Alignment Test Slip
           </button>
         </div>
 
         {/* 2. Cash Drawer */}
-        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col justify-between space-y-3">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col justify-between space-y-3 shadow-xs">
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-white font-bold text-sm">
-                <Banknote className="w-4 h-4 text-amber-400" />
+              <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                <Banknote className="w-4 h-4 text-amber-600" />
                 <span>Heavy Duty Cash Drawer</span>
               </div>
               <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                hardwareStatus.cashDrawer === 'open' ? 'bg-amber-950 text-amber-300 border border-amber-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                hardwareStatus.cashDrawer === 'open' ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
               }`}>
                 {hardwareStatus.cashDrawer === 'open' ? 'Opened' : 'Armed'}
               </span>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500">
               RJ11 24V solenoid pulse kick connection triggered automatically on cash tenders.
             </p>
           </div>
           <button
             type="button"
             onClick={() => handleTestHardware('cashDrawer')}
-            className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold border border-slate-700 transition-colors cursor-pointer"
+            className="w-full py-2 bg-sky-100 hover:bg-sky-200 text-sky-950 rounded-lg text-xs font-bold border-2 border-yellow-300 transition-colors cursor-pointer shadow-2xs"
           >
             Kick Open Cash Drawer (Test)
           </button>
         </div>
 
         {/* 3. Barcode Scanner */}
-        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col justify-between space-y-3">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col justify-between space-y-3 shadow-xs">
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-white font-bold text-sm">
-                <Scan className="w-4 h-4 text-emerald-400" />
+              <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                <Scan className="w-4 h-4 text-emerald-600" />
                 <span>Barcode / 2D QR Scanner</span>
               </div>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                 HID Connected
               </span>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500">
               USB keyboard emulation (HID) mode + built-in Device Camera barcode decoder for mobile billing.
             </p>
           </div>
           <button
             type="button"
             onClick={() => handleTestHardware('barcodeScanner')}
-            className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold border border-slate-700 transition-colors cursor-pointer"
+            className="w-full py-2 bg-sky-100 hover:bg-sky-200 text-sky-950 rounded-lg text-xs font-bold border-2 border-yellow-300 transition-colors cursor-pointer shadow-2xs"
           >
             Test Laser / Camera Trigger
           </button>
         </div>
 
         {/* 4. Customer Display */}
-        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col justify-between space-y-3">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col justify-between space-y-3 shadow-xs">
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-white font-bold text-sm">
-                <Smartphone className="w-4 h-4 text-purple-400" />
+              <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                <Smartphone className="w-4 h-4 text-purple-600" />
                 <span>Customer Facing Pole Display (VFD)</span>
               </div>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                 Online
               </span>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500">
               2x20 vacuum fluorescent pole display reflecting live item additions and final bill total.
             </p>
           </div>
           <button
             type="button"
             onClick={() => handleTestHardware('customerDisplay')}
-            className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold border border-slate-700 transition-colors cursor-pointer"
+            className="w-full py-2 bg-sky-100 hover:bg-sky-200 text-sky-950 rounded-lg text-xs font-bold border-2 border-yellow-300 transition-colors cursor-pointer shadow-2xs"
           >
             Test Customer Display Feed
           </button>
         </div>
 
         {/* 5. Weighing Scale */}
-        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col justify-between space-y-3">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col justify-between space-y-3 shadow-xs">
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-white font-bold text-sm">
-                <Sliders className="w-4 h-4 text-indigo-400" />
+              <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                <Sliders className="w-4 h-4 text-indigo-600" />
                 <span>Electronic Weighing Scale</span>
               </div>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                 Calibrated
               </span>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500">
               RS232 interface for continuous weight polling and weight-embedded barcodes (EAN-13 prefix 20).
             </p>
           </div>
           <button
             type="button"
             onClick={() => handleTestHardware('weighingScale')}
-            className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold border border-slate-700 transition-colors cursor-pointer"
+            className="w-full py-2 bg-sky-100 hover:bg-sky-200 text-sky-950 rounded-lg text-xs font-bold border-2 border-yellow-300 transition-colors cursor-pointer shadow-2xs"
           >
             Read Tare / Net Weight
           </button>
@@ -1742,16 +1736,16 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
       {/* 3. TENDER / PAYMENT MODAL */}
       {showTenderModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
-            <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col max-h-[92vh] text-slate-900">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold text-white">Payment Tender</h3>
-                <p className="text-[11px] text-slate-400">Total Bill Amount: {formatINR(finalTotal)}</p>
+                <h3 className="text-sm font-bold text-slate-900">Payment Tender</h3>
+                <p className="text-[11px] text-slate-500">Total Bill Amount: {formatINR(finalTotal)}</p>
               </div>
               <button
                 onClick={() => setShowTenderModal(false)}
-                className="p-1 text-slate-400 hover:text-white"
+                className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1761,18 +1755,18 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
               {/* Tender Mode Selector */}
               <div className="grid grid-cols-4 gap-2">
                 {[
-                  { id: 'cash', label: 'Cash', icon: <Banknote className="w-4 h-4 text-amber-400" /> },
-                  { id: 'upi_qr', label: 'UPI QR', icon: <QrCode className="w-4 h-4 text-purple-400" /> },
-                  { id: 'card_pos', label: 'Card POS', icon: <CreditCard className="w-4 h-4 text-blue-400" /> },
-                  { id: 'split', label: 'Split', icon: <Layers className="w-4 h-4 text-emerald-400" /> },
+                  { id: 'cash', label: 'Cash', icon: <Banknote className="w-4 h-4 text-amber-600" /> },
+                  { id: 'upi_qr', label: 'UPI QR', icon: <QrCode className="w-4 h-4 text-purple-600" /> },
+                  { id: 'card_pos', label: 'Card POS', icon: <CreditCard className="w-4 h-4 text-sky-700" /> },
+                  { id: 'split', label: 'Split', icon: <Layers className="w-4 h-4 text-emerald-600" /> },
                 ].map((mode) => (
                   <button
                     key={mode.id}
                     onClick={() => setTenderMode(mode.id as any)}
-                    className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 text-xs font-bold transition-all cursor-pointer ${
+                    className={`p-2.5 rounded-xl border-2 flex flex-col items-center justify-center gap-1 text-xs font-bold transition-all cursor-pointer ${
                       tenderMode === mode.id
-                        ? 'bg-blue-600/30 border-blue-500 text-white'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                        ? 'bg-sky-200 text-sky-950 border-yellow-400 font-black shadow-xs'
+                        : 'bg-sky-50 text-sky-900 border-yellow-200/80 hover:bg-sky-100 font-bold'
                     }`}
                   >
                     {mode.icon}
@@ -1783,21 +1777,21 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
               {/* CASH MODE */}
               {tenderMode === 'cash' && (
-                <div className="space-y-3 bg-slate-950 p-4 rounded-xl border border-slate-800">
+                <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-400">Net Bill Amount:</span>
-                    <span className="font-mono font-bold text-white text-sm">{formatINR(finalTotal)}</span>
+                    <span className="text-slate-600">Net Bill Amount:</span>
+                    <span className="font-mono font-bold text-slate-900 text-sm">{formatINR(finalTotal)}</span>
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-slate-300 block mb-1">
+                    <label className="text-xs font-bold text-slate-700 block mb-1">
                       Cash Tendered by Customer (₹):
                     </label>
                     <input
                       type="number"
                       value={cashTendered}
                       onChange={(e) => setCashTendered(parseFloat(e.target.value) || 0)}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-lg font-mono font-bold text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-lg font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500"
                     />
                   </div>
 
@@ -1813,7 +1807,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                         key={i}
                         type="button"
                         onClick={() => setCashTendered(btn.val)}
-                        className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono font-bold rounded-md border border-slate-700 cursor-pointer"
+                        className="px-2.5 py-1 bg-sky-100 hover:bg-sky-200 text-sky-950 text-xs font-mono font-bold rounded-md border-2 border-yellow-300 cursor-pointer shadow-2xs"
                       >
                         {btn.label} ({formatINR(btn.val)})
                       </button>
@@ -1821,11 +1815,11 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                   </div>
 
                   {/* Change Due Display */}
-                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
-                    <span className="text-slate-400">Change Return to Customer:</span>
+                  <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-xs">
+                    <span className="text-slate-600">Change Return to Customer:</span>
                     <span
                       className={`text-base font-black font-mono ${
-                        cashTendered >= finalTotal ? 'text-emerald-400' : 'text-rose-400'
+                        cashTendered >= finalTotal ? 'text-emerald-700' : 'text-rose-600'
                       }`}
                     >
                       {cashTendered >= finalTotal
@@ -1838,9 +1832,9 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
               {/* UPI QR MODE */}
               {tenderMode === 'upi_qr' && (
-                <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 flex flex-col items-center text-center space-y-3">
-                  <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
-                    <QrCode className="w-4 h-4 text-purple-400" />
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col items-center text-center space-y-3">
+                  <span className="text-xs font-bold text-purple-800 flex items-center gap-1.5">
+                    <QrCode className="w-4 h-4 text-purple-600" />
                     <span>Dynamic Counter UPI QR Code</span>
                   </span>
 
@@ -1848,7 +1842,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                     <img
                       src={tenderUpiQr}
                       alt="UPI QR"
-                      className="w-36 h-36 bg-white p-2 rounded-xl border border-purple-400/40 shadow-md"
+                      className="w-36 h-36 bg-white p-2 rounded-xl border border-purple-300 shadow-sm"
                     />
                   ) : (
                     <div className="w-36 h-36 flex items-center justify-center text-xs text-slate-500">
@@ -1856,13 +1850,13 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                     </div>
                   )}
 
-                  <div className="text-xs font-mono text-slate-300">
+                  <div className="text-xs font-mono text-slate-700">
                     VPA: <strong>{settings.upiId || 'javed.electronics@okhdfcbank'}</strong>
                   </div>
-                  <div className="text-sm font-black text-emerald-400 font-mono">
+                  <div className="text-sm font-black text-slate-900 font-mono">
                     Amount: {formatINR(finalTotal)}
                   </div>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[11px] text-slate-500">
                     Customer scans using Google Pay, PhonePe, Paytm, or BHIM.
                   </p>
                 </div>
@@ -1870,22 +1864,22 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
               {/* CARD POS MODE */}
               {tenderMode === 'card_pos' && (
-                <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3 text-xs">
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3 text-xs">
                   <div className="flex justify-between items-center">
-                    <span className="font-bold text-blue-300 flex items-center gap-1.5">
-                      <CreditCard className="w-4 h-4 text-blue-400" />
+                    <span className="font-bold text-sky-950 flex items-center gap-1.5">
+                      <CreditCard className="w-4 h-4 text-sky-700" />
                       <span>Swipe / Dip Card on EDC Machine</span>
                     </span>
-                    <span className="text-[10px] font-mono text-slate-400">EDC Terminal #01</span>
+                    <span className="text-[10px] font-mono text-slate-500">EDC Terminal #01</span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[11px] text-slate-400 block mb-1">Card Network:</label>
+                      <label className="text-[11px] text-slate-600 block mb-1">Card Network:</label>
                       <select
                         value={cardType}
                         onChange={(e) => setCardType(e.target.value as any)}
-                        className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs"
+                        className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 text-xs"
                       >
                         <option value="Visa">Visa</option>
                         <option value="MasterCard">MasterCard</option>
@@ -1894,20 +1888,20 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                     </div>
 
                     <div>
-                      <label className="text-[11px] text-slate-400 block mb-1">Card Last 4 Digits:</label>
+                      <label className="text-[11px] text-slate-600 block mb-1">Card Last 4 Digits:</label>
                       <input
                         type="text"
                         maxLength={4}
                         placeholder="e.g. 4021"
                         value={cardLast4}
                         onChange={(e) => setCardLast4(e.target.value.replace(/\D/g, ''))}
-                        className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono text-xs"
+                        className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono text-xs"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-[11px] text-slate-400 block mb-1">
+                    <label className="text-[11px] text-slate-600 block mb-1">
                       Bank Auth Code (From Slip):
                     </label>
                     <input
@@ -1915,7 +1909,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                       placeholder="e.g. 98214"
                       value={cardAuthCode}
                       onChange={(e) => setCardAuthCode(e.target.value)}
-                      className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono text-xs"
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono text-xs"
                     />
                   </div>
                 </div>
@@ -1923,51 +1917,51 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
               {/* SPLIT TENDER MODE */}
               {tenderMode === 'split' && (
-                <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2.5 text-xs">
-                  <div className="flex justify-between items-center font-bold text-emerald-400 mb-1">
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5 text-xs">
+                  <div className="flex justify-between items-center font-bold text-slate-900 mb-1">
                     <span>Split Multiple Tenders</span>
                     <span>Total: {formatINR(finalTotal)}</span>
                   </div>
 
                   <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">Cash Part (₹):</label>
+                      <label className="text-[10px] text-slate-600 block mb-1">Cash Part (₹):</label>
                       <input
                         type="number"
                         value={splitCash}
                         onChange={(e) => setSplitCash(parseFloat(e.target.value) || 0)}
-                        className="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg font-mono text-xs text-white"
+                        className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg font-mono text-xs text-slate-900"
                       />
                     </div>
 
                     <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">UPI Part (₹):</label>
+                      <label className="text-[10px] text-slate-600 block mb-1">UPI Part (₹):</label>
                       <input
                         type="number"
                         value={splitUpi}
                         onChange={(e) => setSplitUpi(parseFloat(e.target.value) || 0)}
-                        className="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg font-mono text-xs text-white"
+                        className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg font-mono text-xs text-slate-900"
                       />
                     </div>
 
                     <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">Card Part (₹):</label>
+                      <label className="text-[10px] text-slate-600 block mb-1">Card Part (₹):</label>
                       <input
                         type="number"
                         value={splitCard}
                         onChange={(e) => setSplitCard(parseFloat(e.target.value) || 0)}
-                        className="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg font-mono text-xs text-white"
+                        className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg font-mono text-xs text-slate-900"
                       />
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-center pt-2 border-t border-slate-800">
-                    <span className="text-slate-400">Total Tendered:</span>
+                  <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+                    <span className="text-slate-600">Total Tendered:</span>
                     <span
                       className={`font-mono font-bold ${
                         splitCash + splitUpi + splitCard >= finalTotal
-                          ? 'text-emerald-400'
-                          : 'text-rose-400'
+                          ? 'text-emerald-700'
+                          : 'text-rose-600'
                       }`}
                     >
                       {formatINR(splitCash + splitUpi + splitCard)}
@@ -1978,10 +1972,10 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
             </div>
 
             {/* Complete Sale Footer */}
-            <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-3 shrink-0">
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
               <button
                 onClick={() => setShowTenderModal(false)}
-                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl cursor-pointer"
+                className="px-4 py-2.5 bg-sky-50 hover:bg-sky-100 text-sky-950 border-2 border-yellow-200 text-xs font-bold rounded-xl cursor-pointer"
               >
                 Back to Cart
               </button>
@@ -1989,10 +1983,10 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
               <button
                 disabled={tenderMode === 'cash' && cashTendered < finalTotal}
                 onClick={handleFinalizeSale}
-                className={`flex-1 py-3 px-4 rounded-xl text-xs font-black flex items-center justify-center gap-2 cursor-pointer ${
+                className={`flex-1 py-3 px-4 rounded-xl text-xs font-black flex items-center justify-center gap-2 cursor-pointer transition-all ${
                   tenderMode === 'cash' && cashTendered < finalTotal
-                    ? 'opacity-40 bg-slate-800 text-slate-500 cursor-not-allowed'
-                    : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg'
+                    ? 'opacity-40 bg-slate-200 text-slate-400 border-2 border-slate-300 cursor-not-allowed'
+                    : 'bg-sky-200 hover:bg-sky-300 text-sky-950 border-2 border-yellow-400 shadow-md'
                 }`}
               >
                 <Check className="w-4 h-4" />
@@ -2005,14 +1999,14 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
       {/* 4. CUSTOMER LOOKUP & B2B MODAL */}
       {showCustomerModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-                <User className="w-4 h-4 text-blue-400" />
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl text-slate-900">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                <User className="w-4 h-4 text-sky-700" />
                 <span>Customer & B2B Invoicing</span>
               </h3>
-              <button onClick={() => setShowCustomerModal(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setShowCustomerModal(false)} className="text-slate-400 hover:text-slate-700">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -2020,8 +2014,8 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
             <div className="space-y-3 text-xs">
               {/* Quick Returning Customer Autocomplete */}
               {suggestedCustomers.length > 0 && (
-                <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-1.5">
-                  <div className="text-[10px] uppercase font-bold text-slate-400">
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1.5">
+                  <div className="text-[10px] uppercase font-bold text-slate-500">
                     Recent Store Customers (1-Click Fill)
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -2038,9 +2032,9 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                             setCustomerGstinInput(sc.gstin || '');
                           }
                         }}
-                        className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-md border border-slate-700/60 text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+                        className="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-950 rounded-md border border-yellow-300 text-[11px] flex items-center gap-1 cursor-pointer transition-colors font-bold shadow-2xs"
                       >
-                        <User className="w-3 h-3 text-blue-400" />
+                        <User className="w-3 h-3 text-sky-700" />
                         <span>{sc.name}</span>
                         <span className="text-[10px] text-slate-500 font-mono">({sc.phone.slice(-4)})</span>
                       </button>
@@ -2050,29 +2044,29 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
               )}
 
               <div>
-                <label className="text-slate-300 block mb-1">Customer Mobile Number:</label>
+                <label className="text-slate-700 font-bold block mb-1">Customer Mobile Number:</label>
                 <input
                   type="tel"
                   placeholder="e.g. 9876543210"
                   value={customerPhoneInput}
                   onChange={(e) => setCustomerPhoneInput(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
                 />
               </div>
 
               <div>
-                <label className="text-slate-300 block mb-1">Customer Name:</label>
+                <label className="text-slate-700 font-bold block mb-1">Customer Name:</label>
                 <input
                   type="text"
                   placeholder="e.g. Rajesh Kumar"
                   value={customerNameInput}
                   onChange={(e) => setCustomerNameInput(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
                 />
               </div>
 
               {/* B2B Toggle */}
-              <div className="pt-2 border-t border-slate-800">
+              <div className="pt-2 border-t border-slate-200">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
@@ -2080,10 +2074,10 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                     onChange={(e) =>
                       setCustomer((prev) => ({ ...prev, isB2B: e.target.checked }))
                     }
-                    className="rounded text-blue-600 w-4 h-4"
+                    className="rounded text-sky-600 w-4 h-4"
                   />
-                  <span className="font-bold text-white flex items-center gap-1">
-                    <Building2 className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="font-bold text-slate-900 flex items-center gap-1">
+                    <Building2 className="w-3.5 h-3.5 text-sky-700" />
                     <span>Company GST Invoice (B2B Tax Credit)</span>
                   </span>
                 </label>
@@ -2092,32 +2086,32 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
               {customer.isB2B && (
                 <div className="space-y-2 pt-1">
                   <div>
-                    <label className="text-slate-400 block mb-1">Company / Business Name:</label>
+                    <label className="text-slate-600 block mb-1">Company / Business Name:</label>
                     <input
                       type="text"
                       placeholder="e.g. Skyline Tech Solutions Pvt Ltd"
                       value={customerBusinessInput}
                       onChange={(e) => setCustomerBusinessInput(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:bg-white"
                     />
                   </div>
 
                   <div>
-                    <label className="text-slate-400 block mb-1">15-Digit GSTIN:</label>
+                    <label className="text-slate-600 block mb-1">15-Digit GSTIN:</label>
                     <input
                       type="text"
                       maxLength={15}
                       placeholder="e.g. 09AABPJ1234F1Z5"
                       value={customerGstinInput}
                       onChange={(e) => setCustomerGstinInput(e.target.value.toUpperCase())}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono uppercase font-bold"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-mono uppercase font-bold focus:bg-white"
                     />
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
+            <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
               <button
                 onClick={() => {
                   setCustomer({
@@ -2129,7 +2123,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                   });
                   setShowCustomerModal(false);
                 }}
-                className="px-3 py-2 bg-slate-800 text-slate-300 rounded-lg text-xs font-semibold cursor-pointer"
+                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold cursor-pointer border border-slate-200"
               >
                 Reset to Walk-in
               </button>
@@ -2145,7 +2139,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                   }));
                   setShowCustomerModal(false);
                 }}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold cursor-pointer"
+                className="px-4 py-2 bg-sky-200 hover:bg-sky-300 text-sky-950 border-2 border-yellow-400 rounded-lg text-xs font-black cursor-pointer shadow-xs"
               >
                 Apply Customer
               </button>
@@ -2156,14 +2150,14 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
       {/* 5. RECALL PARKED TICKETS MODAL */}
       {showHeldModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl text-slate-900">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
-                <Play className="w-4 h-4 text-blue-400" />
-                <h3 className="text-sm font-bold text-white">Parked / Held Bills ({heldTickets.length})</h3>
+                <Play className="w-4 h-4 text-sky-700" />
+                <h3 className="text-sm font-bold text-slate-900">Parked / Held Bills ({heldTickets.length})</h3>
               </div>
-              <button onClick={() => setShowHeldModal(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setShowHeldModal(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -2177,16 +2171,16 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                 heldTickets.map((ticket) => (
                   <div
                     key={ticket.id}
-                    className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between gap-3"
+                    className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-3"
                   >
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-amber-400 text-xs">
+                        <span className="font-mono font-bold text-amber-700 text-xs">
                           {ticket.ticketNumber}
                         </span>
-                        <span className="text-xs font-bold text-white">{ticket.customer.name}</span>
+                        <span className="text-xs font-bold text-slate-900">{ticket.customer.name}</span>
                       </div>
-                      <div className="text-[11px] text-slate-400">
+                      <div className="text-[11px] text-slate-500">
                         {ticket.items.length} items • {formatINR(ticket.finalTotal)}
                       </div>
                       <div className="text-[10px] text-slate-500 italic mt-0.5">
@@ -2196,7 +2190,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
                     <button
                       onClick={() => handleRecallTicket(ticket)}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold cursor-pointer"
+                      className="px-3 py-1.5 bg-sky-200 hover:bg-sky-300 text-sky-950 border-2 border-yellow-400 rounded-lg text-xs font-black cursor-pointer shadow-xs"
                     >
                       Recall (Load)
                     </button>
@@ -2205,10 +2199,10 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
               )}
             </div>
 
-            <div className="pt-2 border-t border-slate-800 flex justify-end">
+            <div className="pt-2 border-t border-slate-200 flex justify-end">
               <button
                 onClick={() => setShowHeldModal(false)}
-                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg text-xs font-semibold cursor-pointer"
+                className="px-4 py-2 bg-sky-50 hover:bg-sky-100 text-sky-950 border-2 border-yellow-200 rounded-lg text-xs font-bold cursor-pointer"
               >
                 Close
               </button>
@@ -2219,20 +2213,20 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
       {/* 6. LINE SERIAL / DISCOUNT MODAL */}
       {editingItemIndex !== null && cartItems[editingItemIndex] && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <h3 className="text-xs font-bold text-white truncate pr-2">
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl text-slate-900">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+              <h3 className="text-xs font-bold text-slate-900 truncate pr-2">
                 Item Options: {cartItems[editingItemIndex].product.name}
               </h3>
-              <button onClick={() => setEditingItemIndex(null)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setEditingItemIndex(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="text-slate-400 block mb-1">
+                <label className="text-slate-700 font-bold block mb-1">
                   Product Serial Number / IMEI (For Warranty):
                 </label>
                 <input
@@ -2240,12 +2234,12 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                   placeholder="e.g. 359812049182391"
                   value={lineSerialInput}
                   onChange={(e) => setLineSerialInput(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-mono focus:bg-white"
                 />
               </div>
 
               <div>
-                <label className="text-slate-400 block mb-1">Cashier Line Discount (%):</label>
+                <label className="text-slate-700 font-bold block mb-1">Cashier Line Discount (%):</label>
                 <input
                   type="number"
                   min={0}
@@ -2253,15 +2247,15 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                   placeholder="e.g. 5 for 5% off"
                   value={lineDiscountPercent}
                   onChange={(e) => setLineDiscountPercent(parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono font-bold"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-mono font-bold focus:bg-white"
                 />
               </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-800 flex justify-end gap-2">
+            <div className="pt-2 border-t border-slate-200 flex justify-end gap-2">
               <button
                 onClick={() => setEditingItemIndex(null)}
-                className="px-3 py-1.5 bg-slate-800 text-slate-300 rounded-lg text-xs"
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold cursor-pointer"
               >
                 Cancel
               </button>
@@ -2282,7 +2276,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                   );
                   setEditingItemIndex(null);
                 }}
-                className="px-3.5 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold"
+                className="px-3.5 py-1.5 bg-sky-200 hover:bg-sky-300 text-sky-950 border-2 border-yellow-400 rounded-lg text-xs font-black cursor-pointer shadow-xs"
               >
                 Save
               </button>
@@ -2329,21 +2323,21 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
       {/* 9. CLEAR CART CONFIRMATION DIALOG */}
       {showClearConfirm && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl text-center space-y-4">
-            <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 mx-auto flex items-center justify-center">
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-5 shadow-2xl text-center space-y-4 text-slate-900">
+            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 border border-rose-200 mx-auto flex items-center justify-center">
               <Trash2 className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white">Clear Active POS Bill?</h3>
-              <p className="text-xs text-slate-400 mt-1">
+              <h3 className="text-sm font-bold text-slate-900">Clear Active POS Bill?</h3>
+              <p className="text-xs text-slate-500 mt-1">
                 All {cartItems.reduce((acc, i) => acc + i.quantity, 0)} items in the current register bill will be removed.
               </p>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowClearConfirm(false)}
-                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl cursor-pointer"
+                className="flex-1 py-2.5 bg-sky-50 hover:bg-sky-100 text-sky-950 border-2 border-yellow-200 text-xs font-bold rounded-xl cursor-pointer"
               >
                 Keep Bill
               </button>
@@ -2356,7 +2350,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                   playBeepSound('delete');
                   showNotification('POS Cart cleared.', 'info');
                 }}
-                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl cursor-pointer"
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl cursor-pointer shadow-sm"
               >
                 Yes, Clear
               </button>
@@ -2367,29 +2361,29 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
       {/* 10. BILL-LEVEL DISCOUNT MODAL */}
       {showDiscountModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-                <Percent className="w-4 h-4 text-emerald-400" />
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4 text-slate-900">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                <Percent className="w-4 h-4 text-sky-700" />
                 <span>Overall Bill Discount</span>
               </h3>
-              <button onClick={() => setShowDiscountModal(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setShowDiscountModal(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="text-slate-300 block mb-1.5 font-bold">Discount Type:</label>
+                <label className="text-slate-700 block mb-1.5 font-bold">Discount Type:</label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setCartDiscountType('percentage')}
-                    className={`py-2 px-3 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
+                    className={`py-2 px-3 rounded-lg border-2 text-xs font-bold transition-all cursor-pointer ${
                       cartDiscountType === 'percentage'
-                        ? 'bg-blue-600 text-white border-blue-500'
-                        : 'bg-slate-950 text-slate-400 border-slate-700 hover:text-white'
+                        ? 'bg-sky-200 text-sky-950 border-yellow-400 font-black shadow-xs'
+                        : 'bg-sky-50 text-sky-900 border-yellow-200/80 hover:bg-sky-100 font-bold'
                     }`}
                   >
                     Percentage (%)
@@ -2397,10 +2391,10 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                   <button
                     type="button"
                     onClick={() => setCartDiscountType('flat')}
-                    className={`py-2 px-3 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
+                    className={`py-2 px-3 rounded-lg border-2 text-xs font-bold transition-all cursor-pointer ${
                       cartDiscountType === 'flat'
-                        ? 'bg-blue-600 text-white border-blue-500'
-                        : 'bg-slate-950 text-slate-400 border-slate-700 hover:text-white'
+                        ? 'bg-sky-200 text-sky-950 border-yellow-400 font-black shadow-xs'
+                        : 'bg-sky-50 text-sky-900 border-yellow-200/80 hover:bg-sky-100 font-bold'
                     }`}
                   >
                     Flat Amount (₹)
@@ -2409,7 +2403,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
               </div>
 
               <div>
-                <label className="text-slate-300 block mb-1">
+                <label className="text-slate-700 font-bold block mb-1">
                   Discount Value {cartDiscountType === 'percentage' ? '(%)' : '(₹)'}:
                 </label>
                 <input
@@ -2419,7 +2413,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                   value={cartDiscountValue || ''}
                   onChange={(e) => setCartDiscountValue(Math.max(0, parseFloat(e.target.value) || 0))}
                   placeholder={cartDiscountType === 'percentage' ? 'e.g. 5 for 5%' : 'e.g. 500 for ₹500 off'}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono font-bold"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
                 />
               </div>
 
@@ -2430,7 +2424,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                     key={preset}
                     type="button"
                     onClick={() => setCartDiscountValue(preset)}
-                    className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[11px] font-mono cursor-pointer"
+                    className="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-950 rounded text-[11px] font-mono font-bold border border-yellow-300 cursor-pointer shadow-2xs"
                   >
                     {cartDiscountType === 'percentage' ? `${preset}%` : formatINR(preset)}
                   </button>
@@ -2438,7 +2432,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
               </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-800 flex justify-between gap-2">
+            <div className="pt-2 border-t border-slate-200 flex justify-between gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -2446,7 +2440,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                   setCartDiscountValue(0);
                   setShowDiscountModal(false);
                 }}
-                className="px-3 py-2 bg-slate-800 text-slate-400 hover:text-white rounded-lg text-xs"
+                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold cursor-pointer"
               >
                 Clear Discount
               </button>
@@ -2459,7 +2453,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                   setShowDiscountModal(false);
                   showNotification('Bill discount applied.', 'success');
                 }}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold cursor-pointer"
+                className="px-4 py-2 bg-sky-200 hover:bg-sky-300 text-sky-950 border-2 border-yellow-400 rounded-lg text-xs font-black cursor-pointer shadow-xs"
               >
                 Apply to Bill
               </button>
@@ -2470,21 +2464,21 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
       {/* 11. CUSTOM ITEM / SERVICE FEE MODAL */}
       {showCustomItemModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-                <Wrench className="w-4 h-4 text-purple-400" />
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4 text-slate-900">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                <Wrench className="w-4 h-4 text-sky-700" />
                 <span>Add Custom Item or Service Charge</span>
               </h3>
-              <button onClick={() => setShowCustomItemModal(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setShowCustomItemModal(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Popular Presets */}
             <div className="space-y-1.5">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">
+              <span className="text-[10px] uppercase font-bold text-slate-500 block">
                 Popular Quick Services & Add-ons
               </span>
               <div className="grid grid-cols-2 gap-2">
@@ -2503,10 +2497,10 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                       handleAddCustomItem(item.name, item.price, 18, item.isService);
                       setShowCustomItemModal(false);
                     }}
-                    className="p-2 bg-slate-950 hover:bg-slate-800 rounded-lg border border-slate-800 hover:border-purple-500 text-left transition-all cursor-pointer"
+                    className="p-2 bg-slate-50 hover:bg-sky-50 rounded-lg border border-slate-200 hover:border-yellow-400 text-left transition-all cursor-pointer shadow-2xs"
                   >
-                    <div className="text-[11px] font-bold text-white truncate">{item.name}</div>
-                    <div className="text-[10px] text-emerald-400 font-mono font-bold mt-0.5">
+                    <div className="text-[11px] font-bold text-slate-900 truncate">{item.name}</div>
+                    <div className="text-[10px] text-sky-900 font-mono font-bold mt-0.5">
                       {formatINR(item.price)}
                     </div>
                   </button>
@@ -2515,37 +2509,37 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
             </div>
 
             {/* Custom Input Fields */}
-            <div className="pt-2 border-t border-slate-800 space-y-3 text-xs">
+            <div className="pt-2 border-t border-slate-200 space-y-3 text-xs">
               <div>
-                <label className="text-slate-300 block mb-1">Item or Service Name:</label>
+                <label className="text-slate-700 font-bold block mb-1">Item or Service Name:</label>
                 <input
                   type="text"
                   placeholder="e.g. Broken Display Replacement Labor"
                   value={customItemName}
                   onChange={(e) => setCustomItemName(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:bg-white"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-slate-300 block mb-1">Amount / Price (₹):</label>
+                  <label className="text-slate-700 font-bold block mb-1">Amount / Price (₹):</label>
                   <input
                     type="number"
                     min={1}
                     placeholder="e.g. 450"
                     value={customItemPrice}
                     onChange={(e) => setCustomItemPrice(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono font-bold"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-mono font-bold focus:bg-white"
                   />
                 </div>
 
                 <div>
-                  <label className="text-slate-300 block mb-1">GST Tax Rate (%):</label>
+                  <label className="text-slate-700 font-bold block mb-1">GST Tax Rate (%):</label>
                   <select
                     value={customItemGst}
                     onChange={(e) => setCustomItemGst(parseInt(e.target.value) || 18)}
-                    className="w-full px-2.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white text-xs"
+                    className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 text-xs focus:bg-white"
                   >
                     <option value={0}>0% (Exempt)</option>
                     <option value={5}>5%</option>
@@ -2562,18 +2556,18 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                     type="checkbox"
                     checked={customItemIsService}
                     onChange={(e) => setCustomItemIsService(e.target.checked)}
-                    className="rounded text-purple-600 w-4 h-4"
+                    className="rounded text-sky-600 w-4 h-4"
                   />
-                  <span className="text-slate-300 text-[11px]">Mark as Repair / Labor Service (SAC 9987)</span>
+                  <span className="text-slate-700 text-[11px] font-semibold">Mark as Repair / Labor Service (SAC 9987)</span>
                 </label>
               </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-800 flex justify-end gap-2">
+            <div className="pt-2 border-t border-slate-200 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowCustomItemModal(false)}
-                className="px-3 py-2 bg-slate-800 text-slate-300 rounded-lg text-xs"
+                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold cursor-pointer"
               >
                 Cancel
               </button>
@@ -2589,7 +2583,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                     setShowCustomItemModal(false);
                   }
                 }}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-xs font-bold cursor-pointer"
+                className="px-4 py-2 bg-sky-200 hover:bg-sky-300 disabled:opacity-40 disabled:cursor-not-allowed text-sky-950 border-2 border-yellow-400 rounded-lg text-xs font-black cursor-pointer shadow-xs"
               >
                 Add to Bill
               </button>
@@ -2600,21 +2594,21 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
       {/* 12. CAMERA BARCODE SCANNER MODAL */}
       {showCameraScanner && (
-        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full overflow-hidden shadow-2xl flex flex-col">
-            <div className="p-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full overflow-hidden shadow-2xl flex flex-col text-slate-900">
+            <div className="p-3.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Camera className="w-4 h-4 text-blue-400" />
-                <h3 className="text-xs font-bold text-white">Device Camera Barcode Scanner</h3>
+                <Camera className="w-4 h-4 text-sky-700" />
+                <h3 className="text-xs font-bold text-slate-900">Device Camera Barcode Scanner</h3>
               </div>
-              <button onClick={() => setShowCameraScanner(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setShowCameraScanner(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="p-4 flex flex-col items-center space-y-3">
               {/* Camera Feed / Viewfinder */}
-              <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center">
+              <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-slate-300 flex items-center justify-center">
                 <video
                   ref={videoRef}
                   autoPlay
@@ -2631,14 +2625,14 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                 </div>
 
                 {cameraError && (
-                  <div className="absolute inset-0 bg-slate-950/90 p-4 flex flex-col items-center justify-center text-center text-xs text-rose-300">
+                  <div className="absolute inset-0 bg-slate-900/90 p-4 flex flex-col items-center justify-center text-center text-xs text-rose-300">
                     <AlertTriangle className="w-8 h-8 text-rose-400 mb-2" />
                     <p>{cameraError}</p>
                   </div>
                 )}
               </div>
 
-              <p className="text-[11px] text-slate-400 text-center">
+              <p className="text-[11px] text-slate-500 text-center">
                 Point camera lens at barcode printed on product box. Or click demo barcode below:
               </p>
 
@@ -2657,9 +2651,9 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                         setShowCameraScanner(false);
                         showNotification(`Scanned "${p.name}" via camera.`, 'success');
                       }}
-                      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-mono rounded border border-slate-700 flex items-center gap-1 cursor-pointer"
+                      className="px-2 py-1 bg-sky-100 hover:bg-sky-200 text-sky-950 text-[10px] font-mono rounded-lg border-2 border-yellow-300 flex items-center gap-1 cursor-pointer shadow-2xs font-bold"
                     >
-                      <Scan className="w-3 h-3 text-emerald-400" />
+                      <Scan className="w-3 h-3 text-emerald-600" />
                       <span className="truncate max-w-[120px]">{p.barcode || p.sku}</span>
                     </button>
                   ))}
@@ -2667,11 +2661,11 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
               </div>
             </div>
 
-            <div className="p-3 bg-slate-950 border-t border-slate-800 flex justify-end">
+            <div className="p-3 bg-slate-50 border-t border-slate-200 flex justify-end">
               <button
                 type="button"
                 onClick={() => setShowCameraScanner(false)}
-                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg text-xs font-semibold cursor-pointer"
+                className="px-4 py-2 bg-sky-100 hover:bg-sky-200 text-sky-950 border-2 border-yellow-300 rounded-lg text-xs font-bold cursor-pointer shadow-2xs"
               >
                 Close Scanner
               </button>
@@ -2682,18 +2676,18 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
       {/* 13. RECENT INVOICES & RECEIPT REPRINT MODAL */}
       {showRecentReceiptsModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-5 space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-xl w-full p-5 space-y-4 shadow-2xl text-slate-900">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
-                <History className="w-4 h-4 text-blue-400" />
-                <h3 className="text-sm font-bold text-white">
+                <History className="w-4 h-4 text-sky-700" />
+                <h3 className="text-sm font-bold text-slate-900">
                   Recent Register Invoices ({recentReceipts.length})
                 </h3>
               </div>
               <button
                 onClick={() => setShowRecentReceiptsModal(false)}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-slate-700 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2708,23 +2702,23 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                 recentReceipts.map((rec) => (
                   <div
                     key={rec.invoiceNumber}
-                    className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between gap-3 text-xs"
+                    className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-3 text-xs"
                   >
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-blue-400">
+                        <span className="font-mono font-bold text-sky-800">
                           {rec.invoiceNumber}
                         </span>
-                        <span className="font-bold text-white">{rec.customer.name}</span>
+                        <span className="font-bold text-slate-900">{rec.customer.name}</span>
                         {rec.customer.isB2B && (
-                          <span className="text-[9px] font-bold bg-purple-900 text-purple-300 px-1 rounded">
+                          <span className="text-[9px] font-bold bg-sky-100 text-sky-950 border border-yellow-300 px-1 rounded">
                             B2B
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
+                      <div className="text-[11px] text-slate-500 mt-0.5">
                         {new Date(rec.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} •{' '}
-                        {rec.items.length} items • <strong className="text-emerald-400 font-mono">{formatINR(rec.finalTotal)}</strong>
+                        {rec.items.length} items • <strong className="text-slate-900 font-mono">{formatINR(rec.finalTotal)}</strong>
                       </div>
                       <div className="text-[10px] text-slate-500 font-mono uppercase">
                         Tender: {rec.tender.mode}
@@ -2737,7 +2731,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                           setCompletedReceipt(rec);
                           setShowRecentReceiptsModal(false);
                         }}
-                        className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer"
+                        className="px-2.5 py-1.5 bg-sky-100 hover:bg-sky-200 text-sky-950 border-2 border-yellow-300 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer shadow-2xs"
                         title="View & Re-print Thermal Bill"
                       >
                         <Printer className="w-3.5 h-3.5" />
@@ -2749,10 +2743,10 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
               )}
             </div>
 
-            <div className="pt-2 border-t border-slate-800 flex justify-end">
+            <div className="pt-2 border-t border-slate-200 flex justify-end">
               <button
                 onClick={() => setShowRecentReceiptsModal(false)}
-                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg text-xs font-semibold cursor-pointer"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold border border-slate-200 cursor-pointer"
               >
                 Close
               </button>
@@ -2763,23 +2757,23 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
       {/* 14. QUOTATIONS / PROFORMA ESTIMATES MODAL */}
       {showQuotationModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-5 space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-5 space-y-4 shadow-2xl text-slate-900">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-purple-400" />
+                <FileText className="w-5 h-5 text-sky-700" />
                 <div>
-                  <h3 className="text-sm font-bold text-white">
+                  <h3 className="text-sm font-bold text-slate-900">
                     Quotations & Proforma Estimates ({quotations.length})
                   </h3>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[11px] text-slate-500">
                     Convert saved quotations into live counter invoices with 1-click.
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowQuotationModal(false)}
-                className="text-slate-400 hover:text-white cursor-pointer"
+                className="text-slate-400 hover:text-slate-700 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2788,8 +2782,8 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
             <div className="max-h-96 overflow-y-auto space-y-2.5">
               {quotations.length === 0 ? (
                 <div className="text-center py-10 text-slate-500 space-y-2">
-                  <FileText className="w-10 h-10 mx-auto text-slate-700 stroke-[1.5]" />
-                  <p className="text-xs font-bold text-slate-400">No Saved Quotations</p>
+                  <FileText className="w-10 h-10 mx-auto text-slate-400 stroke-[1.5]" />
+                  <p className="text-xs font-bold text-slate-700">No Saved Quotations</p>
                   <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
                     To generate a quotation, add items to cart and click "Quote" in the cart actions bar.
                   </p>
@@ -2798,19 +2792,19 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                 quotations.map((q) => (
                   <div
                     key={q.id}
-                    className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                    className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-purple-400">{q.quoteNumber}</span>
-                        <span className="font-bold text-white">{q.customer.name}</span>
-                        <span className="text-[10px] px-1.5 py-0.2 bg-purple-900/60 text-purple-300 rounded font-bold">
+                        <span className="font-mono font-bold text-sky-800">{q.quoteNumber}</span>
+                        <span className="font-bold text-slate-900">{q.customer.name}</span>
+                        <span className="text-[10px] px-1.5 py-0.2 bg-sky-100 text-sky-950 border border-yellow-300 rounded font-bold">
                           Valid 15 Days
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-400">
+                      <div className="text-[11px] text-slate-500">
                         {new Date(q.createdAt).toLocaleDateString()} • {q.items.length} items •{' '}
-                        <strong className="text-emerald-400 font-mono">{formatINR(q.finalTotal)}</strong>
+                        <strong className="text-slate-900 font-mono">{formatINR(q.finalTotal)}</strong>
                       </div>
                       <div className="text-[10px] text-slate-500 truncate max-w-md">
                         Items: {q.items.map((i) => `${i.product.name} (x${i.quantity})`).join(', ')}
@@ -2820,7 +2814,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                     <div className="flex items-center gap-2 shrink-0">
                       <button
                         onClick={() => handleConvertQuotationToCart(q)}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-md"
+                        className="px-3 py-1.5 bg-sky-200 hover:bg-sky-300 text-sky-950 border-2 border-yellow-400 rounded-lg text-xs font-black flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
                       >
                         <ArrowRight className="w-3.5 h-3.5" />
                         <span>Convert to Invoice</span>
@@ -2834,7 +2828,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                           } catch {}
                           showNotification(`Quotation ${q.quoteNumber} removed.`, 'info');
                         }}
-                        className="p-1.5 text-slate-500 hover:text-rose-400 cursor-pointer"
+                        className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
                         title="Delete Quote"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -2845,10 +2839,10 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
               )}
             </div>
 
-            <div className="pt-2 border-t border-slate-800 flex justify-end">
+            <div className="pt-2 border-t border-slate-200 flex justify-end">
               <button
                 onClick={() => setShowQuotationModal(false)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold cursor-pointer"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold border border-slate-200 cursor-pointer"
               >
                 Close
               </button>
@@ -2859,22 +2853,22 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
 
       {/* 15. MANAGER APPROVAL PIN MODAL (Role-based security) */}
       {showManagerPinModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
-            <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
-              <ShieldCheck className="w-5 h-5 text-amber-400" />
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl text-slate-900">
+            <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
+              <ShieldCheck className="w-5 h-5 text-amber-600" />
               <div>
-                <h3 className="text-sm font-bold text-white">Manager PIN Override</h3>
-                <p className="text-[11px] text-slate-400">Supervisor authorization required</p>
+                <h3 className="text-sm font-bold text-slate-900">Manager PIN Override</h3>
+                <p className="text-[11px] text-slate-500">Supervisor authorization required</p>
               </div>
             </div>
 
             <div className="space-y-3">
-              <p className="text-xs text-slate-300">
+              <p className="text-xs text-slate-600">
                 A manager PIN is required to authorize price overrides or discounts exceeding 25%.
               </p>
               <div>
-                <label className="text-[11px] text-slate-400 block mb-1">Enter Manager 4-Digit PIN (Default: 1234):</label>
+                <label className="text-[11px] text-slate-600 block mb-1">Enter Manager 4-Digit PIN (Default: 1234):</label>
                 <input
                   type="password"
                   maxLength={6}
@@ -2884,16 +2878,16 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                     setManagerPinError(null);
                   }}
                   placeholder="••••"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-center font-mono text-lg font-bold text-white tracking-widest focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-center font-mono text-lg font-bold text-slate-900 tracking-widest focus:outline-none focus:ring-2 focus:ring-sky-500"
                 />
               </div>
 
               {managerPinError && (
-                <p className="text-xs text-rose-400 font-semibold">{managerPinError}</p>
+                <p className="text-xs text-rose-600 font-semibold">{managerPinError}</p>
               )}
             </div>
 
-            <div className="pt-2 border-t border-slate-800 flex justify-end gap-2">
+            <div className="pt-2 border-t border-slate-200 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -2902,7 +2896,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                   setManagerPinInput('');
                   setManagerPinError(null);
                 }}
-                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold cursor-pointer"
+                className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold border border-slate-200 cursor-pointer"
               >
                 Cancel
               </button>
@@ -2922,7 +2916,7 @@ export const POSTerminal: React.FC<POSTerminalProps> = ({ onClose, isFullScreenM
                     playBeepSound('error');
                   }
                 }}
-                className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                className="px-4 py-1.5 bg-sky-200 hover:bg-sky-300 text-sky-950 border-2 border-yellow-400 rounded-lg text-xs font-black transition-colors cursor-pointer shadow-xs"
               >
                 Authorize
               </button>

@@ -377,7 +377,7 @@ export const DeliveryZoneManager: React.FC = () => {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by PIN code (e.g. 226001), locality (Hazratganj), or store name..."
+            placeholder="Search by PIN code (e.g. 401209), locality (Nalasopara / Vasai / Virar), or store name..."
             className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white text-slate-900 placeholder:text-slate-400"
           />
           {searchTerm && (

@@ -50,21 +50,21 @@ export const POSShiftModal: React.FC<POSShiftModalProps> = ({
     <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
       <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="p-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+        <div className="p-4 bg-white border-b border-slate-200 text-slate-900 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-blue-600/30 text-blue-400 flex items-center justify-center">
-              <Banknote className="w-5 h-5 text-blue-400" />
+            <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-800 border border-yellow-300 flex items-center justify-center">
+              <Banknote className="w-5 h-5 text-sky-800" />
             </div>
             <div>
-              <h3 className="text-sm font-bold leading-tight">POS Cash Register & Shift Reconciliation</h3>
-              <p className="text-[11px] text-slate-400">
+              <h3 className="text-sm font-bold leading-tight text-slate-900">POS Cash Register & Shift Reconciliation</h3>
+              <p className="text-[11px] text-slate-500">
                 Register: {session.registerId} • Outlet: {session.outletName}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+            className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -262,7 +262,7 @@ export const POSShiftModal: React.FC<POSShiftModalProps> = ({
         <div className="p-3.5 sm:p-4 bg-white border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-2.5 shrink-0">
           <button
             onClick={handlePrintZReport}
-            className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+            className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-sky-100 hover:bg-sky-200 text-sky-950 border-2 border-yellow-300 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
           >
             <Printer className="w-4 h-4" />
             <span>Print Z-Report (Shift Summary)</span>
@@ -270,7 +270,7 @@ export const POSShiftModal: React.FC<POSShiftModalProps> = ({
 
           <button
             onClick={handleCompleteClose}
-            className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+            className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-sky-200 hover:bg-sky-300 text-sky-950 border-2 border-yellow-400 rounded-xl text-xs font-black transition-all shadow-xs cursor-pointer"
           >
             <ShieldCheck className="w-4 h-4" />
             <span>End Shift & Reconcile</span>

@@ -13,7 +13,12 @@ import {
   Upload,
   Camera,
   Filter,
+  Lock,
+  Clock,
+  PackageCheck,
+  AlertCircle,
 } from 'lucide-react';
+import { cleanCustomerName } from '../../utils/cleaners';
 
 interface ProductReviewsProps {
   productId: string;
@@ -71,6 +76,49 @@ export const ProductReviews: React.FC<ProductReviewsProps> = ({ productId }) => 
   const [selectedStarFilter, setSelectedStarFilter] = useState<number | 'all'>('all');
   const [sortBy, setSortBy] = useState<'helpful' | 'highest' | 'lowest' | 'newest'>('helpful');
   const [votedMap, setVotedMap] = useState<Record<string, boolean>>({});
+
+  // Delivered Order Check: Only customers with a DELIVERED order containing this product can review
+  const deliveredOrdersForProduct = useMemo(() => {
+    return orders.filter((o) => {
+      const hasItem = o.items.some((i) => i.productId === productId);
+      const isDelivered = o.orderStatus === 'delivered';
+      const matchesCustomer =
+        (currentUser.phone && o.customer.phone === currentUser.phone) ||
+        (currentUser.email && o.customer.email === currentUser.email) ||
+        (currentUser.name && o.customer.name.trim().toLowerCase() === currentUser.name.trim().toLowerCase()) ||
+        o.customer.id === currentUser.id;
+      return hasItem && isDelivered && matchesCustomer;
+    });
+  }, [orders, productId, currentUser]);
+
+  // In-Transit Orders Check: Placed order containing this item, but not delivered yet
+  const inTransitOrdersForProduct = useMemo(() => {
+    return orders.filter((o) => {
+      const hasItem = o.items.some((i) => i.productId === productId);
+      const notDelivered = o.orderStatus !== 'delivered' && o.orderStatus !== 'cancelled';
+      const matchesCustomer =
+        (currentUser.phone && o.customer.phone === currentUser.phone) ||
+        (currentUser.email && o.customer.email === currentUser.email) ||
+        (currentUser.name && o.customer.name.trim().toLowerCase() === currentUser.name.trim().toLowerCase()) ||
+        o.customer.id === currentUser.id;
+      return hasItem && notDelivered && matchesCustomer;
+    });
+  }, [orders, productId, currentUser]);
+
+  const isEligibleToReview = deliveredOrdersForProduct.length > 0;
+  const activeDeliveredOrder = deliveredOrdersForProduct[0];
+  const inTransitOrder = inTransitOrdersForProduct[0];
+
+  // Has this customer already reviewed this product?
+  const alreadyReviewed = useMemo(() => {
+    return productReviews.some(
+      (r) =>
+        r.productId === productId &&
+        (deliveredOrdersForProduct.some((o) => o.id === r.orderId) ||
+          (currentUser.id && r.customerId === currentUser.id) ||
+          (currentUser.name && r.customerName.toLowerCase() === currentUser.name.toLowerCase()))
+    );
+  }, [productReviews, productId, deliveredOrdersForProduct, currentUser]);
 
   // Review submission form state
   const [showAddReviewForm, setShowAddReviewForm] = useState(false);
@@ -132,7 +180,7 @@ export const ProductReviews: React.FC<ProductReviewsProps> = ({ productId }) => 
     }
   };
 
-  // Submit review
+  // Submit review - strictly verified delivered orders only
   const handleSubmitReview = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newComment.trim()) {
@@ -140,22 +188,25 @@ export const ProductReviews: React.FC<ProductReviewsProps> = ({ productId }) => 
       return;
     }
 
-    // Check if user has an order with this product
-    const matchingOrder = orders.find((o) =>
-      o.items.some((i) => i.productId === productId)
-    );
+    if (!isEligibleToReview || !activeDeliveredOrder) {
+      setFormFeedback({
+        type: 'error',
+        message: 'Review submission restricted: Only verified customers with a confirmed delivered order can submit feedback.',
+      });
+      return;
+    }
 
     const res = submitProductReview({
       productId,
-      orderId: matchingOrder ? matchingOrder.id : `ORD-VERIFIED-${Date.now().toString().slice(-6)}`,
-      customerName: currentUser.name || 'Verified Customer',
+      orderId: activeDeliveredOrder.id,
+      customerName: cleanCustomerName(currentUser.name) || 'Verified Customer',
       customerId: currentUser.id || 'cust_verified',
-      customerCity: currentUser.savedAddresses[0]?.city || 'Lucknow',
+      customerCity: currentUser.savedAddresses[0]?.city || activeDeliveredOrder.customer.city || 'Nalasopara East',
       rating: newRating,
       title: newTitle.trim() || undefined,
       comment: newComment.trim(),
       images: attachedImages,
-      isVerifiedPurchase: !!matchingOrder || true,
+      isVerifiedPurchase: true,
     });
 
     if (res.success) {
@@ -182,40 +233,77 @@ export const ProductReviews: React.FC<ProductReviewsProps> = ({ productId }) => 
             <span>Verified Customer Reviews & Ratings</span>
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            100% verified purchases from Lucknow shoppers with approved delivery confirmation.
+            Only verified customers with confirmed doorstep delivery can submit product reviews.
           </p>
         </div>
 
-        <button
-          onClick={() => setShowAddReviewForm(!showAddReviewForm)}
-          className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer shrink-0"
-        >
-          {showAddReviewForm ? (
-            <>
-              <X className="w-4 h-4" />
-              <span>Cancel Review</span>
-            </>
-          ) : (
-            <>
-              <Plus className="w-4 h-4" />
-              <span>Write a Review</span>
-            </>
-          )}
-        </button>
+        {/* Action Button: Strictly gated by delivery eligibility */}
+        {alreadyReviewed ? (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-800 rounded-lg text-xs font-bold border border-emerald-200 shrink-0 shadow-2xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <span>Review Submitted</span>
+          </div>
+        ) : isEligibleToReview ? (
+          <button
+            onClick={() => setShowAddReviewForm(!showAddReviewForm)}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors cursor-pointer shrink-0"
+          >
+            {showAddReviewForm ? (
+              <>
+                <X className="w-4 h-4" />
+                <span>Cancel Review</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                <span>Write Verified Review</span>
+              </>
+            )}
+          </button>
+        ) : inTransitOrder ? (
+          <div
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-800 rounded-lg text-xs font-medium border border-amber-200 shrink-0"
+            title="Your order is currently on the way. Review unlocks once delivered."
+          >
+            <Clock className="w-3.5 h-3.5 text-amber-600" />
+            <span>Order #{inTransitOrder.id} In Transit</span>
+          </div>
+        ) : (
+          <div
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-semibold border border-slate-200 shrink-0"
+            title="Only customers who purchased and received this product can review"
+          >
+            <Lock className="w-3.5 h-3.5 text-slate-400" />
+            <span>Delivered Buyers Only</span>
+          </div>
+        )}
       </div>
 
       {/* Review Submission Form Drawer / Accordion */}
-      {showAddReviewForm && (
+      {showAddReviewForm && isEligibleToReview && activeDeliveredOrder && (
         <form
           onSubmit={handleSubmitReview}
-          className="bg-blue-50/60 border border-blue-200 rounded-xl p-4 sm:p-5 space-y-4 animate-in fade-in duration-200"
+          className="bg-emerald-50/60 border-2 border-emerald-300 rounded-2xl p-4 sm:p-5 space-y-4 animate-in fade-in duration-200"
         >
+          {/* Verified Delivery Badge */}
+          <div className="p-3 bg-white border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-slate-800 shadow-2xs">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>
+                <strong className="text-emerald-800">Delivered Order Verified:</strong>{' '}
+                <span className="font-mono font-bold">{activeDeliveredOrder.id}</span>
+              </span>
+            </div>
+            <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+              Delivered
+            </span>
+          </div>
           <div className="flex items-center justify-between">
             <h4 className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-1.5">
               <Camera className="w-4 h-4 text-blue-600" />
               <span>Submit Verified Feedback for this Product</span>
             </h4>
-            <span className="text-[11px] text-blue-700 font-medium">Posting as {currentUser.name}</span>
+            <span className="text-[11px] text-blue-700 font-medium">Posting as {cleanCustomerName(currentUser.name)}</span>
           </div>
 
           {/* Star selector */}
@@ -501,20 +589,20 @@ export const ProductReviews: React.FC<ProductReviewsProps> = ({ productId }) => 
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-300 text-blue-700 font-extrabold text-xs flex items-center justify-center shrink-0">
-                      {review.customerName.charAt(0)}
+                      {cleanCustomerName(review.customerName).charAt(0)}
                     </div>
                     <div>
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-xs font-bold text-slate-900">{review.customerName}</span>
+                        <span className="text-xs font-bold text-slate-900">{cleanCustomerName(review.customerName)}</span>
                         {review.isVerifiedPurchase && (
                           <span className="text-[10px] font-semibold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded flex items-center gap-1 border border-emerald-200">
                             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            <span>Verified Buyer</span>
+                            <span>Verified Delivered Buyer</span>
                           </span>
                         )}
                       </div>
                       <span className="text-[11px] text-slate-400 block">
-                        {review.customerCity || 'Lucknow'} • Verified on{' '}
+                        {review.customerCity || 'Nalasopara'} • Verified on{' '}
                         {new Date(review.createdAt).toLocaleDateString('en-IN', {
                           day: 'numeric',
                           month: 'short',
@@ -602,21 +690,42 @@ export const ProductReviews: React.FC<ProductReviewsProps> = ({ productId }) => 
           })}
         </div>
       ) : (
-        <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-300 p-6 space-y-2">
+        <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-300 p-6 space-y-2.5">
           <Star className="w-8 h-8 text-amber-400 mx-auto fill-amber-400/20" />
           <h4 className="text-xs sm:text-sm font-bold text-slate-800">No approved reviews matching this filter</h4>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
             {selectedStarFilter !== 'all'
               ? 'No reviews with this star rating yet. Switch to all ratings above.'
-              : 'Be the first verified customer to share your experience with this device!'}
+              : isEligibleToReview
+              ? 'Your order has been delivered! Be the first verified buyer to share your experience with this product.'
+              : 'Feedback and ratings can only be submitted by customers after their order is confirmed delivered.'}
           </p>
-          <button
-            onClick={() => setShowAddReviewForm(true)}
-            className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 cursor-pointer shadow-2xs"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Write the First Review</span>
-          </button>
+          <div className="pt-1">
+            {alreadyReviewed ? (
+              <div className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Verified Review Already Submitted</span>
+              </div>
+            ) : isEligibleToReview ? (
+              <button
+                onClick={() => setShowAddReviewForm(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 cursor-pointer shadow-2xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Write the First Verified Review</span>
+              </button>
+            ) : inTransitOrder ? (
+              <div className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span>Order #{inTransitOrder.id} In Transit — Review Unlocks Upon Delivery</span>
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <span>Verified Delivered Buyers Only</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

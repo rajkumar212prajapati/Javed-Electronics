@@ -6,11 +6,17 @@ export type PaymentGatewayProviderType =
   | 'stripe'
   | 'upi_qr'
   | 'cod'
-  | 'store_pickup_pay';
+  | 'store_pickup_pay'
+  | 'je_cash';
 
 export type GatewayEnvironment = 'sandbox' | 'live';
 
-export type GatewayFeeOrDiscountType = 'none' | 'percentage_discount' | 'fixed_discount' | 'surcharge';
+export type GatewayFeeOrDiscountType =
+  | 'none'
+  | 'percentage_discount'
+  | 'fixed_discount'
+  | 'surcharge'
+  | 'percentage_surcharge';
 
 export interface PaymentGatewayConfig {
   id: string; // e.g. 'gw_razorpay', 'gw_phonepe', 'gw_upi_qr'

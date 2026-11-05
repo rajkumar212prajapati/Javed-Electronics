@@ -41,6 +41,9 @@ export const AuthModal: React.FC = () => {
     loginUser,
     verifyAdminOtpAndLogin,
     registerCustomer,
+    initiateCustomerSignupOtp,
+    resendCustomerSignupOtp,
+    verifyCustomerSignupOtp,
     accounts,
   } = useStore();
 
@@ -52,14 +55,22 @@ export const AuthModal: React.FC = () => {
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
 
-  // Customer Registration form fields
+  // Customer Registration form fields & OTP verification state
+  const [customerSignupStep, setCustomerSignupStep] = useState<'form' | 'verify_otp'>('form');
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regPassword, setRegPassword] = useState('');
-  const [regCity, setRegCity] = useState('Lucknow');
-  const [regPincode, setRegPincode] = useState('226001');
+  const [regCity, setRegCity] = useState('Nalasopara');
+  const [regPincode, setRegPincode] = useState('401209');
   const [regAddress, setRegAddress] = useState('');
+
+  // Customer Signup 6-digit OTP states
+  const [customerOtpDigits, setCustomerOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
+  const [customerOtpTimer, setCustomerOtpTimer] = useState<number>(0);
+  const [simulatedCustomerEmailOtp, setSimulatedCustomerEmailOtp] = useState<string | null>(null);
+  const [copiedCustomerOtp, setCopiedCustomerOtp] = useState(false);
+  const customerOtpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Staff / Admin Login fields
   const [staffIdentifier, setStaffIdentifier] = useState('');
@@ -120,6 +131,15 @@ export const AuthModal: React.FC = () => {
     }
   }, [smsCooldown]);
 
+  // Timer countdown for customer signup OTP resend
+  useEffect(() => {
+    if (customerOtpTimer <= 0) return;
+    const interval = setInterval(() => {
+      setCustomerOtpTimer((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [customerOtpTimer]);
+
   if (activeModal !== 'auth') return null;
 
   const handleClose = () => {
@@ -128,6 +148,9 @@ export const AuthModal: React.FC = () => {
     setPendingAdminAccount(null);
     setOtpDigits(['', '', '', '', '', '']);
     setSimulatedSmsOtp(null);
+    setCustomerSignupStep('form');
+    setCustomerOtpDigits(['', '', '', '', '', '']);
+    setSimulatedCustomerEmailOtp(null);
   };
 
   // 1-Click Quick Demo Login Helper
@@ -178,7 +201,7 @@ export const AuthModal: React.FC = () => {
     }
   };
 
-  // Submit Customer Registration
+  // Step 1: Submit Customer Registration & Generate 6-digit OTP
   const handleCustomerRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setStatusMessage(null);
@@ -193,7 +216,7 @@ export const AuthModal: React.FC = () => {
       return;
     }
 
-    const res = registerCustomer({
+    const res = initiateCustomerSignupOtp({
       name: regName,
       email: regEmail,
       phone: regPhone,
@@ -203,14 +226,119 @@ export const AuthModal: React.FC = () => {
       addressLine: regAddress,
     });
 
-    if (res.success) {
-      setStatusMessage({ type: 'success', text: res.message });
+    if (res.success && res.otpCode) {
+      setSimulatedCustomerEmailOtp(res.otpCode);
+      setCustomerOtpDigits(['', '', '', '', '', '']);
+      setCustomerOtpTimer(res.resendSeconds || 60);
+      setCustomerSignupStep('verify_otp');
+      setStatusMessage({
+        type: 'success',
+        text: `6-digit verification code sent to ${regEmail}.`,
+      });
       setTimeout(() => {
-        handleClose();
-      }, 1500);
+        customerOtpInputRefs.current[0]?.focus();
+      }, 200);
     } else {
       setStatusMessage({ type: 'error', text: res.message });
     }
+  };
+
+  // Handle customer 6-digit OTP input change
+  const handleCustomerOtpDigitChange = (index: number, val: string) => {
+    const clean = val.replace(/[^0-9]/g, '');
+    if (!clean && val !== '') return;
+
+    const newDigits = [...customerOtpDigits];
+    newDigits[index] = clean.slice(-1);
+    setCustomerOtpDigits(newDigits);
+
+    // Auto-advance to next input box
+    if (clean && index < 5) {
+      customerOtpInputRefs.current[index + 1]?.focus();
+    }
+
+    // Auto-submit when all 6 digits entered
+    if (clean && index === 5 && newDigits.every((d) => d !== '')) {
+      const fullCode = newDigits.join('');
+      executeCustomerOtpVerification(fullCode);
+    }
+  };
+
+  const handleCustomerOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !customerOtpDigits[index] && index > 0) {
+      customerOtpInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleCustomerOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/[^0-9]/g, '').slice(0, 6);
+    if (!pasted) return;
+
+    const newDigits = [...customerOtpDigits];
+    for (let i = 0; i < pasted.length; i++) {
+      newDigits[i] = pasted[i];
+    }
+    setCustomerOtpDigits(newDigits);
+
+    const focusIdx = Math.min(pasted.length, 5);
+    customerOtpInputRefs.current[focusIdx]?.focus();
+
+    if (pasted.length === 6) {
+      executeCustomerOtpVerification(pasted);
+    }
+  };
+
+  const executeCustomerOtpVerification = (codeToVerify?: string) => {
+    setStatusMessage(null);
+    const code = codeToVerify || customerOtpDigits.join('');
+    if (code.length < 6) {
+      setStatusMessage({ type: 'error', text: 'Please enter all 6 digits of the verification code.' });
+      return;
+    }
+
+    const res = verifyCustomerSignupOtp(regEmail, code);
+    if (res.success) {
+      setStatusMessage({
+        type: 'success',
+        text: `Email verified successfully! Welcome, ${res.user?.name || regName}.`,
+      });
+      setTimeout(() => {
+        handleClose();
+      }, 1200);
+    } else {
+      setStatusMessage({ type: 'error', text: res.message });
+    }
+  };
+
+  const handleResendCustomerOtp = () => {
+    if (customerOtpTimer > 0) return;
+    setStatusMessage(null);
+
+    const res = resendCustomerSignupOtp(regEmail);
+    if (res.success && res.otpCode) {
+      setSimulatedCustomerEmailOtp(res.otpCode);
+      setCustomerOtpDigits(['', '', '', '', '', '']);
+      setCustomerOtpTimer(res.resendSeconds || 60);
+      setStatusMessage({
+        type: 'success',
+        text: `New verification code sent to ${regEmail}.`,
+      });
+      setTimeout(() => {
+        customerOtpInputRefs.current[0]?.focus();
+      }, 200);
+    } else {
+      setStatusMessage({ type: 'error', text: res.message });
+    }
+  };
+
+  const fillSimulatedCustomerOtp = () => {
+    if (!simulatedCustomerEmailOtp) return;
+    const digits = simulatedCustomerEmailOtp.split('');
+    setCustomerOtpDigits(digits);
+    setCopiedCustomerOtp(true);
+    setTimeout(() => setCopiedCustomerOtp(false), 2000);
+    executeCustomerOtpVerification(simulatedCustomerEmailOtp);
   };
 
   // Step 1: Submit Admin & Staff Credentials
@@ -541,93 +669,15 @@ export const AuthModal: React.FC = () => {
 
               {/* METHOD 1: AUTHENTICATOR APP (Google Authenticator / Microsoft Authenticator / TOTP) */}
               {twoFactorMethod === 'totp_app' && (
-                <div className="space-y-3 bg-blue-50/60 border border-blue-200/80 rounded-2xl p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
-                      <Smartphone className="w-4 h-4 text-blue-600" />
-                      <span>Google / Microsoft Authenticator</span>
-                    </span>
-                    <span className="text-[11px] text-blue-700 font-semibold flex items-center gap-1 font-mono">
-                      <Clock className="w-3 h-3 animate-spin text-blue-500" />
-                      <span>{totpData.secondsRemaining}s remaining</span>
-                    </span>
+                <div className="bg-blue-50/60 border border-blue-200/80 rounded-2xl p-3.5 flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <Smartphone className="w-4 h-4" />
                   </div>
-
-                  {/* Visual TOTP rotating code simulator card */}
-                  <div className="bg-white rounded-xl p-3 border border-blue-100 shadow-xs flex items-center justify-between">
-                    <div>
-                      <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                        Live Authenticator Code
-                      </span>
-                      <span className="text-xl sm:text-2xl font-black font-mono tracking-widest text-slate-900">
-                        {totpData.code.slice(0, 3)} {totpData.code.slice(3)}
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleAutoFillTotp}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-                    >
-                      {copiedOtp ? <Check className="w-3.5 h-3.5" /> : <Sparkles className="w-3.5 h-3.5" />}
-                      <span>Auto-fill OTP</span>
-                    </button>
-                  </div>
-
-                  {/* Secret Key Details */}
-                  <div className="flex items-center justify-between text-[11px] text-slate-600 pt-0.5">
-                    <span className="truncate">
-                      Secret Key: <strong className="font-mono text-slate-800">{formatBase32Secret(pendingAdminAccount.twoFactorSecret || 'JAVE2ELECTRONICSADMINSECRETKEY33')}</strong>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleCopySecret}
-                      className="text-blue-700 hover:text-blue-900 font-semibold flex items-center gap-1 cursor-pointer shrink-0 ml-2"
-                    >
-                      {copiedSecret ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedSecret ? 'Copied' : 'Copy Key'}</span>
-                    </button>
-                  </div>
-
-                  {/* QR Code Reveal for Google Authenticator */}
-                  <div className="pt-2 border-t border-blue-200/80">
-                    <button
-                      type="button"
-                      onClick={() => setShowQrScanInModal(!showQrScanInModal)}
-                      className="text-xs font-bold text-blue-700 hover:text-blue-900 flex items-center justify-between w-full cursor-pointer py-1"
-                    >
-                      <span className="flex items-center gap-1.5">
-                        <QrCode className="w-4 h-4 text-indigo-600" />
-                        <span>{showQrScanInModal ? 'Hide Google Authenticator QR' : 'Scan QR Code with Google Authenticator'}</span>
-                      </span>
-                      <span className="text-[10px] text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-200 font-medium">
-                        {showQrScanInModal ? 'Hide QR' : 'Show QR'}
-                      </span>
-                    </button>
-
-                    {showQrScanInModal && (
-                      <div className="mt-2.5 p-3.5 bg-white rounded-xl border border-blue-200 text-center space-y-2 animate-in fade-in">
-                        <p className="text-[11px] text-slate-600 leading-snug">
-                          Open <strong>Google Authenticator</strong> &gt; tap <strong>+</strong> &gt; select <strong>"Scan a QR code"</strong>:
-                        </p>
-                        {modalQrDataUrl ? (
-                          <div className="flex justify-center py-1">
-                            <img
-                              src={modalQrDataUrl}
-                              alt="Google Authenticator Registration QR Code"
-                              className="w-44 h-44 rounded-xl shadow-xs border border-slate-100 object-contain"
-                            />
-                          </div>
-                        ) : (
-                          <div className="w-44 h-44 mx-auto flex items-center justify-center bg-slate-50 text-xs text-slate-400 rounded-xl">
-                            Generating QR Code...
-                          </div>
-                        )}
-                        <p className="text-[10px] text-slate-500 font-mono break-all">
-                          Account: {pendingAdminAccount.email}
-                        </p>
-                      </div>
-                    )}
+                  <div className="flex-1">
+                    <h4 className="text-xs font-bold text-slate-900">Google / Microsoft Authenticator</h4>
+                    <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
+                      Open the authenticator app on your mobile device and enter the 6-digit verification code below.
+                    </p>
                   </div>
                 </div>
               )}
@@ -654,7 +704,7 @@ export const AuthModal: React.FC = () => {
                       type="button"
                       onClick={handleSendSmsOtp}
                       disabled={smsCooldown > 0}
-                      className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs ${
+                      className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs ${
                         smsCooldown > 0
                           ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
                           : 'bg-emerald-600 hover:bg-emerald-700 text-white'
@@ -663,20 +713,6 @@ export const AuthModal: React.FC = () => {
                       <RefreshCw className={`w-3.5 h-3.5 ${smsCooldown > 0 ? 'animate-spin' : ''}`} />
                       <span>{smsCooldown > 0 ? `Resend code in ${smsCooldown}s` : 'Send Code via WhatsApp / SMS'}</span>
                     </button>
-
-                    {simulatedSmsOtp && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const digits = simulatedSmsOtp.split('');
-                          setOtpDigits(digits);
-                          verifyOtpCode(simulatedSmsOtp);
-                        }}
-                        className="py-2 px-3 rounded-xl text-xs font-bold bg-white text-emerald-700 border border-emerald-300 hover:bg-emerald-50 cursor-pointer shadow-2xs whitespace-nowrap"
-                      >
-                        Auto-fill ({simulatedSmsOtp})
-                      </button>
-                    )}
                   </div>
                 </div>
               )}
@@ -689,7 +725,7 @@ export const AuthModal: React.FC = () => {
                     <span>Admin Emergency Recovery Code</span>
                   </div>
                   <p className="text-xs text-slate-600 leading-relaxed">
-                    If you lost access to your Authenticator app, enter your 16-character admin recovery passkey (e.g. <code>JE-SAFE-9901</code>).
+                    If you lost access to your Authenticator app, enter your 16-character admin recovery passkey.
                   </p>
                   <div className="flex gap-2">
                     <input
@@ -699,13 +735,6 @@ export const AuthModal: React.FC = () => {
                       placeholder="e.g. JE-SAFE-9901"
                       className="flex-1 text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono uppercase"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setRecoveryCodeInput('JE-SAFE-9901')}
-                      className="px-2.5 py-1.5 bg-white text-amber-800 border border-amber-300 hover:bg-amber-50 rounded-lg text-[11px] font-bold cursor-pointer"
-                    >
-                      Demo Code
-                    </button>
                   </div>
                 </div>
               )}
@@ -767,74 +796,7 @@ export const AuthModal: React.FC = () => {
               {/* ================================================================ */}
               {/* STEP 1: CREDENTIALS & DEMO CHIPS                                 */}
               {/* ================================================================ */}
-              {/* Quick Demo Login Chips */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1 uppercase tracking-wider">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Quick 1-Click Demo Accounts</span>
-                  </span>
-                  <span className="text-[10px] text-slate-400">Click to test instantly</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('admin@javed-electronics.in', 'admin123')}
-                    className="p-2 bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-400 rounded-lg text-left transition-all cursor-pointer shadow-2xs group"
-                  >
-                    <div className="font-bold text-slate-900 group-hover:text-blue-700 flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <span>👑 Super Admin</span>
-                        <span className="text-[9px] bg-amber-100 text-amber-800 px-1 py-0.2 rounded font-extrabold">2FA</span>
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-mono">admin123</span>
-                    </div>
-                    <div className="text-[10px] text-slate-500 truncate">admin@javed-electronics.in</div>
-                  </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('store@javed-electronics.in', 'store123')}
-                    className="p-2 bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-400 rounded-lg text-left transition-all cursor-pointer shadow-2xs group"
-                  >
-                    <div className="font-bold text-slate-900 group-hover:text-emerald-700 flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <span>🏬 Store Manager</span>
-                        <span className="text-[9px] bg-amber-100 text-amber-800 px-1 py-0.2 rounded font-extrabold">2FA</span>
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-mono">store123</span>
-                    </div>
-                    <div className="text-[10px] text-slate-500 truncate">Hazratganj Flagship Store</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('gomtinagar@javed-electronics.in', 'store123')}
-                    className="p-2 bg-white hover:bg-purple-50 border border-slate-200 hover:border-purple-400 rounded-lg text-left transition-all cursor-pointer shadow-2xs group"
-                  >
-                    <div className="font-bold text-slate-900 group-hover:text-purple-700 flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <span>🏬 Store Manager</span>
-                        <span className="text-[9px] bg-amber-100 text-amber-800 px-1 py-0.2 rounded font-extrabold">2FA</span>
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-mono">store123</span>
-                    </div>
-                    <div className="text-[10px] text-slate-500 truncate">Gomti Nagar Tech Hub</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('sameer.siddiqui@example.com', 'customer123')}
-                    className="p-2 bg-white hover:bg-amber-50 border border-slate-200 hover:border-amber-400 rounded-lg text-left transition-all cursor-pointer shadow-2xs group"
-                  >
-                    <div className="font-bold text-slate-900 group-hover:text-amber-700 flex items-center justify-between">
-                      <span>👤 Registered Customer</span>
-                      <span className="text-[10px] text-slate-400 font-mono">customer123</span>
-                    </div>
-                    <div className="text-[10px] text-slate-500 truncate">Sameer Siddiqui (Lucknow)</div>
-                  </button>
-                </div>
-              </div>
 
               {/* TAB 1: CUSTOMER LOGIN */}
               {authMode === 'customer_login' && (
@@ -899,145 +861,231 @@ export const AuthModal: React.FC = () => {
                 </form>
               )}
 
-              {/* TAB 2: CUSTOMER SELF-REGISTRATION */}
+              {/* TAB 2: CUSTOMER SELF-REGISTRATION WITH EMAIL OTP */}
               {authMode === 'customer_register' && (
-                <form onSubmit={handleCustomerRegisterSubmit} className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Full Name <span className="text-rose-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        value={regName}
-                        onChange={(e) => setRegName(e.target.value)}
-                        placeholder="e.g. Rahul Sharma"
-                        className="w-full text-xs pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Email Address <span className="text-rose-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="email"
-                          value={regEmail}
-                          onChange={(e) => setRegEmail(e.target.value)}
-                          placeholder="name@example.com"
-                          className="w-full text-xs pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                          required
-                        />
+                <div>
+                  {customerSignupStep === 'form' ? (
+                    <form onSubmit={handleCustomerRegisterSubmit} className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Full Name <span className="text-rose-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={regName}
+                            onChange={(e) => setRegName(e.target.value)}
+                            placeholder="e.g. Rahul Sharma"
+                            className="w-full text-xs pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                            required
+                          />
+                        </div>
                       </div>
-                    </div>
 
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Mobile Phone <span className="text-rose-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="tel"
-                          value={regPhone}
-                          onChange={(e) => setRegPhone(e.target.value)}
-                          placeholder="+91 98390 12345"
-                          className="w-full text-xs pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                          required
-                        />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">
+                            Email Address <span className="text-rose-500">*</span>
+                          </label>
+                          <div className="relative">
+                            <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                            <input
+                              type="email"
+                              value={regEmail}
+                              onChange={(e) => setRegEmail(e.target.value)}
+                              placeholder="name@example.com"
+                              className="w-full text-xs pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                              required
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">
+                            Mobile Phone <span className="text-rose-500">*</span>
+                          </label>
+                          <div className="relative">
+                            <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                            <input
+                              type="tel"
+                              value={regPhone}
+                              onChange={(e) => setRegPhone(e.target.value)}
+                              placeholder="+91 98390 12345"
+                              className="w-full text-xs pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                              required
+                            />
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Create Password (minimum 6 characters) <span className="text-rose-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={regPassword}
-                        onChange={(e) => setRegPassword(e.target.value)}
-                        placeholder="Create a secure password"
-                        className="w-full text-xs pl-9 pr-10 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                        required
-                      />
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Create Password (minimum 6 characters) <span className="text-rose-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            type={showPassword ? 'text' : 'password'}
+                            value={regPassword}
+                            onChange={(e) => setRegPassword(e.target.value)}
+                            placeholder="Create a secure password"
+                            className="w-full text-xs pl-9 pr-10 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                          >
+                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">City</label>
+                          <input
+                            type="text"
+                            value={regCity}
+                            onChange={(e) => setRegCity(e.target.value)}
+                            placeholder="Nalasopara"
+                            className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">PIN Code</label>
+                          <input
+                            type="text"
+                            value={regPincode}
+                            onChange={(e) => setRegPincode(e.target.value)}
+                            placeholder="401209"
+                            className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono"
+                          />
+                        </div>
+                      </div>
+
                       <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        type="submit"
+                        className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 mt-2"
                       >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        <span>Continue & Verify Email</span>
+                        <ArrowRight className="w-4 h-4" />
                       </button>
+
+                      <div className="text-center pt-1">
+                        <span className="text-xs text-slate-500">Already have an account? </span>
+                        <button
+                          type="button"
+                          onClick={() => setAuthMode('customer_login')}
+                          className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+                        >
+                          Sign In here
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    /* STEP 2: 6-DIGIT EMAIL VERIFICATION OTP */
+                    <div className="space-y-4">
+                      <div className="text-center space-y-1">
+                        <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto">
+                          <Mail className="w-6 h-6" />
+                        </div>
+                        <h4 className="text-sm sm:text-base font-black text-slate-900">
+                          Verify Your Email Address
+                        </h4>
+                        <p className="text-xs text-slate-500">
+                          Enter the 6-digit code sent to <strong className="text-slate-800">{regEmail}</strong>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomerSignupStep('form');
+                            setStatusMessage(null);
+                          }}
+                          className="text-[11px] font-bold text-blue-600 hover:underline cursor-pointer inline-flex items-center gap-1"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                          <span>Change email address</span>
+                        </button>
+                      </div>
+
+                      {/* Developer Testing Simulator Helper */}
+                      {simulatedCustomerEmailOtp && (
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-2 text-xs">
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-amber-800 block">
+                              Email Inbox Simulation:
+                            </span>
+                            <span className="font-mono font-black text-slate-900 text-sm">
+                              {simulatedCustomerEmailOtp}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={fillSimulatedCustomerOtp}
+                            className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1"
+                          >
+                            {copiedCustomerOtp ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{copiedCustomerOtp ? 'Verified!' : 'Auto-Fill & Verify'}</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* 6 Segmented Input Boxes */}
+                      <div className="flex justify-center gap-2 sm:gap-2.5 my-2">
+                        {customerOtpDigits.map((digit, idx) => (
+                          <input
+                            key={idx}
+                            ref={(el) => {
+                              customerOtpInputRefs.current[idx] = el;
+                            }}
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            maxLength={1}
+                            value={digit}
+                            onChange={(e) => handleCustomerOtpDigitChange(idx, e.target.value)}
+                            onKeyDown={(e) => handleCustomerOtpKeyDown(idx, e)}
+                            onPaste={handleCustomerOtpPaste}
+                            className="w-10 h-12 sm:w-11 sm:h-12 text-center text-lg sm:text-xl font-bold font-mono bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                          />
+                        ))}
+                      </div>
+
+                      {/* Submit & Cooldown actions */}
+                      <div className="space-y-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => executeCustomerOtpVerification()}
+                          className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          <Check className="w-4 h-4" />
+                          <span>Verify & Complete Signup</span>
+                        </button>
+
+                        <div className="flex items-center justify-between text-xs pt-1 px-1">
+                          <span className="text-slate-500">Didn't receive the code?</span>
+                          {customerOtpTimer > 0 ? (
+                            <span className="text-slate-400 font-mono font-medium flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" />
+                              <span>Resend in {customerOtpTimer}s</span>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handleResendCustomerOtp}
+                              className="font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                            >
+                              Resend Code
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">City</label>
-                      <input
-                        type="text"
-                        value={regCity}
-                        onChange={(e) => setRegCity(e.target.value)}
-                        placeholder="Lucknow"
-                        className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">PIN Code</label>
-                      <input
-                        type="text"
-                        value={regPincode}
-                        onChange={(e) => setRegPincode(e.target.value)}
-                        placeholder="226001"
-                        className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                      Delivery Address (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={regAddress}
-                      onChange={(e) => setRegAddress(e.target.value)}
-                      placeholder="e.g. Flat 402, Shalimar Heights, Gomti Nagar"
-                      className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900"
-                    />
-                  </div>
-
-                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-800 font-medium">
-                    🎁 <strong>New Customer Bonus:</strong> 150 reward points will be added to your account on sign up for discounts on your first order!
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 mt-2"
-                  >
-                    <span>Register & Create Account</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-
-                  <div className="text-center pt-1">
-                    <span className="text-xs text-slate-500">Already have an account? </span>
-                    <button
-                      type="button"
-                      onClick={() => setAuthMode('customer_login')}
-                      className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
-                    >
-                      Sign in
-                    </button>
-                  </div>
-                </form>
+                  )}
+                </div>
               )}
 
               {/* TAB 3: ADMIN & STORE STAFF LOGIN */}

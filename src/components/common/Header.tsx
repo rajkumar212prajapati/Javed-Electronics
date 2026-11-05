@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../../context/StoreContext';
 import { formatINR } from '../../utils/currency';
-import { ProductCategory } from '../../types';
 import {
   Search,
   ShoppingCart,
@@ -16,19 +15,10 @@ import {
   LogOut,
   KeyRound,
   Scan,
-  ShoppingBag,
-  Smartphone,
-  Headphones,
-  Watch,
   Zap,
-  Tv,
-  Laptop,
-  Home,
-  Coffee,
-  Percent,
-  Truck,
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
+import { PredictiveSearchDropdown, saveRecentSearch } from './PredictiveSearchDropdown';
 
 export const Header: React.FC = () => {
   const {
@@ -53,10 +43,61 @@ export const Header: React.FC = () => {
   } = useStore();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [activeTopPill, setActiveTopPill] = useState<'store' | 'value365' | 'express'>('store');
-  const [storeTabGroup, setStoreTabGroup] = useState<
-    'highlights' | 'mobiles_wearables' | 'audio_tv' | 'power_home' | 'all'
-  >('highlights');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchContainerRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setIsSearchFocused(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSearchSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (searchQuery.trim()) {
+      saveRecentSearch(searchQuery.trim());
+    }
+    setIsSearchFocused(false);
+    const prodSection = document.getElementById('products-section');
+    if (prodSection) {
+      prodSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const handleSelectSuggestion = (text: string) => {
+    setSearchQuery(text);
+    saveRecentSearch(text);
+    setIsSearchFocused(false);
+    const prodSection = document.getElementById('products-section');
+    if (prodSection) {
+      prodSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const handleSelectCategory = (categoryId: string) => {
+    setSelectedCategory(categoryId);
+    setSearchQuery('');
+    setIsSearchFocused(false);
+    const prodSection = document.getElementById('products-section');
+    if (prodSection) {
+      prodSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const handleSelectBrand = (brand: string) => {
+    setSelectedBrand(brand);
+    setSearchQuery(brand);
+    saveRecentSearch(brand);
+    setIsSearchFocused(false);
+    const prodSection = document.getElementById('products-section');
+    if (prodSection) {
+      prodSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
 
   const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0);
 
@@ -83,61 +124,13 @@ export const Header: React.FC = () => {
     currentUser?.savedAddresses?.find((a) => a.isDefault)?.pincode ||
     currentUser?.savedAddresses?.[0]?.pincode ||
     activeOutlet?.pincode ||
-    '226001';
+    '401209';
 
   const defaultArea =
     currentUser?.savedAddresses?.find((a) => a.isDefault)?.area ||
     currentUser?.savedAddresses?.[0]?.area ||
     activeOutlet?.name.split(' ')[0] ||
-    'Add address';
-
-  const categoryNavItems: {
-    id: ProductCategory | 'all';
-    label: string;
-    group: 'highlights' | 'mobiles_wearables' | 'audio_tv' | 'power_home';
-    icon: React.ReactNode;
-  }[] = [
-    { id: 'all', label: 'For You (All Items)', group: 'highlights', icon: <ShoppingBag className="w-4 h-4 text-blue-600" /> },
-    { id: 'smartphones', label: 'Mobiles & 5G', group: 'mobiles_wearables', icon: <Smartphone className="w-4 h-4 text-indigo-600" /> },
-    { id: 'smartwatches', label: 'Smartwatches', group: 'mobiles_wearables', icon: <Watch className="w-4 h-4 text-indigo-600" /> },
-    { id: 'audio', label: 'Earbuds & Audio', group: 'audio_tv', icon: <Headphones className="w-4 h-4 text-purple-600" /> },
-    { id: 'tvs_accessories', label: '4K Smart TVs', group: 'audio_tv', icon: <Tv className="w-4 h-4 text-purple-600" /> },
-    { id: 'chargers_cables', label: 'Chargers & Power', group: 'power_home', icon: <Zap className="w-4 h-4 text-emerald-600" /> },
-    { id: 'computer_accessories', label: 'Computer & Wi-Fi', group: 'power_home', icon: <Laptop className="w-4 h-4 text-emerald-600" /> },
-    { id: 'home_electronics', label: 'Home Electronics', group: 'power_home', icon: <Home className="w-4 h-4 text-emerald-600" /> },
-    { id: 'small_appliances', label: 'Small Appliances', group: 'power_home', icon: <Coffee className="w-4 h-4 text-emerald-600" /> },
-  ];
-
-  const storeCategoryGroups = [
-    {
-      id: 'highlights' as const,
-      label: 'Store & Deals',
-      summary: 'For You · Value 365 · Express · Track',
-      icon: <ShoppingBag className="w-4 h-4 text-blue-600 shrink-0" />,
-      activeStyle: 'bg-linear-to-br from-blue-50/90 via-white to-indigo-50/60 border-blue-300 ring-1 ring-blue-200/70',
-    },
-    {
-      id: 'mobiles_wearables' as const,
-      label: 'Mobiles & Watches',
-      summary: '5G Smartphones · AMOLED Watches',
-      icon: <Smartphone className="w-4 h-4 text-indigo-600 shrink-0" />,
-      activeStyle: 'bg-linear-to-br from-indigo-50/90 via-white to-violet-50/60 border-indigo-300 ring-1 ring-indigo-200/70',
-    },
-    {
-      id: 'audio_tv' as const,
-      label: 'Audio & Smart TVs',
-      summary: 'ANC Earbuds · Speakers · Google TVs',
-      icon: <Headphones className="w-4 h-4 text-purple-600 shrink-0" />,
-      activeStyle: 'bg-linear-to-br from-purple-50/90 via-white to-fuchsia-50/50 border-purple-300 ring-1 ring-purple-200/70',
-    },
-    {
-      id: 'power_home' as const,
-      label: 'Power, PC & Home',
-      summary: 'GaN Chargers · Accessories · Appliances',
-      icon: <Zap className="w-4 h-4 text-emerald-600 shrink-0" />,
-      activeStyle: 'bg-linear-to-br from-emerald-50/90 via-white to-teal-50/60 border-emerald-300 ring-1 ring-emerald-200/70',
-    },
-  ];
+    'Nalasopara East';
 
   // ============================================================================
   // 1. DASHBOARD HEADER (Strictly for Admin, Store Manager & Rider Portals)
@@ -204,8 +197,6 @@ export const Header: React.FC = () => {
             <button
               type="button"
               onClick={() => {
-                setActiveTopPill('store');
-                setStoreTabGroup('highlights');
                 setActiveBudgetFilter(null);
                 setSelectedCategory('all');
                 setSelectedBrand('all');
@@ -347,26 +338,50 @@ export const Header: React.FC = () => {
           </div>
         </div>
 
-        {/* ROW 2: Crisp Search Bar + QR Button + All Categories Toggle */}
+        {/* ROW 2: Crisp Search Bar with Predictive Dropdown + Store QR Button */}
         <div className="flex items-center gap-2">
-          <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search mobiles, earbuds, smartwatches, TVs, chargers..."
-              className="w-full h-10 sm:h-11 pl-10 pr-9 bg-white text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm rounded-xl border border-slate-200/90 shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-400 box-border"
+          <div ref={searchContainerRef} className="relative flex-1 min-w-0">
+            <form onSubmit={handleSearchSubmit} className="relative w-full">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onFocus={() => setIsSearchFocused(true)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setIsSearchFocused(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setIsSearchFocused(false);
+                  }
+                }}
+                placeholder="Search mobiles, chargers, earbuds, smartwatches, TVs..."
+                className="w-full h-10 sm:h-11 pl-10 pr-9 bg-white text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm rounded-xl border border-slate-200/90 shadow-2xs focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-400 box-border"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setIsSearchFocused(true);
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer p-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </form>
+
+            {/* Interactive Predictive Search & Similar Words Dropdown */}
+            <PredictiveSearchDropdown
+              query={searchQuery}
+              isOpen={isSearchFocused}
+              onClose={() => setIsSearchFocused(false)}
+              onSelectSuggestion={handleSelectSuggestion}
+              onSelectCategory={handleSelectCategory}
+              onSelectBrand={handleSelectBrand}
             />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer p-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
           </div>
 
           <button
@@ -378,136 +393,6 @@ export const Header: React.FC = () => {
             <QrCode className="w-4 h-4 text-blue-600" />
             <span className="hidden sm:inline">Store QR</span>
           </button>
-
-          <button
-            type="button"
-            onClick={() => setStoreTabGroup(storeTabGroup === 'all' ? 'highlights' : 'all')}
-            className={`h-10 sm:h-11 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer shrink-0 shadow-2xs ${
-              storeTabGroup === 'all'
-                ? 'bg-slate-900 text-white border-slate-900'
-                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200/90'
-            }`}
-          >
-            {storeTabGroup === 'all' ? 'Compact' : 'All Tabs'}
-          </button>
-        </div>
-
-        {/* ROW 3: Category-Wise Summary Buttons (Lightweight Premium Look) */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-          {storeCategoryGroups.map((grp) => {
-            const isSelected = storeTabGroup === grp.id;
-            return (
-              <button
-                key={grp.id}
-                type="button"
-                onClick={() => setStoreTabGroup(grp.id)}
-                className={`p-2 sm:p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
-                  isSelected
-                    ? `${grp.activeStyle} shadow-xs`
-                    : 'bg-white/80 hover:bg-white border-slate-200/80 shadow-2xs'
-                }`}
-              >
-                <span className="w-7 h-7 rounded-lg bg-white border border-slate-200/80 shadow-2xs flex items-center justify-center shrink-0">
-                  {grp.icon}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <span className="text-xs font-bold text-slate-900 block truncate">
-                    {grp.label}
-                  </span>
-                  <span className="text-[10px] text-slate-500 block truncate">
-                    {grp.summary}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* ROW 4: Sub-Tabs for Active Category Group (or All Store Tabs) */}
-        <div className="bg-slate-100/75 p-1.5 rounded-xl border border-slate-200/70 flex flex-wrap items-center gap-1.5">
-          {categoryNavItems
-            .filter((cat) => storeTabGroup === 'all' || cat.group === storeTabGroup)
-            .map((cat) => {
-              const isSelected =
-                selectedCategory === cat.id &&
-                activeTopPill === 'store' &&
-                activeBudgetFilter === null;
-              return (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveTopPill('store');
-                    setActiveBudgetFilter(null);
-                    setSelectedCategory(cat.id);
-                    if (cat.id !== 'all') {
-                      const el = document.getElementById('products-section');
-                      if (el) el.scrollIntoView({ behavior: 'smooth' });
-                    }
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer border ${
-                    isSelected
-                      ? 'bg-white text-blue-700 border-blue-200/90 shadow-xs font-bold'
-                      : 'bg-white/65 hover:bg-white text-slate-600 hover:text-slate-900 border-transparent hover:border-slate-200/80 font-medium'
-                  }`}
-                >
-                  {cat.icon}
-                  <span className="whitespace-nowrap">{cat.label}</span>
-                </button>
-              );
-            })}
-
-          {(storeTabGroup === 'highlights' || storeTabGroup === 'all') && (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  if (activeTopPill === 'value365') {
-                    setActiveTopPill('store');
-                    setActiveBudgetFilter(null);
-                  } else {
-                    setActiveTopPill('value365');
-                    setActiveBudgetFilter(1999);
-                    const el = document.getElementById('products-section');
-                    if (el) el.scrollIntoView({ behavior: 'smooth' });
-                  }
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer border ${
-                  activeTopPill === 'value365' || activeBudgetFilter === 1999
-                    ? 'bg-white text-blue-700 border-blue-200/90 shadow-xs font-bold'
-                    : 'bg-white/65 hover:bg-white text-slate-600 hover:text-slate-900 border-transparent hover:border-slate-200/80 font-medium'
-                }`}
-              >
-                <Percent className="w-3.5 h-3.5 shrink-0 text-rose-500" />
-                <span className="whitespace-nowrap">Value 365 (Under ₹1,999)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTopPill('express');
-                  setActiveModal('pincode_check');
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer border ${
-                  activeTopPill === 'express'
-                    ? 'bg-white text-blue-700 border-blue-200/90 shadow-xs font-bold'
-                    : 'bg-white/65 hover:bg-white text-slate-600 hover:text-slate-900 border-transparent hover:border-slate-200/80 font-medium'
-                }`}
-              >
-                <Truck className="w-3.5 h-3.5 shrink-0 text-amber-600" />
-                <span className="whitespace-nowrap">Express Delivery</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveModal('order_tracking')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-white/65 hover:bg-white text-slate-600 hover:text-slate-900 border border-transparent hover:border-slate-200/80 font-medium transition-all cursor-pointer"
-              >
-                <Package className="w-3.5 h-3.5 shrink-0 text-blue-600" />
-                <span className="whitespace-nowrap">Track Order</span>
-              </button>
-            </>
-          )}
         </div>
       </div>
 

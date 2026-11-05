@@ -11,6 +11,44 @@ export type OutletOwnershipModelType =
 
 export type OutletStatus = 'active' | 'inactive' | 'suspended' | 'pending_approval';
 
+export type StoreType =
+  | 'grocery' // Grocery Store (Quick FMCG & staples)
+  | 'pharma' // Pharma Store (Medicines & healthcare, prescription)
+  | 'cafe_kitchen' // Cafe or Cloud Kitchen (Prepared food & beverages)
+  | 'electronics_superstore' // Electronics or Super Store (Tech & appliances)
+  | 'fruits_veg_dairy' // Fruits Vegetable Dairy Store (Farm fresh produce & milk)
+  | 'service_provider'; // Service Provider Store (Technician & doorstep services)
+
+export interface StoreDeliverySlot {
+  id: string; // e.g. "slot_morning_1"
+  title: string; // e.g. "Early Morning Fresh Farm Run (06:00 AM - 08:30 AM)"
+  startTime: string; // e.g. "06:00 AM"
+  endTime: string; // e.g. "08:30 AM"
+  maxOrders: number; // Order capacity cap
+  currentOrders: number; // Active bookings count
+  cutoffMinutes: number; // Order cutoff window before slot start (e.g. 30 mins)
+  slotFee: number; // Slot handling or express fee (₹0 default)
+  isActive: boolean; // Slot active or inactive toggle
+  daysOfWeek?: string[]; // e.g. ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+  specialBadge?: string; // e.g. "Fresh Farm Morning", "Emergency Night", "Peak Lunch"
+}
+
+export interface StoreOrderAcceptanceConfig {
+  orderAcceptanceEnabled: boolean; // Master toggle to accept or pause incoming orders
+  deliveryTimePromise: string; // e.g. "30 - 45 Mins Express", "15 - 30 Mins Urgent"
+  deliveryMode: 'instant_express' | 'slot_scheduled' | 'hybrid_both';
+  averagePrepTimeMinutes: number; // Prep time in minutes (e.g. 20m for cafe, 10m for grocery)
+  autoAcceptOrders: boolean; // Auto-confirm incoming orders
+  maxConcurrentOrders: number; // Capacity ceiling for simultaneous in-flight orders
+  slots: StoreDeliverySlot[];
+  // Category-specific parameters
+  prescriptionRequired?: boolean; // For pharma
+  drugLicenseNumber?: string; // For pharma
+  fssaiNumber?: string; // For grocery / cafe / fruits & dairy
+  serviceWarrantyDays?: number; // For service provider (e.g. 30 days job guarantee)
+  specialistDispatched?: boolean; // For service provider (certified technician)
+}
+
 export interface OutletCoordinates {
   lat: number;
   lng: number;
@@ -44,6 +82,11 @@ export interface Outlet {
   code: string; // e.g. "OUT-LKO-001"
   name: string;
   logo?: string;
+  storeType?: StoreType;
+  deliveryTimePromise?: string;
+  orderAcceptanceConfig?: StoreOrderAcceptanceConfig;
+  fssaiNumber?: string;
+  drugLicenseNumber?: string;
   businessCategoryId: string;
   ownershipModel: OutletOwnershipModelType;
   parentCompany: string;
@@ -251,11 +294,61 @@ export interface StockTransfer {
   receivedAt?: string;
 }
 
+export interface FranchiseFinancialDetails {
+  bankName: string;
+  accountHolderName: string;
+  accountNumber: string;
+  ifscCode: string;
+  accountType: 'current' | 'escrow' | 'savings';
+  upiId?: string;
+  panNumber: string;
+  securityDepositAmount?: number;
+  bankGuaranteeAmount?: number;
+}
+
+export interface FranchiseSettlementStructure {
+  settlementCycle: 'daily_t1' | 'weekly_monday' | 'biweekly' | 'monthly_1st';
+  settlementMode: 'imps_neft' | 'escrow_auto_split' | 'upi_transfer';
+  payoutCutoffTime: string; // e.g. "23:59"
+  minPayoutThreshold: number; // e.g. 1000
+  rollingReservePercent: number; // e.g. 5%
+  orderCommissionPercent: number; // e.g. 8%
+  deliveryFeeSharePercent: number; // e.g. 70%
+  marketingLevyPercent: number; // e.g. 2%
+  tdsRatePercent: number; // e.g. 1%
+  gstOnFeesPercent: number; // 18%
+}
+
 export interface FranchiseAgreement {
   id: string;
   outletId: string;
+  outletCode?: string;
   outletName: string;
+  outletType?: OutletOwnershipModelType;
+  outletCategory?: StoreType;
   franchisePartnerName: string;
+  ownerName?: string;
+  ownerPhone?: string;
+  ownerEmail?: string;
+  managerName?: string;
+  managerPhone?: string;
+  managerEmail?: string;
+  gstin?: string;
+  shopEstablishmentNumber?: string;
+  pan?: string;
+  fssaiNumber?: string;
+  drugLicenseNumber?: string;
+  stateName?: string;
+  districtName?: string;
+  zonalOrAreaName?: string;
+  pincode?: string;
+  serviceablePincodes?: string[];
+  geofenceLatitude?: number;
+  geofenceLongitude?: number;
+  geofenceRadiusKm?: number;
+  completeAddress?: string;
+  financialDetails?: FranchiseFinancialDetails;
+  paymentSettlement?: FranchiseSettlementStructure;
   modelType: OutletOwnershipModelType;
   startDate: string;
   endDate: string;

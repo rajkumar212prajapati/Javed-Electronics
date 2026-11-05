@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../../context/StoreContext';
-import { Home, PlaySquare, LayoutGrid, User, ShoppingCart } from 'lucide-react';
+import { Home, Flame, LayoutGrid, User, ShoppingCart } from 'lucide-react';
 
 export const MobileBottomNav: React.FC = () => {
   const {
@@ -10,68 +10,90 @@ export const MobileBottomNav: React.FC = () => {
     setSelectedCategory,
     setSelectedBrand,
     setSearchQuery,
+    activeModal,
     setActiveModal,
+    setSelectedProductForDetail,
+    setActivePromotionalPage,
+    fullScreenCategory,
+    setFullScreenCategory,
   } = useStore();
 
-  const [activeNav, setActiveNav] = useState<'home' | 'deals' | 'categories' | 'account' | 'cart'>('home');
+  const [activeNav, setActiveNav] = useState<'home' | 'maha_sale' | 'categories' | 'account' | 'cart'>('home');
 
   const isDashboardView = isAuthenticated && currentRole !== 'customer';
   if (isDashboardView) return null;
 
   const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0);
 
+  // Determine highlighted tab based on currently open modal or active navigation state
+  const currentActiveTab: 'home' | 'maha_sale' | 'categories' | 'account' | 'cart' =
+    activeModal === 'maha_sale'
+      ? 'maha_sale'
+      : activeModal === 'customer_account' || activeModal === 'auth'
+      ? 'account'
+      : activeModal === 'cart' || activeModal === 'checkout'
+      ? 'cart'
+      : fullScreenCategory
+      ? 'categories'
+      : activeNav;
+
   return (
     <nav
-      aria-label="Mobile bottom navigation"
-      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-slate-200 px-2 py-1.5 flex items-center justify-around shadow-[0_-2px_10px_rgba(0,0,0,0.05)] no-print"
+      aria-label="Customer portal bottom navigation"
+      className="fixed bottom-0 inset-x-0 z-[100] bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-1.5 flex items-center justify-around shadow-[0_-4px_16px_rgba(0,0,0,0.08)] no-print"
     >
       <button
         type="button"
         onClick={() => {
           setActiveNav('home');
+          setActiveModal(null);
+          setFullScreenCategory(null);
+          setSelectedProductForDetail(null);
+          setActivePromotionalPage(null);
           setSelectedCategory('all');
           setSelectedBrand('all');
           setSearchQuery('');
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         className={`flex flex-col items-center justify-center gap-0.5 py-1 px-3 rounded-lg transition-colors cursor-pointer ${
-          activeNav === 'home' ? 'text-blue-600 font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'
+          currentActiveTab === 'home' ? 'text-indigo-600 font-extrabold' : 'text-slate-600 hover:text-slate-900 font-medium'
         }`}
       >
-        <Home className={`w-5 h-5 ${activeNav === 'home' ? 'fill-blue-600 text-blue-600' : ''}`} />
+        <Home className={`w-5 h-5 ${currentActiveTab === 'home' ? 'fill-indigo-600 text-indigo-600' : ''}`} />
         <span className="text-[11px] leading-tight">Home</span>
       </button>
 
       <button
         type="button"
         onClick={() => {
-          setActiveNav('deals');
-          const el = document.getElementById('on-everybodys-list');
-          if (el) {
-            el.scrollIntoView({ behavior: 'smooth' });
-          } else {
-            window.scrollTo({ top: 320, behavior: 'smooth' });
-          }
+          setActiveNav('maha_sale');
+          setFullScreenCategory(null);
+          setSelectedProductForDetail(null);
+          setActivePromotionalPage(null);
+          setActiveModal('maha_sale');
         }}
         className={`flex flex-col items-center justify-center gap-0.5 py-1 px-3 rounded-lg transition-colors cursor-pointer ${
-          activeNav === 'deals' ? 'text-blue-600 font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'
+          currentActiveTab === 'maha_sale' ? 'text-rose-600 font-extrabold' : 'text-slate-600 hover:text-slate-900 font-medium'
         }`}
       >
-        <PlaySquare className="w-5 h-5" />
-        <span className="text-[11px] leading-tight">Play</span>
+        <span className="relative">
+          <Flame className={`w-5 h-5 ${currentActiveTab === 'maha_sale' ? 'fill-rose-600 text-rose-600 animate-pulse' : 'text-rose-500'}`} />
+          <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+        </span>
+        <span className="text-[11px] leading-tight font-bold">Maha Sale</span>
       </button>
 
       <button
         type="button"
         onClick={() => {
           setActiveNav('categories');
-          const el = document.getElementById('products-section');
-          if (el) {
-            el.scrollIntoView({ behavior: 'smooth' });
-          }
+          setActiveModal(null);
+          setSelectedProductForDetail(null);
+          setActivePromotionalPage(null);
+          setFullScreenCategory('all');
         }}
         className={`flex flex-col items-center justify-center gap-0.5 py-1 px-3 rounded-lg transition-colors cursor-pointer ${
-          activeNav === 'categories' ? 'text-blue-600 font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'
+          currentActiveTab === 'categories' ? 'text-indigo-600 font-extrabold' : 'text-slate-600 hover:text-slate-900 font-medium'
         }`}
       >
         <LayoutGrid className="w-5 h-5" />
@@ -89,7 +111,7 @@ export const MobileBottomNav: React.FC = () => {
           }
         }}
         className={`flex flex-col items-center justify-center gap-0.5 py-1 px-3 rounded-lg transition-colors cursor-pointer ${
-          activeNav === 'account' ? 'text-blue-600 font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'
+          currentActiveTab === 'account' ? 'text-indigo-600 font-extrabold' : 'text-slate-600 hover:text-slate-900 font-medium'
         }`}
       >
         <User className="w-5 h-5" />
@@ -103,7 +125,7 @@ export const MobileBottomNav: React.FC = () => {
           setActiveModal('cart');
         }}
         className={`relative flex flex-col items-center justify-center gap-0.5 py-1 px-3 rounded-lg transition-colors cursor-pointer ${
-          activeNav === 'cart' ? 'text-blue-600 font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'
+          currentActiveTab === 'cart' ? 'text-indigo-600 font-extrabold' : 'text-slate-600 hover:text-slate-900 font-medium'
         }`}
       >
         <div className="relative">

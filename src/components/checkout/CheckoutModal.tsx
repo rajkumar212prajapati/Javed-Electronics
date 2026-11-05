@@ -1,40 +1,38 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useStore } from '../../context/StoreContext';
-import { DeliveryType, PaymentMethod, PaymentGatewayProviderType, PaymentGatewayConfig } from '../../types';
+import { DeliveryType, PaymentMethod, PaymentGatewayProviderType } from '../../types';
 import { formatINR } from '../../utils/currency';
 import { generateWhatsAppOrderMessage, getWhatsAppClickToChatUrl } from '../../utils/whatsapp';
 import { buildUpiPaymentUri, generateQrDataUrl } from '../../utils/qrcode';
 import { validateGSTIN } from '../../utils/gstTaxEngine';
 import {
   X,
-  MapPin,
+  ArrowLeft,
   Truck,
   Store,
   CreditCard,
   QrCode,
   Banknote,
-  Clock,
-  ShieldCheck,
   Check,
   AlertCircle,
   MessageCircle,
   Building2,
-  Receipt,
-  FileText,
-  Percent,
   Zap,
   Globe,
   Smartphone,
   Copy,
-  ExternalLink,
-  Shield,
-  Info,
+  Wallet,
+  Upload,
+  Image as ImageIcon,
+  Camera,
   CheckCircle2,
-  AlertTriangle,
-  Sparkles,
+  Trash2,
+  ExternalLink,
+  ShieldCheck,
 } from 'lucide-react';
 import { CustomerLocationPickerMap } from './CustomerLocationPickerMap';
-import { Coordinates } from '../../utils/geoUtils';
+import { Coordinates, POPULAR_DELIVERY_LANDMARKS } from '../../utils/geoUtils';
+import { cleanCustomerName } from '../../utils/cleaners';
 
 export const CheckoutModal: React.FC = () => {
   const {
@@ -47,51 +45,52 @@ export const CheckoutModal: React.FC = () => {
     cartCouponDiscount,
     cartBulkDiscount,
     cartDeliveryFee,
-    cartTaxAmount,
     cartGstCalculation,
     cartFinalTotal,
     createOrder,
     setSelectedOrderForModal,
     checkPincodeServiceable,
     paymentGateways,
-    activePaymentGateways,
   } = useStore();
 
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('delivery');
   const [deliverySlot, setDeliverySlot] = useState<string>('Today 4:00 PM - 7:00 PM');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('upi_qr');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('je_cash');
 
   // Customer info fields
-  const [name, setName] = useState(currentUser.name || '');
+  const [name, setName] = useState(() => cleanCustomerName(currentUser.name));
   const [phone, setPhone] = useState(currentUser.phone || '');
   const [email, setEmail] = useState(currentUser.email || '');
   const [addressLine, setAddressLine] = useState(currentUser.savedAddresses[0]?.addressLine || '');
-  const [area, setArea] = useState(currentUser.savedAddresses[0]?.area || 'Hazratganj');
-  const [city] = useState('Lucknow');
-  const [state] = useState('Uttar Pradesh');
-  const [pincode, setPincode] = useState(currentUser.savedAddresses[0]?.pincode || '226001');
+  const [area, setArea] = useState(currentUser.savedAddresses[0]?.area || 'Nalasopara East');
+  const [state] = useState(currentUser.savedAddresses[0]?.state || 'Maharashtra');
+  const [pincode, setPincode] = useState(currentUser.savedAddresses[0]?.pincode || '401209');
   const [landmark, setLandmark] = useState(currentUser.savedAddresses[0]?.landmark || '');
-  const [instructions, setInstructions] = useState('');
+  const [instructions] = useState('');
 
   // Map & Geospatial Location State
   const [customerCoords, setCustomerCoords] = useState<Coordinates>(() => {
     return (
       currentUser.savedAddresses[0]?.coordinates || {
-        lat: 26.8482,
-        lng: 80.9412,
+        lat: 19.4173,
+        lng: 72.8205,
       }
     );
   });
   const [deliveryDistanceKm, setDeliveryDistanceKm] = useState<number>(3.2);
-  const [deliveryEstimatedMins, setDeliveryEstimatedMins] = useState<number>(25);
   const [addressTag, setAddressTag] = useState<'Home' | 'Work' | 'Other'>('Home');
 
   // B2B GST Invoicing state
   const [isB2B, setIsB2B] = useState(false);
   const [businessName, setBusinessName] = useState('');
   const [gstin, setGstin] = useState('');
-  const [gstinFeedback, setGstinFeedback] = useState<{ isValid: boolean; stateName?: string; stateCode?: string; pan?: string; error?: string } | null>(null);
-  const [showTaxBreakdown, setShowTaxBreakdown] = useState(false);
+  const [gstinFeedback, setGstinFeedback] = useState<{
+    isValid: boolean;
+    stateName?: string;
+    stateCode?: string;
+    pan?: string;
+    error?: string;
+  } | null>(null);
 
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -100,8 +99,20 @@ export const CheckoutModal: React.FC = () => {
   const [phonePeMobile, setPhonePeMobile] = useState('');
   const [paytmMobile, setPaytmMobile] = useState('');
 
-  // Dynamic UPI QR code preview state
+  // Partial Prepaid + COD Split State (when order value > COD limit)
+  const [partialCodSplitMode, setPartialCodSplitMode] = useState<'token_20' | 'excess_above_limit'>('token_20');
+  const [partialPrepaidMethod, setPartialPrepaidMethod] = useState<'upi_qr' | 'razorpay' | 'phonepe' | 'je_cash'>('upi_qr');
+  const [partialUpiQrDataUrl, setPartialUpiQrDataUrl] = useState<string>('');
+  const [informHubAfterPayment, setInformHubAfterPayment] = useState<boolean>(true);
+
+  // Dynamic UPI QR code preview state & Customer Proof Upload
   const [upiQrDataUrl, setUpiQrDataUrl] = useState<string>('');
+  const [upiDeepLink, setUpiDeepLink] = useState<string>('');
+  const [paymentScreenshot, setPaymentScreenshot] = useState<string | null>(null);
+  const [screenshotFileName, setScreenshotFileName] = useState<string>('');
+  const [upiUtrInput, setUpiUtrInput] = useState<string>('');
+  const [isUploadingScreenshot, setIsUploadingScreenshot] = useState<boolean>(false);
+  const screenshotInputRef = useRef<HTMLInputElement | null>(null);
 
   // Gateways active and eligible for current delivery type
   const availableGateways = useMemo(() => {
@@ -131,21 +142,128 @@ export const CheckoutModal: React.FC = () => {
     }
   }, [availableGateways, paymentMethod]);
 
-  // Base and discounted payable amounts
-  const basePayable = deliveryType === 'store_pickup' ? cartSubtotal - cartCouponDiscount : cartFinalTotal;
+  // Base payable amount before payment-method-specific discount or COD charge
+  const basePayable =
+    deliveryType === 'store_pickup'
+      ? Math.max(0, cartSubtotal - cartCouponDiscount - cartBulkDiscount.discountAmount)
+      : cartFinalTotal;
 
-  const gatewayDiscount = useMemo(() => {
-    if (!activeGateway) return 0;
-    if (activeGateway.feeOrDiscountType === 'percentage_discount' && activeGateway.feeOrDiscountValue > 0) {
-      return Math.round((basePayable * activeGateway.feeOrDiscountValue) / 100);
+  const getGatewayPrepaidDiscount = (gw: (typeof availableGateways)[0] | null) => {
+    if (!gw || gw.provider === 'cod' || gw.provider === 'store_pickup_pay') return 0;
+
+    if (settings.prepaidDiscountEnabled !== false) {
+      const discVal =
+        settings.prepaidDiscountValue !== undefined
+          ? settings.prepaidDiscountValue
+          : gw.feeOrDiscountType === 'percentage_discount' || gw.feeOrDiscountType === 'fixed_discount'
+          ? gw.feeOrDiscountValue
+          : 2;
+      const discType =
+        settings.prepaidDiscountType ||
+        (gw.feeOrDiscountType === 'fixed_discount' ? 'fixed' : 'percentage');
+
+      if (discVal <= 0) return 0;
+      const rawDiscount =
+        discType === 'fixed'
+          ? Math.min(basePayable, discVal)
+          : Math.round((basePayable * discVal) / 100);
+      const maxCap =
+        settings.prepaidMaxDiscountAmount && settings.prepaidMaxDiscountAmount > 0
+          ? settings.prepaidMaxDiscountAmount
+          : Infinity;
+      return Math.min(rawDiscount, maxCap);
     }
-    if (activeGateway.feeOrDiscountType === 'fixed_discount' && activeGateway.feeOrDiscountValue > 0) {
-      return Math.min(basePayable, activeGateway.feeOrDiscountValue);
+
+    if (gw.feeOrDiscountType === 'percentage_discount' && gw.feeOrDiscountValue > 0) {
+      return Math.round((basePayable * gw.feeOrDiscountValue) / 100);
+    }
+    if (gw.feeOrDiscountType === 'fixed_discount' && gw.feeOrDiscountValue > 0) {
+      return Math.min(basePayable, gw.feeOrDiscountValue);
     }
     return 0;
-  }, [activeGateway, basePayable]);
+  };
 
-  const payableAmount = Math.max(0, basePayable - gatewayDiscount);
+  const getGatewayCodCharge = (gw: (typeof availableGateways)[0] | null) => {
+    if (!gw || gw.provider !== 'cod') return 0;
+
+    if (settings.codExtraChargeEnabled !== false) {
+      const chargeVal =
+        settings.codExtraChargeValue !== undefined
+          ? settings.codExtraChargeValue
+          : gw.feeOrDiscountType === 'surcharge' || gw.feeOrDiscountType === 'percentage_surcharge'
+          ? gw.feeOrDiscountValue
+          : 49;
+      const chargeType =
+        settings.codExtraChargeType ||
+        (gw.feeOrDiscountType === 'percentage_surcharge' ? 'percentage' : 'fixed');
+
+      if (chargeVal <= 0) return 0;
+      return chargeType === 'percentage'
+        ? Math.round((basePayable * chargeVal) / 100)
+        : chargeVal;
+    }
+
+    if (gw.feeOrDiscountType === 'surcharge' && gw.feeOrDiscountValue > 0) {
+      return gw.feeOrDiscountValue;
+    }
+    if (gw.feeOrDiscountType === 'percentage_surcharge' && gw.feeOrDiscountValue > 0) {
+      return Math.round((basePayable * gw.feeOrDiscountValue) / 100);
+    }
+    return 0;
+  };
+
+  const gatewayDiscount = useMemo(
+    () => getGatewayPrepaidDiscount(activeGateway),
+    [
+      activeGateway,
+      basePayable,
+      settings.prepaidDiscountEnabled,
+      settings.prepaidDiscountType,
+      settings.prepaidDiscountValue,
+      settings.prepaidMaxDiscountAmount,
+    ]
+  );
+
+  const codExtraCharge = useMemo(
+    () => getGatewayCodCharge(activeGateway),
+    [
+      activeGateway,
+      basePayable,
+      settings.codExtraChargeEnabled,
+      settings.codExtraChargeType,
+      settings.codExtraChargeValue,
+    ]
+  );
+
+  const payableAmount = Math.max(0, basePayable - gatewayDiscount + codExtraCharge);
+
+  // COD Limit & Partial Prepaid Calculation
+  const codGatewayConfig = useMemo(
+    () => availableGateways.find((gw) => gw.provider === 'cod'),
+    [availableGateways]
+  );
+  const codMaxLimit = codGatewayConfig?.maxOrderValue || 30000;
+  const isOrderAboveCodLimit = payableAmount > codMaxLimit;
+  const isPartialPrepaidCodActive = paymentMethod === 'cod' && isOrderAboveCodLimit;
+
+  const { partialPrepaidAmount, codBalanceOnDelivery } = useMemo(() => {
+    if (!isOrderAboveCodLimit) {
+      return { partialPrepaidAmount: 0, codBalanceOnDelivery: payableAmount };
+    }
+    const excessAboveLimit = Math.max(1, payableAmount - codMaxLimit);
+    const token20Pct = Math.max(1, Math.round(payableAmount * 0.2));
+
+    if (partialCodSplitMode === 'excess_above_limit') {
+      return {
+        partialPrepaidAmount: excessAboveLimit,
+        codBalanceOnDelivery: payableAmount - excessAboveLimit,
+      };
+    }
+    return {
+      partialPrepaidAmount: token20Pct,
+      codBalanceOnDelivery: payableAmount - token20Pct,
+    };
+  }, [isOrderAboveCodLimit, payableAmount, codMaxLimit, partialCodSplitMode]);
 
   // Generate UPI QR code for upi_qr gateway
   useEffect(() => {
@@ -159,9 +277,34 @@ export const CheckoutModal: React.FC = () => {
         transactionRef: tempRef,
         note: 'Javed Electronics Order',
       });
+      setUpiDeepLink(upiString);
       generateQrDataUrl(upiString, { width: 220 }).then(setUpiQrDataUrl);
     }
   }, [paymentMethod, deliveryType, payableAmount, activeGateway, settings.upiId, settings.upiName]);
+
+  // Generate UPI QR code for Partial Prepaid COD when UPI QR is selected
+  useEffect(() => {
+    if (isPartialPrepaidCodActive && partialPrepaidMethod === 'upi_qr' && partialPrepaidAmount > 0) {
+      const tempRef = `JE-PARTIAL-${Date.now().toString().slice(-6)}`;
+      const upiGw = availableGateways.find((g) => g.provider === 'upi_qr');
+      const targetUpiVpa = upiGw?.upiVpa || settings.upiId;
+      const upiString = buildUpiPaymentUri({
+        upiId: targetUpiVpa,
+        payeeName: settings.upiName || 'Javed Electronics',
+        amount: partialPrepaidAmount,
+        transactionRef: tempRef,
+        note: 'Partial Prepaid COD Order',
+      });
+      generateQrDataUrl(upiString, { width: 180 }).then(setPartialUpiQrDataUrl);
+    }
+  }, [
+    isPartialPrepaidCodActive,
+    partialPrepaidMethod,
+    partialPrepaidAmount,
+    availableGateways,
+    settings.upiId,
+    settings.upiName,
+  ]);
 
   const handleCopyUpi = (vpa: string) => {
     if (navigator?.clipboard) {
@@ -171,12 +314,42 @@ export const CheckoutModal: React.FC = () => {
     }
   };
 
+  const handleScreenshotUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 8 * 1024 * 1024) {
+      setErrorMessage('Screenshot image must be under 8MB.');
+      return;
+    }
+
+    setScreenshotFileName(file.name);
+    setIsUploadingScreenshot(true);
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setPaymentScreenshot(reader.result);
+        setErrorMessage(null);
+      }
+      setIsUploadingScreenshot(false);
+    };
+    reader.onerror = () => {
+      setErrorMessage('Failed to read image file.');
+      setIsUploadingScreenshot(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveScreenshot = () => {
+    setPaymentScreenshot(null);
+    setScreenshotFileName('');
+  };
+
   if (activeModal !== 'checkout' || cart.length === 0) return null;
 
   const isPincodeValid = checkPincodeServiceable(pincode);
 
-  const handleOrderSubmission = async (isWhatsApp: boolean) => {
-    // Form validations
+  const handleOrderSubmission = async (shouldInformHubOnWhatsApp: boolean) => {
     if (!name.trim()) {
       setErrorMessage('Please enter your full name.');
       return;
@@ -187,29 +360,29 @@ export const CheckoutModal: React.FC = () => {
     }
     if (deliveryType === 'delivery') {
       if (!addressLine.trim()) {
-        setErrorMessage('Please enter your street address / house number.');
+        setErrorMessage('Please enter your street address.');
         return;
       }
-      if (!isPincodeValid) {
-        setErrorMessage(`PIN code ${pincode} is outside our current local delivery area in Lucknow.`);
+      if (!isPincodeValid && deliveryDistanceKm > 25) {
+        setErrorMessage(`PIN code ${pincode} is outside our local delivery area.`);
         return;
       }
     }
 
     if (isB2B) {
       if (!businessName.trim()) {
-        setErrorMessage('Please enter your Registered Business / Company Name for B2B GST Invoicing.');
+        setErrorMessage('Please enter your Business Name for GST Invoice.');
         return;
       }
       const gstinVal = validateGSTIN(gstin);
       if (!gstinVal.isValid) {
-        setErrorMessage(gstinVal.error || 'Please enter a valid 15-character Indian GSTIN.');
+        setErrorMessage(gstinVal.error || 'Please enter a valid 15-character GSTIN.');
         return;
       }
     }
 
-    if (availableGateways.length === 0 && !isWhatsApp) {
-      setErrorMessage('Online payment gateways are currently paused. Please use "Order on WhatsApp" to confirm your order directly with the store.');
+    if (availableGateways.length === 0 && !shouldInformHubOnWhatsApp) {
+      setErrorMessage('Payment gateways are currently paused.');
       return;
     }
 
@@ -218,9 +391,39 @@ export const CheckoutModal: React.FC = () => {
 
     try {
       const chosenPaymentMethod =
-        deliveryType === 'store_pickup' && !activeGateway?.applicableDeliveryTypes.includes('store_pickup')
+        deliveryType === 'store_pickup' &&
+        !activeGateway?.applicableDeliveryTypes.includes('store_pickup')
           ? 'store_pickup_pay'
           : (activeGateway?.provider as PaymentMethod) || paymentMethod;
+
+      if (chosenPaymentMethod === 'je_cash') {
+        const userBal = currentUser.rewardBalance || currentUser.jeCashBalance || 0;
+        if (userBal < payableAmount) {
+          setErrorMessage(
+            `Insufficient JE Cash balance (${formatINR(userBal)} available). Please select another payment method.`
+          );
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      const isPartialCodOrder = chosenPaymentMethod === 'cod' && isOrderAboveCodLimit;
+      if (isPartialCodOrder && partialPrepaidMethod === 'je_cash') {
+        const userBal = currentUser.rewardBalance || currentUser.jeCashBalance || 0;
+        if (userBal < partialPrepaidAmount) {
+          setErrorMessage(
+            `Insufficient JE Cash balance for Partial Prepaid (${formatINR(partialPrepaidAmount)}). Please select UPI or Cards.`
+          );
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      if (chosenPaymentMethod === 'upi_qr' && !paymentScreenshot) {
+        setErrorMessage('Please upload your UPI payment confirmation screenshot before placing the order.');
+        setIsSubmitting(false);
+        return;
+      }
 
       const order = await createOrder({
         customer: {
@@ -228,10 +431,13 @@ export const CheckoutModal: React.FC = () => {
           name: name.trim(),
           phone: phone.trim(),
           email: email.trim() || undefined,
-          address: deliveryType === 'delivery' ? addressLine.trim() : `Store Pickup: ${settings.address}`,
-          area: deliveryType === 'delivery' ? area.trim() : 'Hazratganj Store',
-          city: 'Lucknow',
-          state: state || 'Uttar Pradesh',
+          address:
+            deliveryType === 'delivery'
+              ? addressLine.trim()
+              : `Store Pickup: ${settings.address}`,
+          area: deliveryType === 'delivery' ? area.trim() : 'Nalasopara Flagship Store',
+          city: 'Nalasopara',
+          state: state || 'Maharashtra',
           pincode: deliveryType === 'delivery' ? pincode.trim() : settings.pincode,
           landmark: landmark.trim() || undefined,
           instructions: instructions.trim() || undefined,
@@ -240,19 +446,36 @@ export const CheckoutModal: React.FC = () => {
           isB2B,
           businessName: isB2B ? businessName.trim() : undefined,
           gstin: isB2B ? gstin.trim().toUpperCase() : undefined,
-          panNumber: isB2B && gstin.trim().length >= 12 ? gstin.trim().slice(2, 12).toUpperCase() : undefined,
+          panNumber:
+            isB2B && gstin.trim().length >= 12
+              ? gstin.trim().slice(2, 12).toUpperCase()
+              : undefined,
         },
         deliveryType,
         deliverySlot: deliveryType === 'delivery' ? deliverySlot : 'Store Counter Pickup',
         paymentMethod: chosenPaymentMethod,
-        isWhatsAppCheckout: isWhatsApp,
+        informHubForDispatch: shouldInformHubOnWhatsApp,
+        isPartialPrepaidCod: isPartialCodOrder,
+        partialPrepaidAmount: isPartialCodOrder ? partialPrepaidAmount : undefined,
+        codBalanceOnDelivery: isPartialCodOrder ? codBalanceOnDelivery : undefined,
+        partialPrepaidMethod: isPartialCodOrder ? partialPrepaidMethod : undefined,
+        prepaidDiscount: gatewayDiscount > 0 ? gatewayDiscount : undefined,
+        codExtraCharge: codExtraCharge > 0 ? codExtraCharge : undefined,
+        paymentProof: paymentScreenshot
+          ? {
+              screenshotUrl: paymentScreenshot,
+              utrNumber: upiUtrInput.trim() || undefined,
+            }
+          : undefined,
       });
 
+      setPaymentScreenshot(null);
+      setScreenshotFileName('');
+      setUpiUtrInput('');
       setSelectedOrderForModal(order);
       setActiveModal('order_confirmation');
 
-      // If WhatsApp checkout requested, open WhatsApp with prefilled message
-      if (isWhatsApp) {
+      if (shouldInformHubOnWhatsApp) {
         const msg = generateWhatsAppOrderMessage(order);
         const url = getWhatsAppClickToChatUrl(settings.whatsappNumber, msg);
         try {
@@ -265,414 +488,396 @@ export const CheckoutModal: React.FC = () => {
       }
     } catch (err: any) {
       console.error(err);
-      setErrorMessage(err.message || 'Failed to place order. Please check stock availability.');
+      setErrorMessage(err.message || 'Failed to place order.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const getGatewayIcon = (provider: PaymentGatewayProviderType) => {
+    switch (provider) {
+      case 'upi_qr':
+        return <QrCode className="w-4 h-4 text-slate-600 shrink-0" />;
+      case 'razorpay':
+        return <CreditCard className="w-4 h-4 text-slate-600 shrink-0" />;
+      case 'phonepe':
+        return <Smartphone className="w-4 h-4 text-slate-600 shrink-0" />;
+      case 'paytm':
+        return <Smartphone className="w-4 h-4 text-slate-600 shrink-0" />;
+      case 'cashfree':
+        return <Zap className="w-4 h-4 text-slate-600 shrink-0" />;
+      case 'stripe':
+        return <Globe className="w-4 h-4 text-slate-600 shrink-0" />;
+      case 'cod':
+        return <Banknote className="w-4 h-4 text-slate-600 shrink-0" />;
+      case 'store_pickup_pay':
+        return <Store className="w-4 h-4 text-slate-600 shrink-0" />;
+      case 'je_cash':
+        return <Wallet className="w-4 h-4 text-slate-600 shrink-0" />;
+      default:
+        return <CreditCard className="w-4 h-4 text-slate-600 shrink-0" />;
+    }
+  };
+
+  const getCleanGatewayName = (gw: (typeof availableGateways)[0]) => {
+    switch (gw.provider) {
+      case 'je_cash':
+        return 'JE Cash';
+      case 'upi_qr':
+        return 'UPI / QR Code';
+      case 'razorpay':
+        return 'Cards, UPI & NetBanking (Razorpay)';
+      case 'phonepe':
+        return 'PhonePe';
+      case 'paytm':
+        return 'Paytm';
+      case 'cashfree':
+        return 'Cashfree Payments';
+      case 'cod':
+        return 'Cash on Delivery';
+      case 'store_pickup_pay':
+        return 'Pay at Store Counter';
+      case 'stripe':
+        return 'International Cards (Stripe)';
+      default:
+        return gw.shortName || gw.name;
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-white rounded-xl sm:rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl border border-slate-200 relative my-auto sm:my-6 max-h-[92vh] flex flex-col">
-        {/* Modal Header */}
-        <div className="p-3.5 sm:p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
-          <div>
-            <h2 className="text-sm sm:text-base font-bold text-slate-900">Secure Checkout</h2>
-            <p className="text-[11px] sm:text-xs text-slate-500">
-              Javed Electronics • Express Dispatch & Store Pickup
-            </p>
+    <div className="fixed inset-0 z-[70] bg-slate-50 w-screen h-screen flex flex-col overflow-hidden">
+      {/* Full-Screen Top Header */}
+      <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 shrink-0">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setActiveModal('cart')}
+              className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center gap-1.5 text-xs font-semibold cursor-pointer transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back</span>
+            </button>
+            <h1 className="text-base sm:text-lg font-bold text-slate-900">Checkout</h1>
           </div>
+
           <button
-            onClick={() => setActiveModal('cart')}
-            className="p-1.5 text-slate-400 hover:text-slate-700 rounded-md cursor-pointer"
+            type="button"
+            onClick={() => setActiveModal(null)}
+            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
+      </header>
 
-        {/* Modal Body */}
-        <div className="p-3.5 sm:p-5 overflow-y-auto space-y-4 sm:space-y-5">
-          {errorMessage && (
-            <div className="p-2.5 sm:p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
-          {/* 1. Delivery vs Store Pickup Toggle */}
-          <div>
-            <label className="text-[11px] sm:text-xs font-bold text-slate-800 uppercase tracking-wider block mb-2">
-              1. Delivery Preference
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-              <button
-                type="button"
-                onClick={() => setDeliveryType('delivery')}
-                className={`p-2.5 sm:p-3.5 rounded-xl border text-left flex items-start gap-2.5 sm:gap-3 transition-all cursor-pointer ${
-                  deliveryType === 'delivery'
-                    ? 'border-blue-600 bg-blue-50/50 ring-1 ring-blue-600'
-                    : 'border-slate-200 bg-white hover:bg-slate-50'
-                }`}
-              >
-                <Truck className={`w-5 h-5 shrink-0 ${deliveryType === 'delivery' ? 'text-blue-600' : 'text-slate-400'}`} />
-                <div>
-                  <div className="text-xs font-bold text-slate-900">Local Home Delivery</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    Same-day 4-hr dispatch in Lucknow
-                  </div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setDeliveryType('store_pickup')}
-                className={`p-2.5 sm:p-3.5 rounded-xl border text-left flex items-start gap-2.5 sm:gap-3 transition-all cursor-pointer ${
-                  deliveryType === 'store_pickup'
-                    ? 'border-blue-600 bg-blue-50/50 ring-1 ring-blue-600'
-                    : 'border-slate-200 bg-white hover:bg-slate-50'
-                }`}
-              >
-                <Store className={`w-5 h-5 shrink-0 ${deliveryType === 'store_pickup' ? 'text-blue-600' : 'text-slate-400'}`} />
-                <div>
-                  <div className="text-xs font-bold text-slate-900">Store Pickup (FREE)</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    Hazratganj Store • Ready in 30 mins
-                  </div>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* 2. Customer Contact & Address */}
-          <div>
-            <label className="text-xs font-bold text-slate-800 uppercase tracking-wider block mb-2">
-              2. Customer Details & {deliveryType === 'delivery' ? 'Delivery Address' : 'Contact'}
-            </label>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                  Full Name *
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Mohammad Rizwan"
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
-                  required
-                />
+      {/* Full-Screen Scrollable Content */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-5 pb-24 sm:pb-12 grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left Column: Delivery, Address, Payment */}
+          <div className="lg:col-span-7 space-y-5">
+            {errorMessage && (
+              <div className="p-3 bg-white border border-rose-300 text-rose-700 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{errorMessage}</span>
               </div>
+            )}
 
-              <div>
-                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                  Mobile Number (for order & WhatsApp updates) *
-                </label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="e.g. 9839012345"
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
-                  required
-                />
+            {/* Delivery Mode */}
+            <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+              <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                Delivery Option
+              </h2>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDeliveryType('delivery')}
+                  className={`p-3 rounded-xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
+                    deliveryType === 'delivery'
+                      ? 'border-blue-600 bg-white ring-1 ring-blue-600'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <Truck
+                    className={`w-4 h-4 shrink-0 ${
+                      deliveryType === 'delivery' ? 'text-blue-600' : 'text-slate-400'
+                    }`}
+                  />
+                  <span className="text-xs font-bold text-slate-900">Home Delivery</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDeliveryType('store_pickup')}
+                  className={`p-3 rounded-xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
+                    deliveryType === 'store_pickup'
+                      ? 'border-blue-600 bg-white ring-1 ring-blue-600'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <Store
+                    className={`w-4 h-4 shrink-0 ${
+                      deliveryType === 'store_pickup' ? 'text-blue-600' : 'text-slate-400'
+                    }`}
+                  />
+                  <span className="text-xs font-bold text-slate-900">Store Pickup</span>
+                </button>
               </div>
+            </section>
 
-              {deliveryType === 'delivery' && (
-                <>
-                  {/* Interactive Map Location Selector */}
-                  <div className="sm:col-span-2 pt-1">
-                    <CustomerLocationPickerMap
-                      initialCoordinates={customerCoords}
-                      onLocationChange={(coords, meta) => {
-                        setCustomerCoords(coords);
-                        if (meta?.addressLine) setAddressLine(meta.addressLine);
-                        if (meta?.area) setArea(meta.area);
-                        if (meta?.pincode) setPincode(meta.pincode);
-                        if (meta?.landmark) setLandmark(meta.landmark);
-                        if (meta?.distanceKm !== undefined) setDeliveryDistanceKm(meta.distanceKm);
-                        if (meta?.estimatedMinutes !== undefined) setDeliveryEstimatedMins(meta.estimatedMinutes);
-                      }}
-                      onSaveAddressRequest={(tag) => {
-                        setAddressTag(tag);
-                      }}
-                    />
-                  </div>
+            {/* Customer Details & Address */}
+            <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+              <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                {deliveryType === 'delivery' ? 'Delivery Address' : 'Contact Details'}
+              </h2>
 
-                  <div className="sm:col-span-2">
-                    <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                      House / Flat / Street Address *
-                    </label>
-                    <input
-                      type="text"
-                      value={addressLine}
-                      onChange={(e) => setAddressLine(e.target.value)}
-                      placeholder="e.g. Flat 302, Royal Residency, Lane 3"
-                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
-                      required
-                    />
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-medium text-slate-600 block mb-1">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Full Name"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-600"
+                    required
+                  />
+                </div>
 
-                  <div>
-                    <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                      Locality / Area *
-                    </label>
-                    <input
-                      type="text"
-                      value={area}
-                      onChange={(e) => setArea(e.target.value)}
-                      placeholder="e.g. Hazratganj / Mahanagar"
-                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
-                      required
-                    />
-                  </div>
+                <div>
+                  <label className="text-[11px] font-medium text-slate-600 block mb-1">
+                    Mobile Number
+                  </label>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="10-digit mobile number"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-600"
+                    required
+                  />
+                </div>
 
-                  <div>
-                    <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                      PIN Code (Lucknow) *
-                    </label>
-                    <div className="relative">
+                {deliveryType === 'delivery' && (
+                  <>
+                    <div className="sm:col-span-2 pt-1">
+                      <CustomerLocationPickerMap
+                        initialCoordinates={customerCoords}
+                        onLocationChange={(coords, meta) => {
+                          setCustomerCoords(coords);
+                          if (meta?.addressLine) setAddressLine(meta.addressLine);
+                          if (meta?.area) setArea(meta.area);
+                          if (meta?.pincode) setPincode(meta.pincode);
+                          if (meta?.landmark) setLandmark(meta.landmark);
+                          if (meta?.distanceKm !== undefined) setDeliveryDistanceKm(meta.distanceKm);
+                        }}
+                        onSaveAddressRequest={(tag) => {
+                          setAddressTag(tag);
+                        }}
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="text-[11px] font-medium text-slate-600 block mb-1">
+                        Address
+                      </label>
+                      <input
+                        type="text"
+                        value={addressLine}
+                        onChange={(e) => setAddressLine(e.target.value)}
+                        placeholder="House / Flat / Street"
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-600"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-medium text-slate-600 block mb-1">
+                        Area
+                      </label>
+                      <input
+                        type="text"
+                        list="serviceable-localities"
+                        value={area}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setArea(val);
+                          const match = POPULAR_DELIVERY_LANDMARKS.find(
+                            (l) =>
+                              l.name.toLowerCase() === val.toLowerCase() ||
+                              l.area.toLowerCase() === val.toLowerCase()
+                          );
+                          if (match) {
+                            setPincode(match.pincode);
+                            setCustomerCoords({ lat: match.lat, lng: match.lng });
+                          }
+                        }}
+                        placeholder="Area / Locality"
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-600"
+                        required
+                      />
+                      <datalist id="serviceable-localities">
+                        {POPULAR_DELIVERY_LANDMARKS.map((item, idx) => (
+                          <option key={`${item.name}-${idx}`} value={item.name}>
+                            {item.area} ({item.pincode})
+                          </option>
+                        ))}
+                      </datalist>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-medium text-slate-600 block mb-1">
+                        PIN Code
+                      </label>
                       <input
                         type="text"
                         value={pincode}
                         onChange={(e) => setPincode(e.target.value)}
-                        placeholder="e.g. 226001"
+                        placeholder="PIN Code"
                         maxLength={6}
-                        className="w-full px-3 py-2 text-xs font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                        className="w-full px-3 py-2 text-xs font-mono border border-slate-300 rounded-lg focus:outline-none focus:border-blue-600"
                         required
                       />
-                      {pincode.length === 6 && (
-                        <span
-                          className={`absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                            isPincodeValid
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-rose-100 text-rose-700'
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-medium text-slate-600 block mb-1">
+                        Landmark (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={landmark}
+                        onChange={(e) => setLandmark(e.target.value)}
+                        placeholder="Landmark"
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-medium text-slate-600 block mb-1">
+                        Delivery Slot
+                      </label>
+                      <select
+                        value={deliverySlot}
+                        onChange={(e) => setDeliverySlot(e.target.value)}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-blue-600 bg-white cursor-pointer"
+                      >
+                        <option value="Today 4:00 PM - 7:00 PM">Today (4:00 PM - 7:00 PM)</option>
+                        <option value="Tomorrow 10:00 AM - 1:00 PM">Tomorrow (10:00 AM - 1:00 PM)</option>
+                        <option value="Tomorrow 4:00 PM - 7:00 PM">Tomorrow (4:00 PM - 7:00 PM)</option>
+                      </select>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* B2B GST Option */}
+              <div className="pt-2 border-t border-slate-100">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isB2B}
+                    onChange={(e) => {
+                      setIsB2B(e.target.checked);
+                      if (!e.target.checked) setGstinFeedback(null);
+                    }}
+                    className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                  />
+                  <span className="text-xs font-medium text-slate-700 flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Add GSTIN for B2B Invoice</span>
+                  </span>
+                </label>
+
+                {isB2B && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 text-xs">
+                    <div>
+                      <label className="font-medium text-slate-600 block mb-1">
+                        Business Name
+                      </label>
+                      <input
+                        type="text"
+                        value={businessName}
+                        onChange={(e) => setBusinessName(e.target.value)}
+                        placeholder="Company Name"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-blue-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-medium text-slate-600 block mb-1">
+                        GSTIN
+                      </label>
+                      <input
+                        type="text"
+                        value={gstin}
+                        onChange={(e) => {
+                          const val = e.target.value
+                            .toUpperCase()
+                            .replace(/[^0-9A-Z]/g, '')
+                            .slice(0, 15);
+                          setGstin(val);
+                          if (val.length === 15) {
+                            setGstinFeedback(validateGSTIN(val));
+                          } else if (val.length > 0) {
+                            setGstinFeedback({
+                              isValid: false,
+                              error: `${val.length}/15 characters`,
+                            });
+                          } else {
+                            setGstinFeedback(null);
+                          }
+                        }}
+                        placeholder="15-Digit GSTIN"
+                        maxLength={15}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono text-slate-900 focus:outline-none focus:border-blue-600"
+                      />
+                      {gstinFeedback && (
+                        <p
+                          className={`text-[11px] mt-1 ${
+                            gstinFeedback.isValid ? 'text-emerald-700' : 'text-rose-600'
                           }`}
                         >
-                          {isPincodeValid ? 'Serviceable' : 'Unavailable'}
-                        </span>
+                          {gstinFeedback.isValid
+                            ? `${gstinFeedback.stateName} (${gstinFeedback.stateCode})`
+                            : gstinFeedback.error}
+                        </p>
                       )}
                     </div>
                   </div>
-
-                  <div>
-                    <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                      Nearby Landmark (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={landmark}
-                      onChange={(e) => setLandmark(e.target.value)}
-                      placeholder="e.g. Behind Mayfair Cinema"
-                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                      Preferred Delivery Slot
-                    </label>
-                    <select
-                      value={deliverySlot}
-                      onChange={(e) => setDeliverySlot(e.target.value)}
-                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white cursor-pointer"
-                    >
-                      <option value="Today 4:00 PM - 7:00 PM">Today Evening (4:00 PM - 7:00 PM)</option>
-                      <option value="Tomorrow 10:00 AM - 1:00 PM">Tomorrow Morning (10:00 AM - 1:00 PM)</option>
-                      <option value="Tomorrow 4:00 PM - 7:00 PM">Tomorrow Evening (4:00 PM - 7:00 PM)</option>
-                    </select>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* 3. B2B GST Invoicing & Tax Input Credit */}
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isB2B}
-                  onChange={(e) => {
-                    setIsB2B(e.target.checked);
-                    if (!e.target.checked) setGstinFeedback(null);
-                  }}
-                  className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
-                />
-                <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                  <Building2 className="w-4 h-4 text-blue-600" />
-                  <span>Claim GST Input Tax Credit (B2B Tax Invoice)</span>
-                </span>
-              </label>
-
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide bg-blue-100 text-blue-800">
-                GST ITC
-              </span>
-            </div>
-
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Enable this if you are ordering on behalf of a registered company or business to receive an official B2B GST invoice with Input Tax Credit (ITC) for your GSTR-2B filing.
-            </p>
-
-            {isB2B && (
-              <div className="space-y-3 pt-2 border-t border-slate-200 animate-in fade-in duration-150">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">
-                      Registered Business / Company Name <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={businessName}
-                      onChange={(e) => setBusinessName(e.target.value)}
-                      placeholder="e.g. Acme Technologies Pvt Ltd"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">
-                      15-Digit Indian GSTIN <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={gstin}
-                      onChange={(e) => {
-                        const val = e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 15);
-                        setGstin(val);
-                        if (val.length === 15) {
-                          setGstinFeedback(validateGSTIN(val));
-                        } else if (val.length > 0) {
-                          setGstinFeedback({ isValid: false, error: `${val.length}/15 characters entered` });
-                        } else {
-                          setGstinFeedback(null);
-                        }
-                      }}
-                      placeholder="e.g. 09AABPJ1234F1Z5"
-                      maxLength={15}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                {gstinFeedback && (
-                  <div
-                    className={`p-2.5 rounded-lg text-[11px] flex items-center justify-between ${
-                      gstinFeedback.isValid
-                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                        : 'bg-rose-50 text-rose-800 border border-rose-200'
-                    }`}
-                  >
-                    {gstinFeedback.isValid ? (
-                      <div className="flex items-center gap-1.5">
-                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>
-                          Valid GSTIN! State: <strong>{gstinFeedback.stateName} (Code: {gstinFeedback.stateCode})</strong> • PAN: <strong>{gstinFeedback.pan}</strong>
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5">
-                        <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                        <span>{gstinFeedback.error}</span>
-                      </div>
-                    )}
-                  </div>
                 )}
               </div>
-            )}
-          </div>
+            </section>
 
-          {/* 4. Payment Method (Dynamic Admin Orchestrated Gateways) */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                4. Payment Method
-              </label>
-              <span className="text-[10px] font-semibold text-slate-500">
-                {availableGateways.length} active option{availableGateways.length === 1 ? '' : 's'} available
-              </span>
-            </div>
+            {/* Payment Method */}
+            <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+              <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                Payment Method
+              </h2>
 
-            {availableGateways.length === 0 ? (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs space-y-2">
-                <div className="flex items-center gap-2 text-amber-800 font-bold">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>All Online Payment Gateways Currently Paused</span>
-                </div>
-                <p className="text-amber-700 leading-relaxed text-[11px]">
-                  Store administration has temporarily paused payment gateways for maintenance. You can complete your order directly via our Hazratganj WhatsApp direct concierge or pick up at the store.
-                </p>
-                <div className="pt-1">
-                  <button
-                    type="button"
-                    onClick={() => handleOrderSubmission(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg font-bold text-xs hover:bg-emerald-700"
-                  >
-                    <MessageCircle className="w-3.5 h-3.5" />
-                    <span>Confirm Order on WhatsApp</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-2">
                 {availableGateways.map((gw) => {
                   const isSelected = paymentMethod === gw.provider || paymentMethod === gw.id;
-                  const isExceedingMax = Boolean(gw.maxOrderValue && payableAmount > gw.maxOrderValue);
-                  const isBelowMin = Boolean(gw.minOrderValue && payableAmount < gw.minOrderValue);
+                  const isCodGateway = gw.provider === 'cod';
+                  const isExceedingMax = isCodGateway
+                    ? false
+                    : Boolean(gw.maxOrderValue && basePayable > gw.maxOrderValue);
+                  const isBelowMin = Boolean(gw.minOrderValue && basePayable < gw.minOrderValue);
                   const isDisabled = Boolean(isExceedingMax || isBelowMin);
-
-                  const getBadgeColorClass = (color?: string) => {
-                    switch (color) {
-                      case 'purple':
-                        return 'bg-purple-100 text-purple-800 border-purple-200';
-                      case 'blue':
-                        return 'bg-blue-100 text-blue-800 border-blue-200';
-                      case 'indigo':
-                        return 'bg-indigo-100 text-indigo-800 border-indigo-200';
-                      case 'emerald':
-                        return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-                      case 'amber':
-                        return 'bg-amber-100 text-amber-800 border-amber-200';
-                      case 'rose':
-                        return 'bg-rose-100 text-rose-800 border-rose-200';
-                      default:
-                        return 'bg-slate-100 text-slate-700 border-slate-200';
-                    }
-                  };
-
-                  const getGatewayIcon = (provider: PaymentGatewayProviderType) => {
-                    switch (provider) {
-                      case 'upi_qr':
-                        return <QrCode className="w-4 h-4 text-purple-600 shrink-0" />;
-                      case 'razorpay':
-                        return <CreditCard className="w-4 h-4 text-blue-600 shrink-0" />;
-                      case 'phonepe':
-                        return <Smartphone className="w-4 h-4 text-indigo-600 shrink-0" />;
-                      case 'paytm':
-                        return <Smartphone className="w-4 h-4 text-sky-600 shrink-0" />;
-                      case 'cashfree':
-                        return <Zap className="w-4 h-4 text-emerald-600 shrink-0" />;
-                      case 'stripe':
-                        return <Globe className="w-4 h-4 text-rose-600 shrink-0" />;
-                      case 'cod':
-                        return <Banknote className="w-4 h-4 text-amber-600 shrink-0" />;
-                      case 'store_pickup_pay':
-                        return <Store className="w-4 h-4 text-teal-600 shrink-0" />;
-                      default:
-                        return <CreditCard className="w-4 h-4 text-slate-600 shrink-0" />;
-                    }
-                  };
+                  const gwPrepaidDisc = getGatewayPrepaidDiscount(gw);
+                  const gwCodExtra = getGatewayCodCharge(gw);
 
                   return (
                     <label
                       key={gw.id}
                       className={`block p-3 rounded-xl border transition-all cursor-pointer ${
                         isDisabled
-                          ? 'opacity-60 bg-slate-50 border-slate-200 cursor-not-allowed'
+                          ? 'opacity-50 bg-slate-50 border-slate-200 cursor-not-allowed'
                           : isSelected
-                          ? 'border-blue-600 bg-blue-50/40 ring-1 ring-blue-600 shadow-xs'
-                          : 'border-slate-200 hover:bg-slate-50'
+                          ? 'border-blue-600 bg-white ring-1 ring-blue-600'
+                          : 'border-slate-200 bg-white hover:bg-slate-50'
                       }`}
                     >
                       <div className="flex items-start gap-3">
@@ -682,288 +887,375 @@ export const CheckoutModal: React.FC = () => {
                           disabled={isDisabled}
                           checked={isSelected}
                           onChange={() => setPaymentMethod(gw.provider as PaymentMethod)}
-                          className="mt-1 text-blue-600 cursor-pointer shrink-0"
+                          className="mt-0.5 text-blue-600 cursor-pointer shrink-0"
                         />
 
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-900 min-w-0">
                               {getGatewayIcon(gw.provider)}
-                              <span>{gw.name}</span>
+                              <span className="truncate">{getCleanGatewayName(gw)}</span>
                             </div>
 
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {gw.badgeText && (
-                                <span
-                                  className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${getBadgeColorClass(
-                                    gw.badgeColor
-                                  )}`}
-                                >
-                                  {gw.badgeText}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {gw.provider === 'je_cash' && (
+                                <span className="text-xs font-mono font-bold text-slate-700 whitespace-nowrap">
+                                  Bal: {formatINR(currentUser.rewardBalance || currentUser.jeCashBalance || 0)}
                                 </span>
                               )}
 
-                              {gw.environment === 'sandbox' && (
-                                <span className="text-[9px] font-mono font-bold bg-amber-100 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded">
-                                  TEST MODE
+                              {gwPrepaidDisc > 0 && (
+                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md whitespace-nowrap">
+                                  Save {formatINR(gwPrepaidDisc)}
                                 </span>
                               )}
 
-                              {gw.feeOrDiscountType === 'percentage_discount' && gw.feeOrDiscountValue > 0 && (
-                                <span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                                  <Sparkles className="w-2.5 h-2.5" />
-                                  <span>{gw.feeOrDiscountValue}% Instant Off</span>
+                              {gwCodExtra > 0 && (
+                                <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md whitespace-nowrap">
+                                  +{formatINR(gwCodExtra)} COD Fee
                                 </span>
                               )}
                             </div>
                           </div>
 
-                          <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                            {gw.description}
-                          </p>
-
-                          {/* Supported Rails Pills */}
-                          {gw.supportedMethods && gw.supportedMethods.length > 0 && (
-                            <div className="flex flex-wrap items-center gap-1 mt-1.5">
-                              {gw.supportedMethods.slice(0, 5).map((method) => (
-                                <span
-                                  key={method}
-                                  className="text-[10px] font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200/60"
-                                >
-                                  {method}
-                                </span>
-                              ))}
-                              {gw.supportedMethods.length > 5 && (
-                                <span className="text-[10px] text-slate-400">
-                                  +{gw.supportedMethods.length - 5} more
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Limit validation warnings */}
                           {isExceedingMax && (
-                            <div className="text-[10px] text-rose-600 font-semibold mt-1 flex items-center gap-1">
-                              <AlertCircle className="w-3 h-3" />
-                              <span>Maximum order limit for this method is {formatINR(gw.maxOrderValue || 0)}.</span>
-                            </div>
+                            <p className="text-[11px] text-rose-600 mt-1">
+                              Max limit: {formatINR(gw.maxOrderValue || 0)}
+                            </p>
                           )}
                           {isBelowMin && (
-                            <div className="text-[10px] text-amber-600 font-semibold mt-1 flex items-center gap-1">
-                              <AlertCircle className="w-3 h-3" />
-                              <span>Minimum order limit is {formatINR(gw.minOrderValue)}.</span>
-                            </div>
+                            <p className="text-[11px] text-slate-500 mt-1">
+                              Min limit: {formatINR(gw.minOrderValue)}
+                            </p>
                           )}
 
-                          {/* Interactive Drawer for Selected Gateway */}
+                          {/* Selected Gateway Minimal Content */}
                           {isSelected && !isDisabled && (
-                            <div className="mt-3 pt-3 border-t border-blue-200/70 space-y-2.5">
-                              {/* 1. Dynamic UPI QR */}
-                              {gw.provider === 'upi_qr' && (
-                                <div className="p-3 bg-white rounded-xl border border-purple-200 flex flex-col items-center max-w-full min-w-0 box-border text-center">
-                                  <div className="flex items-center gap-1.5 text-xs font-bold text-purple-900 mb-2">
-                                    <QrCode className="w-4 h-4 text-purple-600" />
-                                    <span>Scan with Any UPI App to Pay</span>
-                                  </div>
+                            <div className="mt-3 pt-3 border-t border-slate-100 space-y-2.5">
+                              {/* JE Cash */}
+                              {gw.provider === 'je_cash' && (() => {
+                                const userJeCashBal =
+                                  currentUser.rewardBalance || currentUser.jeCashBalance || 0;
+                                const isSufficient = userJeCashBal >= payableAmount;
 
-                                  {upiQrDataUrl ? (
-                                    <img
-                                      src={upiQrDataUrl}
-                                      alt="UPI QR"
-                                      className="w-32 h-32 sm:w-36 sm:h-36 max-w-full rounded-lg border border-purple-100 shadow-xs"
-                                    />
-                                  ) : (
-                                    <div className="w-32 h-32 flex items-center justify-center text-xs text-slate-400">
-                                      Generating QR...
+                                return isSufficient ? (
+                                  <div className="text-xs text-slate-600 flex justify-between">
+                                    <span>Remaining after payment:</span>
+                                    <span className="font-mono font-bold text-slate-900">
+                                      {formatINR(userJeCashBal - payableAmount)}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2 text-xs text-slate-600">
+                                    <p className="text-rose-600 font-medium">
+                                      Insufficient JE Cash balance (Non-refillable). Please select another payment method.
+                                    </p>
+                                    <button
+                                      type="button"
+                                      onClick={() => setPaymentMethod('upi_qr')}
+                                      className="py-1.5 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                                    >
+                                      Use UPI / QR
+                                    </button>
+                                  </div>
+                                );
+                              })()}
+
+                              {/* Dynamic UPI QR with Live Amount & Screenshot Proof */}
+                              {gw.provider === 'upi_qr' && (
+                                <div className="space-y-3 pt-1">
+                                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 sm:p-4">
+                                    {/* Top Row: Amount & Auto-Amount Indicator */}
+                                    <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-200 text-xs">
+                                      <div className="flex items-center gap-1.5 font-semibold text-slate-800">
+                                        <QrCode className="w-4 h-4 text-blue-600" />
+                                        <span>Dynamic QR</span>
+                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                          Exact Amount Pre-filled
+                                        </span>
+                                      </div>
+                                      <div className="text-right">
+                                        <span className="font-mono font-bold text-sm text-slate-900">
+                                          {formatINR(payableAmount)}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Middle: QR Code + Payee Details */}
+                                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3.5 pt-3">
+                                      <div className="flex flex-col items-center shrink-0">
+                                        <div className="p-2 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                                          {upiQrDataUrl ? (
+                                            <img
+                                              src={upiQrDataUrl}
+                                              alt="Dynamic UPI QR"
+                                              className="w-32 h-32 object-contain rounded"
+                                            />
+                                          ) : (
+                                            <div className="w-32 h-32 bg-slate-100 rounded flex items-center justify-center text-xs text-slate-400">
+                                              Loading QR...
+                                            </div>
+                                          )}
+                                        </div>
+                                        <span className="text-[10px] text-slate-500 mt-1 text-center">
+                                          Scan with GPay, PhonePe, Paytm, or BHIM
+                                        </span>
+                                      </div>
+
+                                      <div className="flex-1 space-y-2.5 text-xs w-full">
+                                        <div>
+                                          <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                                            Payee UPI ID
+                                          </div>
+                                          <div className="flex items-center gap-1.5 mt-0.5">
+                                            <span className="font-mono font-bold text-slate-900 bg-white px-2.5 py-1 rounded-md border border-slate-200 text-xs select-all break-all">
+                                              {gw.upiVpa || settings.upiId}
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                handleCopyUpi(gw.upiVpa || settings.upiId);
+                                              }}
+                                              className="px-2 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-md text-xs font-semibold inline-flex items-center gap-1 shrink-0 cursor-pointer"
+                                            >
+                                              <Copy className="w-3 h-3" />
+                                              <span>{copiedUpi ? 'Copied' : 'Copy'}</span>
+                                            </button>
+                                          </div>
+                                        </div>
+
+                                        {upiDeepLink && (
+                                          <a
+                                            href={upiDeepLink}
+                                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700"
+                                          >
+                                            <ExternalLink className="w-3 h-3" />
+                                            <span>Open UPI App on phone</span>
+                                          </a>
+                                        )}
+
+                                        {/* Upload Screenshot Proof */}
+                                        <div className="pt-2 border-t border-slate-200 space-y-1.5">
+                                          <div className="flex items-center justify-between">
+                                            <span className="font-bold text-slate-800 flex items-center gap-1">
+                                              <Camera className="w-3 h-3 text-slate-600" />
+                                              <span>Upload Payment Screenshot</span>
+                                              <span className="text-rose-600 font-bold">*</span>
+                                            </span>
+                                            {paymentScreenshot && (
+                                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded-full flex items-center gap-0.5">
+                                                <CheckCircle2 className="w-3 h-3" />
+                                                Attached
+                                              </span>
+                                            )}
+                                          </div>
+
+                                          {paymentScreenshot ? (
+                                            <div className="p-2 bg-white rounded-lg border border-emerald-300 flex items-center justify-between gap-2 shadow-2xs">
+                                              <div className="flex items-center gap-2 min-w-0">
+                                                <img
+                                                  src={paymentScreenshot}
+                                                  alt="Proof Preview"
+                                                  className="w-10 h-10 object-cover rounded border border-slate-200 shrink-0"
+                                                />
+                                                <div className="min-w-0">
+                                                  <p className="font-semibold text-slate-900 truncate text-[11px]">
+                                                    {screenshotFileName || 'screenshot.jpg'}
+                                                  </p>
+                                                  <p className="text-[10px] text-emerald-700 font-medium">
+                                                    ✓ Proof ready for verification
+                                                  </p>
+                                                </div>
+                                              </div>
+                                              <button
+                                                type="button"
+                                                onClick={handleRemoveScreenshot}
+                                                className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer shrink-0"
+                                                title="Remove screenshot"
+                                              >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <label className="flex items-center justify-center gap-2 p-2.5 border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-lg bg-white cursor-pointer transition-colors group text-center">
+                                              <input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={handleScreenshotUpload}
+                                                className="hidden"
+                                              />
+                                              <Upload className="w-4 h-4 text-slate-400 group-hover:text-blue-600" />
+                                              <span className="font-semibold text-slate-700 group-hover:text-blue-600 text-xs">
+                                                {isUploadingScreenshot ? 'Reading...' : 'Tap to Upload Screenshot'}
+                                              </span>
+                                            </label>
+                                          )}
+
+                                          {/* Optional UTR input */}
+                                          <input
+                                            type="text"
+                                            placeholder="UTR / UPI Ref Number (Optional)"
+                                            value={upiUtrInput}
+                                            onChange={(e) => setUpiUtrInput(e.target.value)}
+                                            className="w-full px-2.5 py-1 text-xs border border-slate-200 rounded-lg bg-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 mt-1"
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Process indicator */}
+                                    <div className="mt-2.5 pt-2 border-t border-slate-200 text-[10px] text-slate-500 flex items-start gap-1">
+                                      <ShieldCheck className="w-3 h-3 text-blue-600 shrink-0 mt-0.5" />
+                                      <span>
+                                        Order enters <strong>Verifying Payment</strong> status on submission. Admin will review proof and move order to <strong>In Progress</strong>.
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* PhonePe */}
+                              {gw.provider === 'phonepe' && (
+                                <input
+                                  type="tel"
+                                  placeholder="PhonePe mobile number"
+                                  value={phonePeMobile || phone}
+                                  onChange={(e) => setPhonePeMobile(e.target.value)}
+                                  className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg"
+                                />
+                              )}
+
+                              {/* Paytm */}
+                              {gw.provider === 'paytm' && (
+                                <input
+                                  type="tel"
+                                  placeholder="Paytm mobile number"
+                                  value={paytmMobile || phone}
+                                  onChange={(e) => setPaytmMobile(e.target.value)}
+                                  className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg"
+                                />
+                              )}
+
+                              {/* Cash on Delivery — Extra Charge notice & Partial Prepaid when > COD Limit */}
+                              {gw.provider === 'cod' && (
+                                <div className="space-y-3">
+                                  {codExtraCharge > 0 && (
+                                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs flex items-center justify-between gap-2 flex-wrap">
+                                      <span className="text-amber-900 font-medium">
+                                        COD Handling Charge of <strong>{formatINR(codExtraCharge)}</strong> added.
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          setPaymentMethod('upi_qr');
+                                        }}
+                                        className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 underline cursor-pointer"
+                                      >
+                                        Switch to Prepaid & Save
+                                      </button>
                                     </div>
                                   )}
 
-                                  <div className="mt-2 flex items-center gap-2 flex-wrap justify-center">
-                                    <span className="text-[11px] font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded border border-slate-200">
-                                      {gw.upiVpa || settings.upiId}
-                                    </span>
+                                  {isOrderAboveCodLimit && (
+                                    <div className="space-y-3">
+                                      <p className="text-xs text-slate-600">
+                                        Order exceeds COD limit ({formatINR(codMaxLimit)}). Pay partial prepaid now and the upper amount on delivery:
+                                      </p>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     <button
                                       type="button"
                                       onClick={(e) => {
                                         e.preventDefault();
-                                        handleCopyUpi(gw.upiVpa || settings.upiId);
+                                        setPartialCodSplitMode('token_20');
                                       }}
-                                      className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                                      className={`p-2.5 rounded-lg border text-left cursor-pointer ${
+                                        partialCodSplitMode === 'token_20'
+                                          ? 'border-blue-600 bg-white ring-1 ring-blue-600'
+                                          : 'border-slate-200 bg-slate-50'
+                                      }`}
                                     >
-                                      {copiedUpi ? (
-                                        <>
-                                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                          <span className="text-emerald-700">Copied!</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Copy className="w-3 h-3" />
-                                          <span>Copy UPI ID</span>
-                                        </>
-                                      )}
+                                      <div className="text-xs font-bold text-slate-900">
+                                        Prepaid Now: {formatINR(Math.max(1, Math.round(payableAmount * 0.2)))}
+                                      </div>
+                                      <div className="text-[11px] text-slate-600">
+                                        Pay on Delivery: {formatINR(payableAmount - Math.max(1, Math.round(payableAmount * 0.2)))}
+                                      </div>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        setPartialCodSplitMode('excess_above_limit');
+                                      }}
+                                      className={`p-2.5 rounded-lg border text-left cursor-pointer ${
+                                        partialCodSplitMode === 'excess_above_limit'
+                                          ? 'border-blue-600 bg-white ring-1 ring-blue-600'
+                                          : 'border-slate-200 bg-slate-50'
+                                      }`}
+                                    >
+                                      <div className="text-xs font-bold text-slate-900">
+                                        Prepaid Now: {formatINR(Math.max(1, payableAmount - codMaxLimit))}
+                                      </div>
+                                      <div className="text-[11px] text-slate-600">
+                                        Pay on Delivery: {formatINR(codMaxLimit)}
+                                      </div>
                                     </button>
                                   </div>
 
-                                  <div className="text-[11px] text-emerald-700 font-bold mt-1.5 flex items-center gap-1">
-                                    <span>Exact Payable: {formatINR(payableAmount)}</span>
-                                    {gatewayDiscount > 0 && (
-                                      <span className="text-[10px] text-purple-600 font-normal">
-                                        (Saved {formatINR(gatewayDiscount)} via 1% instant off)
-                                      </span>
+                                  <div className="space-y-2">
+                                    <span className="text-[11px] font-medium text-slate-600 block">
+                                      Pay Partial Prepaid ({formatINR(partialPrepaidAmount)}) via:
+                                    </span>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                                      {[
+                                        { id: 'upi_qr', label: 'UPI / QR' },
+                                        { id: 'razorpay', label: 'Cards / NetBanking' },
+                                        { id: 'phonepe', label: 'PhonePe' },
+                                        { id: 'je_cash', label: 'JE Cash' },
+                                      ].map((m) => (
+                                        <button
+                                          key={m.id}
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            setPartialPrepaidMethod(m.id as any);
+                                          }}
+                                          className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border cursor-pointer ${
+                                            partialPrepaidMethod === m.id
+                                              ? 'bg-slate-900 text-white border-slate-900'
+                                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                                          }`}
+                                        >
+                                          {m.label}
+                                        </button>
+                                      ))}
+                                    </div>
+
+                                    {partialPrepaidMethod === 'upi_qr' && partialUpiQrDataUrl && (
+                                      <div className="flex items-center gap-3 pt-1">
+                                        <img
+                                          src={partialUpiQrDataUrl}
+                                          alt="Partial Prepaid UPI QR"
+                                          className="w-20 h-20 rounded-lg border border-slate-200 bg-white shrink-0"
+                                        />
+                                        <div className="text-xs text-slate-600 space-y-0.5">
+                                          <div className="font-bold text-slate-900">
+                                            Pay Now: {formatINR(partialPrepaidAmount)}
+                                          </div>
+                                          <div>
+                                            Pay on Delivery: {formatINR(codBalanceOnDelivery)}
+                                          </div>
+                                        </div>
+                                      </div>
                                     )}
                                   </div>
-                                </div>
-                              )}
-
-                              {/* 2. PhonePe PG */}
-                              {gw.provider === 'phonepe' && (
-                                <div className="p-3 bg-white rounded-xl border border-indigo-200 space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
-                                      <Smartphone className="w-4 h-4 text-indigo-600" />
-                                      <span>PhonePe 1-Tap Mobile Intent</span>
-                                    </span>
-                                    <span className="text-[10px] font-mono text-indigo-700 font-semibold bg-indigo-50 px-2 py-0.5 rounded">
-                                      Instant Handshake
-                                    </span>
                                   </div>
-                                  <p className="text-[11px] text-slate-600 leading-relaxed">
-                                    Clicking <strong>Place Order</strong> will automatically trigger the PhonePe mobile intent on your device or show a 1-tap confirmation notification.
-                                  </p>
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="tel"
-                                      placeholder="PhonePe registered mobile number"
-                                      value={phonePeMobile || phone}
-                                      onChange={(e) => setPhonePeMobile(e.target.value)}
-                                      className="px-2.5 py-1.5 text-xs border border-indigo-200 rounded-lg flex-1 bg-indigo-50/20"
-                                    />
-                                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-1.5 rounded-lg shrink-0">
-                                      Verified Rails
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* 3. Paytm Payment Gateway */}
-                              {gw.provider === 'paytm' && (
-                                <div className="p-3 bg-white rounded-xl border border-sky-200 space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-sky-900 flex items-center gap-1.5">
-                                      <Smartphone className="w-4 h-4 text-sky-600" />
-                                      <span>Paytm Wallet & Postpaid BNPL</span>
-                                    </span>
-                                    <span className="text-[10px] font-mono text-sky-700 font-semibold bg-sky-50 px-2 py-0.5 rounded">
-                                      Zero Convenience Fee
-                                    </span>
-                                  </div>
-                                  <p className="text-[11px] text-slate-600 leading-relaxed">
-                                    Seamlessly checkout using your Paytm Wallet balance, linked Bank Account, or Paytm Postpaid BNPL credit.
-                                  </p>
-                                  <input
-                                    type="tel"
-                                    placeholder="Enter 10-digit Paytm mobile number"
-                                    value={paytmMobile || phone}
-                                    onChange={(e) => setPaytmMobile(e.target.value)}
-                                    className="w-full px-2.5 py-1.5 text-xs border border-sky-200 rounded-lg bg-sky-50/20"
-                                  />
-                                </div>
-                              )}
-
-                              {/* 4. Cashfree Payments */}
-                              {gw.provider === 'cashfree' && (
-                                <div className="p-3 bg-white rounded-xl border border-emerald-200 space-y-1.5">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-                                      <Zap className="w-4 h-4 text-emerald-600" />
-                                      <span>Cashfree Auto-Collect & Fast Refunds</span>
-                                    </span>
-                                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                                      Instant Auto-Debit
-                                    </span>
-                                  </div>
-                                  <p className="text-[11px] text-slate-600 leading-relaxed">
-                                    Direct UPI auto-collect with 5-minute automated instant refund guarantee on order returns or cancellations.
-                                  </p>
-                                </div>
-                              )}
-
-                              {/* 5. Razorpay Cards & Netbanking */}
-                              {gw.provider === 'razorpay' && (
-                                <div className="p-3 bg-white rounded-xl border border-blue-200 space-y-1.5">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
-                                      <CreditCard className="w-4 h-4 text-blue-600" />
-                                      <span>Razorpay 256-Bit SSL Secure Checkout</span>
-                                    </span>
-                                    <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
-                                      PCI-DSS Level 1
-                                    </span>
-                                  </div>
-                                  <p className="text-[11px] text-slate-600 leading-relaxed">
-                                    Supports all major Credit & Debit Cards (Visa, MasterCard, RuPay), Netbanking across 50+ Indian banks, and cardless EMI.
-                                  </p>
-                                </div>
-                              )}
-
-                              {/* 6. Stripe International */}
-                              {gw.provider === 'stripe' && (
-                                <div className="p-3 bg-white rounded-xl border border-rose-200 space-y-1.5">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
-                                      <Globe className="w-4 h-4 text-rose-600" />
-                                      <span>Global & NRI International Checkout</span>
-                                    </span>
-                                    <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded">
-                                      USD / GBP / EUR / AED
-                                    </span>
-                                  </div>
-                                  <p className="text-[11px] text-slate-600 leading-relaxed">
-                                    Pay securely from anywhere in the world using American Express, Visa, Mastercard, or Apple Pay for family gifting in Lucknow.
-                                  </p>
-                                </div>
-                              )}
-
-                              {/* 7. Cash on Delivery (COD) */}
-                              {gw.provider === 'cod' && (
-                                <div className="p-3 bg-white rounded-xl border border-amber-200 space-y-1.5">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                                      <Banknote className="w-4 h-4 text-amber-600" />
-                                      <span>Doorstep Physical Product Inspection</span>
-                                    </span>
-                                    <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
-                                      Open-Box Delivery
-                                    </span>
-                                  </div>
-                                  <p className="text-[11px] text-slate-600 leading-relaxed">
-                                    Inspect your brand-sealed electronics package in front of our verified delivery partner before making cash or rider UPI payment.
-                                  </p>
-                                </div>
-                              )}
-
-                              {/* 8. Store Counter Pickup Pay */}
-                              {gw.provider === 'store_pickup_pay' && (
-                                <div className="p-3 bg-white rounded-xl border border-teal-200 space-y-1.5">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-teal-900 flex items-center gap-1.5">
-                                      <Store className="w-4 h-4 text-teal-600" />
-                                      <span>Pay at Hazratganj Store Counter</span>
-                                    </span>
-                                    <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
-                                      Ready in 30 Mins
-                                    </span>
-                                  </div>
-                                  <p className="text-[11px] text-slate-600 leading-relaxed">
-                                    Collect your order directly from Javed Electronics showroom counter. Pay via Cash, POS Card Swipe, or Counter QR Code.
-                                  </p>
-                                </div>
-                              )}
-
-                              {/* Custom Instructions if provided */}
-                              {gw.customInstructions && (
-                                <div className="text-[11px] text-slate-600 italic bg-slate-50 p-2 rounded-lg border border-slate-200/60">
-                                  ℹ️ {gw.customInstructions}
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -974,145 +1266,210 @@ export const CheckoutModal: React.FC = () => {
                   );
                 })}
               </div>
-            )}
+            </section>
           </div>
 
-          {/* Order Summary Recap & Tax Breakdown */}
-          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2">
-            <div className="flex justify-between text-slate-600">
-              <span>Items Total ({cart.reduce((t, i) => t + i.quantity, 0)} items):</span>
-              <span className="font-mono">{formatINR(cartSubtotal)}</span>
-            </div>
-            {cartCouponDiscount > 0 && (
-              <div className="flex justify-between text-emerald-600 font-semibold">
-                <span>Coupon Discount:</span>
-                <span className="font-mono">-{formatINR(cartCouponDiscount)}</span>
-              </div>
-            )}
-            {cartBulkDiscount.discountAmount > 0 && (
-              <div className="flex justify-between text-indigo-700 font-bold bg-indigo-50/80 px-2 py-1 rounded border border-indigo-100">
-                <span className="flex items-center gap-1">
-                  <Percent className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Bulk Volume Discount ({cartBulkDiscount.ruleName}):</span>
-                </span>
-                <span className="font-mono">-{formatINR(cartBulkDiscount.discountAmount)}</span>
-              </div>
-            )}
-            {gatewayDiscount > 0 && (
-              <div className="flex justify-between text-emerald-700 font-bold bg-emerald-50/80 px-2 py-1 rounded border border-emerald-200">
-                <span className="flex items-center gap-1">
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Gateway Instant Benefit ({activeGateway?.shortName || 'Direct'}):</span>
-                </span>
-                <span className="font-mono">-{formatINR(gatewayDiscount)}</span>
-              </div>
-            )}
-            <div className="flex justify-between text-slate-600">
-              <span>Delivery Charges:</span>
-              <span className="font-mono">
-                {deliveryType === 'store_pickup' || cartDeliveryFee === 0 ? (
-                  <span className="text-emerald-600 font-semibold">FREE</span>
-                ) : (
-                  formatINR(cartDeliveryFee)
-                )}
-              </span>
-            </div>
+          {/* Right Column: Order Summary & Actions */}
+          <div className="lg:col-span-5">
+            <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4 lg:sticky lg:top-5">
+              <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                Order Summary
+              </h2>
 
-            {/* GST Tax Breakdown Box */}
-            <div className="mt-2 pt-2 border-t border-slate-200/80 bg-white/70 p-2.5 rounded-lg border text-[11px] space-y-1">
-              <div className="flex items-center justify-between text-slate-700 font-bold">
-                <span className="flex items-center gap-1">
-                  <Receipt className="w-3.5 h-3.5 text-blue-600" />
-                  <span>GST & Tax Breakdown (Included)</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowTaxBreakdown(!showTaxBreakdown)}
-                  className="text-blue-600 hover:text-blue-800 text-[10px] underline font-semibold cursor-pointer"
-                >
-                  {showTaxBreakdown ? 'Hide Slabs' : 'View Slabs'}
-                </button>
-              </div>
-
-              <div className="flex justify-between text-slate-600">
-                <span>Taxable Value (Base Amount):</span>
-                <span className="font-mono">{formatINR(cartGstCalculation.taxableAmount)}</span>
-              </div>
-
-              {cartGstCalculation.isInterState ? (
-                <div className="flex justify-between text-slate-600">
-                  <span>Integrated GST (IGST 18%):</span>
-                  <span className="font-mono">{formatINR(cartGstCalculation.igstAmount)}</span>
-                </div>
-              ) : (
-                <>
-                  <div className="flex justify-between text-slate-600">
-                    <span>Central GST (CGST 9%):</span>
-                    <span className="font-mono">{formatINR(cartGstCalculation.cgstAmount)}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>State GST (SGST 9%):</span>
-                    <span className="font-mono">{formatINR(cartGstCalculation.sgstAmount)}</span>
-                  </div>
-                </>
-              )}
-
-              {showTaxBreakdown && (
-                <div className="pt-1.5 mt-1 border-t border-slate-200 text-[10px] text-slate-500 space-y-0.5">
-                  <div className="font-semibold text-slate-700">HSN Summary:</div>
-                  {cartGstCalculation.hsnSummary.map((hsn) => (
-                    <div key={hsn.hsnCode} className="flex justify-between">
-                      <span>HSN {hsn.hsnCode} ({hsn.gstRate}%):</span>
-                      <span className="font-mono">Tax: {formatINR(hsn.totalTax)}</span>
+              {/* Compact Item List */}
+              <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto pr-1">
+                {cart.map((item) => {
+                  const unitPrice = item.product.dealPrice || item.product.regularPrice;
+                  return (
+                    <div
+                      key={`${item.productId}-${item.selectedVariant || ''}`}
+                      className="py-2 flex items-center justify-between gap-2 text-xs"
+                    >
+                      <div className="truncate text-slate-700">
+                        <span className="font-medium text-slate-900">{item.product.name}</span>
+                        <span className="text-slate-400 ml-1">× {item.quantity}</span>
+                      </div>
+                      <span className="font-mono font-semibold text-slate-900 shrink-0">
+                        {formatINR(unitPrice * item.quantity)}
+                      </span>
                     </div>
-                  ))}
-                  <div className="text-[9px] text-slate-400 mt-1">
-                    Place of Supply: {cartGstCalculation.placeOfSupply}
-                  </div>
+                  );
+                })}
+              </div>
+
+              {/* Price Totals */}
+              <div className="space-y-2 pt-3 border-t border-slate-200 text-xs">
+                <div className="flex justify-between text-slate-600">
+                  <span>Subtotal</span>
+                  <span className="font-mono">{formatINR(cartSubtotal)}</span>
                 </div>
-              )}
 
-              <div className="flex justify-between font-bold text-slate-800 pt-1 border-t border-slate-100">
-                <span>Total GST Included:</span>
-                <span className="font-mono text-emerald-700">{formatINR(cartGstCalculation.totalTax)}</span>
-              </div>
-            </div>
+                {cartCouponDiscount > 0 && (
+                  <div className="flex justify-between text-emerald-700">
+                    <span>Coupon Discount</span>
+                    <span className="font-mono">-{formatINR(cartCouponDiscount)}</span>
+                  </div>
+                )}
 
-            <div className="flex justify-between text-base font-extrabold text-slate-900 border-t border-slate-200 pt-2">
-              <div>
-                <span>Total Payable Amount:</span>
-                <span className="block text-[10px] text-slate-400 font-normal">Inclusive of all applicable GST</span>
+                {cartBulkDiscount.discountAmount > 0 && (
+                  <div className="flex justify-between text-emerald-700">
+                    <span>Bulk Discount</span>
+                    <span className="font-mono">-{formatINR(cartBulkDiscount.discountAmount)}</span>
+                  </div>
+                )}
+
+                {gatewayDiscount > 0 && (
+                  <div className="flex justify-between text-emerald-700 font-medium">
+                    <span>Prepaid Order Discount</span>
+                    <span className="font-mono">-{formatINR(gatewayDiscount)}</span>
+                  </div>
+                )}
+
+                {codExtraCharge > 0 && (
+                  <div className="flex justify-between text-amber-800 font-medium">
+                    <span>COD Extra Charge</span>
+                    <span className="font-mono">+{formatINR(codExtraCharge)}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between text-slate-600">
+                  <span>Delivery</span>
+                  <span className="font-mono">
+                    {deliveryType === 'store_pickup' || cartDeliveryFee === 0
+                      ? 'FREE'
+                      : formatINR(cartDeliveryFee)}
+                  </span>
+                </div>
+
+                <div className="flex justify-between text-slate-500">
+                  <span>GST (Included)</span>
+                  <span className="font-mono">{formatINR(cartGstCalculation.totalTax)}</span>
+                </div>
+
+                <div className="flex justify-between text-base font-bold text-slate-900 border-t border-slate-200 pt-2.5">
+                  <span>Total Payable</span>
+                  <span className="font-mono">{formatINR(payableAmount)}</span>
+                </div>
+
+                {isPartialPrepaidCodActive && (
+                  <div className="pt-2 border-t border-slate-100 space-y-1 text-xs">
+                    <div className="flex justify-between font-semibold text-slate-900">
+                      <span>Partial Prepaid Now</span>
+                      <span className="font-mono">{formatINR(partialPrepaidAmount)}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold text-slate-700">
+                      <span>Pay on Delivery (COD)</span>
+                      <span className="font-mono">{formatINR(codBalanceOnDelivery)}</span>
+                    </div>
+                  </div>
+                )}
               </div>
-              <span className="font-mono text-blue-700">{formatINR(payableAmount)}</span>
+
+              {/* Post-Payment Hub Dispatch Notification Option & Primary Action */}
+              <div className="pt-2 border-t border-slate-100 space-y-3">
+                {/* Hidden file input for quick screenshot upload from bottom button */}
+                <input
+                  ref={screenshotInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleScreenshotUpload}
+                  className="hidden"
+                />
+
+                {errorMessage && (
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{errorMessage}</span>
+                  </div>
+                )}
+
+                {paymentMethod === 'upi_qr' && paymentScreenshot && (
+                  <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <img
+                        src={paymentScreenshot}
+                        alt="Payment Proof"
+                        className="w-8 h-8 object-cover rounded border border-emerald-300 shrink-0"
+                      />
+                      <span className="font-semibold text-emerald-900 truncate">
+                        ✓ Payment screenshot attached
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemoveScreenshot}
+                      className="text-[11px] font-semibold text-rose-600 hover:text-rose-700 shrink-0 cursor-pointer"
+                    >
+                      Change
+                    </button>
+                  </div>
+                )}
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={informHubAfterPayment}
+                    onChange={(e) => setInformHubAfterPayment(e.target.checked)}
+                    className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer shrink-0"
+                  />
+                  <span className="text-xs text-slate-700">
+                    After processing payment, inform Hub for faster dispatch
+                  </span>
+                </label>
+
+                {(() => {
+                  const isJeCash = paymentMethod === 'je_cash';
+                  const userBal = currentUser.rewardBalance || currentUser.jeCashBalance || 0;
+                  const hasSufficientJeCash = userBal >= payableAmount;
+                  const needsScreenshot = paymentMethod === 'upi_qr' && !paymentScreenshot;
+
+                  return (
+                    <button
+                      type="button"
+                      disabled={isSubmitting || (isJeCash && !hasSufficientJeCash)}
+                      onClick={() => {
+                        if (needsScreenshot) {
+                          screenshotInputRef.current?.click();
+                          return;
+                        }
+                        handleOrderSubmission(informHubAfterPayment);
+                      }}
+                      className={`w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl font-bold text-xs sm:text-sm shadow-sm transition-all cursor-pointer ${
+                        isJeCash && !hasSufficientJeCash
+                          ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                          : paymentMethod === 'upi_qr' && paymentScreenshot
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      }`}
+                    >
+                      {needsScreenshot ? (
+                        <Upload className="w-4 h-4 shrink-0" />
+                      ) : (
+                        <Check className="w-4 h-4 shrink-0" />
+                      )}
+                      <span>
+                        {isSubmitting
+                          ? 'Processing...'
+                          : isJeCash
+                          ? hasSufficientJeCash
+                            ? `Pay ${formatINR(payableAmount)} with JE Cash`
+                            : 'Insufficient JE Cash'
+                          : paymentMethod === 'upi_qr'
+                          ? paymentScreenshot
+                            ? `Confirm Payment & Place Order (${formatINR(payableAmount)})`
+                            : `Upload Screenshot & Confirm (${formatINR(payableAmount)})`
+                          : isPartialPrepaidCodActive
+                          ? `Pay ${formatINR(partialPrepaidAmount)} Now + ${formatINR(codBalanceOnDelivery)} on Delivery`
+                          : `Place Order (${formatINR(payableAmount)})`}
+                      </span>
+                    </button>
+                  );
+                })()}
+              </div>
             </div>
           </div>
         </div>
-
-        {/* Modal Footer: Action CTAs */}
-        <div className="p-4 border-t border-slate-200 bg-white grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* WhatsApp Direct Checkout Button */}
-          <button
-            type="button"
-            disabled={isSubmitting}
-            onClick={() => handleOrderSubmission(true)}
-            className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-4 rounded-xl font-bold text-xs sm:text-sm shadow-md transition-all cursor-pointer"
-          >
-            <MessageCircle className="w-4 h-4 fill-white text-emerald-600" />
-            <span>Order on WhatsApp</span>
-          </button>
-
-          {/* Standard Place Order Button */}
-          <button
-            type="button"
-            disabled={isSubmitting}
-            onClick={() => handleOrderSubmission(false)}
-            className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-xl font-bold text-xs sm:text-sm shadow-md transition-all cursor-pointer"
-          >
-            <Check className="w-4 h-4" />
-            <span>{isSubmitting ? 'Placing Order...' : 'Place Order'}</span>
-          </button>
-        </div>
-      </div>
+      </main>
     </div>
   );
 };

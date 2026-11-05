@@ -6,6 +6,7 @@ export * from './paymentGateways';
 export * from './pos';
 export * from './sopSla';
 export * from './shiprocket';
+export * from './returnRefund';
 
 export type Role = 
   | 'customer'
@@ -30,6 +31,46 @@ export interface UserProfile {
   referralCode: string;
   savedAddresses: Address[];
   rewardBalance: number;
+  jeCashBalance?: number; // JE Cash store balance
+}
+
+export interface JeCashTransaction {
+  id: string;
+  type: 'credit' | 'debit';
+  amount: number;
+  balanceAfter: number;
+  description: string;
+  category: 'refill' | 'order_payment' | 'order_refund' | 'referral_bonus' | 'cashback';
+  timestamp: string;
+  orderId?: string;
+  referenceId?: string;
+  paymentMethodUsed?: string; // e.g. "UPI (GPay / PhonePe)", "Credit/Debit Card", "Netbanking"
+}
+
+export type AccountStatus = 'active' | 'suspended' | 'terminated' | 'on_hold' | 're_verification';
+
+export type AccountSanctionDuration =
+  | '24_hours'
+  | '48_hours'
+  | '7_days'
+  | '14_days'
+  | '30_days'
+  | 'custom'
+  | 'permanent';
+
+export interface AccountSanction {
+  id: string;
+  status: AccountStatus;
+  reason: string;
+  appliedAt: string;
+  appliedBy: string;
+  duration: AccountSanctionDuration;
+  expiresAt?: string; // ISO date string for specific duration
+  reVerificationRequirements?: string[];
+  notes?: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  resolutionNote?: string;
 }
 
 export interface UserAccount {
@@ -42,9 +83,13 @@ export interface UserAccount {
   outletId?: string;
   outletName?: string;
   referralCode?: string;
+  rewardBalance?: number;
   createdAt: string;
   lastLoginAt?: string;
   isActive: boolean;
+  accountStatus?: AccountStatus;
+  sanction?: AccountSanction;
+  sanctionHistory?: AccountSanction[];
   createdBy?: string;
   twoFactorEnabled?: boolean;
   twoFactorSecret?: string;
@@ -92,14 +137,42 @@ export type ProductCategory =
   | 'tvs_accessories'
   | 'computer_accessories'
   | 'home_electronics'
-  | 'small_appliances';
+  | 'small_appliances'
+  | 'clothing'
+  | 'cosmetics'
+  | 'mens_apparel'
+  | 'womens_apparel'
+  | 'kids_apparel'
+  | 'other'
+  | (string & {});
+
+export interface CategoryCommissionStructure {
+  type: 'percentage' | 'fixed' | 'hybrid';
+  commissionPercent: number;
+  fixedFee: number;
+  gstRate: number;
+}
+
+export interface SubCategoryItem {
+  id: string;
+  name: string;
+  parentCategoryId: ProductCategory;
+  description?: string;
+  imageUrl?: string;
+  iconName?: string;
+  commissionPercent?: number;
+  itemCount?: number;
+}
 
 export interface CategoryItem {
   id: ProductCategory;
   name: string;
   iconName: string;
+  imageUrl?: string;
   description: string;
   itemCount?: number;
+  commissionStructure?: CategoryCommissionStructure;
+  subCategories?: SubCategoryItem[];
 }
 
 export interface ColorVariantOption {
@@ -155,9 +228,18 @@ export interface Product {
   brand: string;
   modelNumber?: string;
   moduleName?: string;
+  partNumber?: string;
+  manufacturerName?: string;
+  packerName?: string;
+  warrantyInfo?: string;
+  categoryFormatId?: string;
+  categoryFormatValues?: Record<string, string>;
   categoryId: ProductCategory;
+  subCategoryId?: string;
+  subCategoryName?: string;
   images: string[];
   description: string;
+  shortDescription?: string;
   specifications: Record<string, string>;
   boxContents?: string[];
   mrp: number;
@@ -199,6 +281,18 @@ export interface Product {
   isBestSeller?: boolean;
   isNewArrival?: boolean;
   isFestiveDeal?: boolean;
+  // Maha Sale Participation Fields
+  isMahaSaleActive?: boolean;
+  mahaSaleEndTime?: string;
+  mahaSaleDiscountPct?: number;
+  mahaSaleParticipationId?: string;
+  mahaSaleSlotId?: string;
+  mahaSaleDiscountType?: 'percentage' | 'fixed_value';
+  mahaSaleDiscountValue?: number;
+  // JE Assured Badge & 4-Pillar SOP Health Fields
+  isJeAssured?: boolean;
+  jeAssuredHealth?: import('./mahaSale').JeAssuredHealthMetrics;
+  badge?: string;
   status: 'published' | 'draft';
   rating: number;
   reviewsCount: number;
@@ -267,6 +361,8 @@ export interface CartItem {
 export type OrderStatus =
   | 'pending'
   | 'awaiting_whatsapp_confirmation'
+  | 'payment_verifying'
+  | 'in_progress'
   | 'confirmed'
   | 'payment_pending'
   | 'paid'
@@ -286,6 +382,7 @@ export type OrderStatus =
   | 'delivery_failed';
 
 export type PaymentMethod =
+  | 'je_cash'
   | 'cod'
   | 'upi_qr'
   | 'online_razorpay'
@@ -296,7 +393,7 @@ export type PaymentMethod =
   | 'stripe'
   | 'store_pickup_pay'
   | string;
-export type PaymentStatus = 'pending' | 'verified_paid' | 'failed' | 'refunded';
+export type PaymentStatus = 'pending' | 'verifying' | 'verified_paid' | 'paid' | 'failed' | 'refunded';
 export type DeliveryType = 'delivery' | 'store_pickup';
 
 export type ItemCancellationReason =
@@ -391,8 +488,16 @@ export interface HsnMasterRecord {
   isService?: boolean;
 }
 
+export interface CustomerDeliveryFeedback {
+  rating: number; // 1 to 5
+  tags: string[];
+  comment?: string;
+  submittedAt: string;
+}
+
 export interface Order {
   id: string; // e.g. JE-2026-000123
+  userId?: string; // Direct customer account user ID link
   invoiceNumber: string;
   createdAt: string;
   outletId?: string;
@@ -426,6 +531,8 @@ export interface Order {
   bulkDiscountAmount?: number;
   appliedBulkRuleId?: string;
   appliedBulkRuleName?: string;
+  prepaidDiscount?: number;
+  codExtraCharge?: number;
   deliveryFee: number;
   taxAmount: number;
   taxableAmount?: number;
@@ -443,10 +550,21 @@ export interface Order {
   deliverySlot?: string;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
+  isPartialPrepaidCod?: boolean;
+  partialPrepaidAmount?: number;
+  codBalanceOnDelivery?: number;
+  partialPrepaidMethod?: string;
+  hubNotifiedForDispatch?: boolean;
   paymentDetails?: {
     transactionId?: string;
+    utrNumber?: string;
+    screenshotUrl?: string;
     paidAt?: string;
+    submittedAt?: string;
     verifiedBy?: string;
+    verifiedAt?: string;
+    verificationNote?: string;
+    rejectionReason?: string;
   };
   orderStatus: OrderStatus;
   statusHistory: OrderStatusHistoryItem[];
@@ -463,15 +581,33 @@ export interface Order {
     steps?: string[];
     navigationUrl?: string;
   };
+  deliveryCode?: string;
   deliveryProof?: {
     note?: string;
     collectedAmount?: number;
+    paymentMethodCollected?: 'cash' | 'doorstep_upi_qr';
     receiverName?: string;
     timestamp?: string;
+    podImageUrl?: string;
+    deliveryPinEntered?: string;
+    verifiedOtp?: boolean;
+    customerFeedback?: CustomerDeliveryFeedback;
   };
   failureReason?: string;
   cancellationReason?: string;
   returnReason?: string;
+  returnDetails?: {
+    reason: string;
+    issueType?: string;
+    productId?: string;
+    productName?: string;
+    sku?: string;
+    serialNumber?: string;
+    unboxingVideoUrl?: string;
+    unboxingVideoName?: string;
+    proofImages?: string[];
+    requestedAt: string;
+  };
   qrCodeDataUrl?: string;
   whatsappMessageSent?: boolean;
   originalSubtotal?: number;
@@ -480,6 +616,8 @@ export interface Order {
   refundStatus?: 'none' | 'pending' | 'processed' | 'cod_adjusted';
   cancellationDetails?: OrderCancellationDetails;
   dispatchDetails?: ExpressShipmentDetails;
+  rtoRequest?: OrderRtoDetails;
+  shippingAddress?: Address;
 }
 
 export type DispatchFulfillmentType = 'rider' | 'express_partner';
@@ -496,6 +634,7 @@ export type ExpressCarrierName =
 export interface ExpressShipmentDetails {
   fulfillmentType: DispatchFulfillmentType;
   carrier: ExpressCarrierName;
+  outletId?: string;
   awbNumber?: string;
   trackingUrl?: string;
   assignedAt?: string;
@@ -520,6 +659,33 @@ export interface ExpressShipmentDetails {
   carrierSettledAt?: string;
   riderRemittanceId?: string;
   riderRemittedAt?: string;
+  rtoRequest?: OrderRtoDetails;
+}
+
+export interface OrderRtoDetails {
+  reason:
+    | 'customer_not_answering'
+    | 'address_not_found'
+    | 'wrong_address'
+    | 'wrong_order_placed'
+    | 'customer_refused'
+    | 'customer_not_accepting'
+    | 'customer_rescheduled'
+    | 'customer_rescheduled_cancel'
+    | 'other';
+  reasonText?: string;
+  notes?: string;
+  riderNotes?: string;
+  adminNotes?: string;
+  requestedAt: string;
+  requestedByRiderId?: string;
+  requestedByRiderName?: string;
+  riderId?: string;
+  riderName?: string;
+  status: 'pending' | 'pending_store_approval' | 'approved' | 'rejected';
+  reviewedBy?: string;
+  reviewNotes?: string;
+  reviewedAt?: string;
 }
 
 export interface RiderRemittanceSubmission {
@@ -603,6 +769,43 @@ export interface Coupon {
   timesUsed: number;
   description: string;
   isActive: boolean;
+  categoryRestriction?: ProductCategory | 'all';
+  applicableOutlets?: 'all' | string[];
+  createdAt?: string;
+}
+
+export interface ReferralProgramConfig {
+  isEnabled: boolean;
+  refereeRewardAmount: number; // e.g. 100 (instant coupon discount for new user)
+  referrerRewardAmount: number; // e.g. 100 (wallet cashback credit for referrer)
+  minOrderValueToQualify: number; // e.g. 499
+  referralCouponCodePrefix: string; // e.g. "REF"
+  referralCouponValidityDays: number; // e.g. 30
+  maxReferralsPerUser: number; // e.g. 25
+  programHeadline: string;
+  programDescription: string;
+  autoCreditWalletOnDelivery: boolean;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface ReferralRecord {
+  id: string;
+  referrerId?: string;
+  referrerName: string;
+  referrerPhone: string;
+  referrerCode: string;
+  refereeName: string;
+  refereePhone?: string;
+  refereeEmail?: string;
+  refereeCodeUsed: string;
+  rewardAmount: number;
+  status: 'pending_order' | 'awarded' | 'cancelled';
+  qualifyingOrderId?: string;
+  bonusCouponCode?: string;
+  redeemedAt: string;
+  awardedAt?: string;
+  notes?: string;
 }
 
 export interface ReferralReward {
@@ -669,6 +872,13 @@ export interface StoreSettings {
   deliveryFee: number;
   freeDeliveryThreshold: number;
   codEnabled: boolean;
+  codExtraChargeEnabled?: boolean;
+  codExtraChargeType?: 'fixed' | 'percentage';
+  codExtraChargeValue?: number;
+  prepaidDiscountEnabled?: boolean;
+  prepaidDiscountType?: 'percentage' | 'fixed';
+  prepaidDiscountValue?: number;
+  prepaidMaxDiscountAmount?: number;
   upiId: string;
   upiName: string;
   sameDayCutoffTime: string;
@@ -683,4 +893,130 @@ export interface StoreSettings {
   eWayBillThreshold?: number;
   shippingGstRate?: number;
   shippingSacCode?: string;
+  assuredBadgeName?: string;
+  assuredBadgeEnabled?: boolean;
+  assuredTagline?: string;
+  assuredBadgeColor?: string;
 }
+
+export type PromoBasisType =
+  | 'category'
+  | 'brand'
+  | 'shop'
+  | 'festival'
+  | 'day_slot'
+  | 'sale'
+  | 'month_end'
+  | 'month_start'
+  | 'custom';
+
+export type PromoScheduleType =
+  | 'always_active'
+  | 'date_range'
+  | 'recurring_slot'
+  | 'month_end'
+  | 'month_start';
+
+export type PromoHomepagePlacement = 'top' | 'middle' | 'bottom';
+export type PromoPlacementDisplayType = 'image_banner' | 'icon_text_card' | 'strip_banner';
+
+export interface PromotionalPage {
+  id: string;
+  title: string;
+  slug: string;
+  basisType: PromoBasisType;
+  basisValue?: string; // category id, brand name, outlet id, or festival name
+  description?: string;
+
+  // Timing & Schedule
+  isActive: boolean;
+  scheduleType: PromoScheduleType;
+  startDate?: string; // ISO
+  endDate?: string; // ISO
+  recurringDays?: number[]; // [0, 6] for weekends, [5] for Friday, etc.
+  slotStartTime?: string; // "16:00"
+  slotEndTime?: string; // "20:00"
+  monthEndDays?: number; // e.g. 3 (last 3 days of month)
+  monthStartDays?: number; // e.g. 5 (first 5 days of month)
+
+  // Visuals & Banner
+  bannerImageUrl: string;
+  bannerHeadline: string;
+  bannerSubtext: string;
+  bannerTheme?: string; // gradient or hex
+  badgeText?: string;
+  promotionalTickerText?: string;
+
+  // Homepage Linkage & Placement
+  homepagePlacements: PromoHomepagePlacement[];
+  placementDisplayType: PromoPlacementDisplayType;
+  placementIcon?: string;
+  placementText?: string;
+  priority: number;
+
+  // Product Selection & Visibility
+  productSelectionMode: 'manual' | 'filter_rule' | 'hybrid';
+  selectedProductIds: string[];
+  filterRule?: {
+    categoryIds?: string[];
+    brands?: string[];
+    maxPrice?: number;
+    minDiscountPercentage?: number;
+    onlyInStock?: boolean;
+    outletId?: string;
+  };
+  customDiscountPercentage?: number;
+  highlightTag?: string;
+
+  createdAt: string;
+  updatedAt: string;
+  updatedBy?: string;
+}
+
+// ============================================================================
+// CHATBOT AI & KNOWLEDGE BASE TRAINING TYPES
+// ============================================================================
+export type ChatbotKnowledgeCategory =
+  | 'orders'
+  | 'delivery'
+  | 'products'
+  | 'warranty_assured'
+  | 'outlets'
+  | 'payments'
+  | 'coupons_referrals'
+  | 'general';
+
+export interface ChatbotKnowledgeAction {
+  label: string;
+  actionType: 'order_tracking' | 'pincode_check' | 'whatsapp' | 'promotional_page';
+  actionTarget?: string; // e.g., promo slug, orderId, or phone
+  iconType: 'package' | 'truck' | 'whatsapp' | 'link';
+}
+
+export interface ChatbotKnowledgeItem {
+  id: string;
+  category: ChatbotKnowledgeCategory;
+  question: string;
+  keywords: string[];
+  answer: string;
+  suggestedAction?: ChatbotKnowledgeAction;
+  isActive: boolean;
+  priority: number; // 1 to 10 (higher matched first)
+  timesAnswered?: number;
+  lastUpdated: string;
+}
+
+export interface ChatbotAiSettings {
+  botName: string;
+  welcomeGreeting: string;
+  systemPersonaPrompt: string;
+  temperature: number; // 0.1 to 1.0
+  enableGeminiAi: boolean;
+  quickPromptPills: Array<{ id: string; label: string; query: string }>;
+  fallbackHelpline: string;
+  fallbackWhatsapp: string;
+  knowledgeBase: ChatbotKnowledgeItem[];
+}
+
+export * from './mahaSale';
+export * from './categoryFormat';

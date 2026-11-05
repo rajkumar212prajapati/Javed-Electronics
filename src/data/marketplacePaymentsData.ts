@@ -19,8 +19,8 @@ export const INITIAL_BRANDING_SETTINGS: BrandingSettings = {
   supportPhone: '+91 98390 12345',
   supportWhatsApp: '+91 98390 12345',
   supportEmail: 'support@javed-electronics.in',
-  businessAddress: 'Shop #14, Ground Floor, Janpath Market, Hazratganj, Lucknow, UP - 226001',
-  gstin: '09AAACJ1234F1Z5',
+  businessAddress: 'Shop 09, Sai Dham Apt, Vijaynagar, Nalasopara East, Palghar, Mumbai, Maharashtra - 401209',
+  gstin: '27AAACJ1234F1Z5',
   pan: 'AAACJ1234F',
   theme: {
     primaryColor: '#1d4ed8', // Blue-700
@@ -30,10 +30,10 @@ export const INITIAL_BRANDING_SETTINGS: BrandingSettings = {
     borderRadius: 'rounded-xl',
     mode: 'light',
   },
-  promotionalTicker: 'Festive Tech Dhamaka: Up to 60% OFF + 4-Hr Guaranteed Delivery in Lucknow',
+  promotionalTicker: 'Festive Tech Dhamaka: Up to 60% OFF + Express Same-Day Delivery in Nalasopara, Vasai & Virar (401209)',
   heroHeadline: 'Festive Electronics Mega Sale 2026',
-  heroSubheadline: 'Get genuine smartphones, audio gear, 4K Smart TVs and kitchen electronics delivered to your doorstep in 4 hours.',
-  footerAbout: 'Javed Electronics is Lucknow’s premier trusted multi-outlet retail electronics network. 100% genuine products with manufacturer brand warranty and verified local service support.',
+  heroSubheadline: 'Get genuine smartphones, audio gear, 4K Smart TVs and electronics delivered to your doorstep in Nalasopara, Vasai & Virar.',
+  footerAbout: 'Javed Electronics is Nalasopara & Mumbai MMR’s premier trusted electronics retailer with headquarters at Shop 09 Sai Dham Apt, Vijaynagar, Nalasopara East. 100% genuine products with manufacturer brand warranty and local service support.',
   socialLinks: {
     instagram: 'https://instagram.com/javed_electronics_lko',
     facebook: 'https://facebook.com/javed.electronics.lucknow',

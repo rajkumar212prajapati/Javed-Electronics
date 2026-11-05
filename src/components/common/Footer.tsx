@@ -52,7 +52,7 @@ export const Footer: React.FC = () => {
             <div className="min-w-0">
               <h4 className="text-white font-bold text-xs sm:text-sm">4-Hour Local Delivery</h4>
               <p className="text-[11px] sm:text-xs text-pink-100 mt-0.5">
-                Express same-day dispatch across Lucknow city
+                Express dispatch across Nalasopara, Vasai & Virar
               </p>
             </div>
           </div>
@@ -234,9 +234,9 @@ export const Footer: React.FC = () => {
         {/* Serviceable PIN codes info */}
         <div className="space-y-2.5 sm:space-y-3">
           <h4 className="text-white font-extrabold text-xs sm:text-sm tracking-wide">
-            Delivery Coverage (Lucknow)
+            Delivery Coverage (Nalasopara & Mumbai MMR)
           </h4>
-          <p className="text-xs text-pink-50">Same-day courier delivery across major areas:</p>
+          <p className="text-xs text-pink-50">Same-day courier delivery across 45 locations:</p>
           <div className="flex flex-wrap gap-1.5 text-[11px]">
             {settings.serviceablePincodes.slice(0, 8).map((pin) => (
               <span

@@ -2,14 +2,18 @@ import { Order } from '../types';
 import { formatINR } from './currency';
 
 /**
- * Format order into a clean, professional WhatsApp text message for local customer order confirmation
+ * Format order into a Priority Hub Dispatch Notification message after payment processing
  */
 export function generateWhatsAppOrderMessage(order: Order): string {
   const itemsList = order.items
-    .map((item) => `• ${item.productName}${item.variant ? ` (${item.variant})` : ''} × ${item.quantity} - ${formatINR(item.total)}`)
+    .map(
+      (item) =>
+        `• ${item.productName}${item.variant ? ` (${item.variant})` : ''} × ${item.quantity} - ${formatINR(item.total)}`
+    )
     .join('\n');
 
   const paymentLabels: Record<string, string> = {
+    je_cash: 'JE Cash (Store Credit)',
     upi_qr: 'Direct Dynamic UPI / QR Code',
     razorpay: 'Razorpay Gateway (Cards/Netbanking/UPI)',
     online_razorpay: 'Razorpay Gateway (Cards/Netbanking/UPI)',
@@ -17,34 +21,44 @@ export function generateWhatsAppOrderMessage(order: Order): string {
     paytm: 'Paytm Gateway (Wallet & Postpaid)',
     cashfree: 'Cashfree Payments (Auto-Collect)',
     stripe: 'Stripe International (Global Cards)',
-    cod: 'Cash on Delivery (COD)',
+    cod: order.isPartialPrepaidCod
+      ? 'Partial Prepaid + Cash on Delivery (Split COD)'
+      : 'Cash on Delivery (COD)',
     store_pickup_pay: 'Store Counter Pickup Pay',
   };
-  const paymentLabel = paymentLabels[order.paymentMethod] || order.paymentMethod.replace(/_/g, ' ');
+  const paymentLabel =
+    paymentLabels[order.paymentMethod] || order.paymentMethod.replace(/_/g, ' ');
 
-  const deliveryTypeLabel = order.deliveryType === 'store_pickup' 
-    ? '🏪 Store Pickup' 
-    : `🚚 Home Delivery (${order.customer.area}, PIN: ${order.customer.pincode})`;
+  const deliveryTypeLabel =
+    order.deliveryType === 'store_pickup'
+      ? '🏪 Store Pickup'
+      : `🚚 Express Home Delivery (${order.customer.area}, PIN: ${order.customer.pincode})`;
 
-  return `Hello Javed Electronics,
+  const paymentBreakdownBlock = order.isPartialPrepaidCod
+    ? `*Payment Method:* ${paymentLabel}\n*Partial Prepaid (Processed):* ${formatINR(order.partialPrepaidAmount || 0)} via ${(order.partialPrepaidMethod || 'UPI').toUpperCase()}\n*Upper / Balance Amount on Delivery (COD):* ${formatINR(order.codBalanceOnDelivery || 0)}`
+    : `*Payment Method:* ${paymentLabel} (${order.paymentStatus === 'verified_paid' ? 'Payment Processed & Verified' : 'Processed / Confirmed'})`;
 
-I would like to confirm my order.
+  return `⚡ *HUB FASTER DISPATCH NOTIFICATION (PAYMENT PROCESSED)*
+
+Hello Javed Electronics Dispatch Hub,
+My payment has been processed. Please prioritize packing and faster dispatch for my order:
 
 *Order ID:* ${order.id}
+*Invoice No:* ${order.invoiceNumber}
 *Customer:* ${order.customer.name} (${order.customer.phone})
 
-*Items:*
+*Items for Dispatch:*
 ${itemsList}
 
 *Subtotal:* ${formatINR(order.subtotal)}
 ${order.discountTotal > 0 ? `*Discount:* -${formatINR(order.discountTotal)}\n` : ''}*Delivery:* ${order.deliveryFee === 0 ? 'FREE' : formatINR(order.deliveryFee)}
-*Total Payable:* ${formatINR(order.finalTotal)}
+*Total Order Value:* ${formatINR(order.finalTotal)}
 
-*Payment Method:* ${paymentLabel} (${order.paymentStatus === 'verified_paid' ? 'Paid' : 'Pending'})
-*Delivery Preference:* ${deliveryTypeLabel}
-${order.customer.address ? `*Address:* ${order.customer.address}, ${order.customer.landmark ? `Near ${order.customer.landmark}, ` : ''}${order.customer.city} - ${order.customer.pincode}` : ''}
+${paymentBreakdownBlock}
+${order.paymentDetails?.transactionId ? `*Transaction Ref:* ${order.paymentDetails.transactionId}\n` : ''}*Delivery Preference:* ${deliveryTypeLabel}
+${order.customer.address ? `*Dispatch Address:* ${order.customer.address}, ${order.customer.landmark ? `Near ${order.customer.landmark}, ` : ''}${order.customer.city} - ${order.customer.pincode}` : ''}
 
-Please confirm product availability and expected delivery time. Thank you!`;
+Please prioritize hub dispatch and share live tracking details. Thank you!`;
 }
 
 /**
@@ -60,7 +74,11 @@ export function getWhatsAppClickToChatUrl(phoneInternational: string, message: s
 /**
  * Quick product inquiry message on WhatsApp
  */
-export function generateProductInquiryMessage(productName: string, price: number, sku: string): string {
+export function generateProductInquiryMessage(
+  productName: string,
+  price: number,
+  sku: string
+): string {
   return `Hello Javed Electronics,
 
 I am interested in buying:

@@ -1,0 +1,6 @@
+{
+  "summary": "Architectural implementation plan for Customer Signup with Email Verification OTP.\nDetails the multi-step signup experience (credential entry, 6-digit OTP verification with 60-second resend timer, simulation drawer/popup, and immediate auto-login).",
+  "updatedAt": "2026-11-05T17:53:41.968546315Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

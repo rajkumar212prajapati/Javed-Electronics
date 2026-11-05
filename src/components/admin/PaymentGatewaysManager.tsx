@@ -28,7 +28,9 @@ import {
   Lock,
   ChevronRight,
   Info,
+  Wallet,
 } from 'lucide-react';
+import { buildUpiPaymentUri, generateQrDataUrl } from '../../utils/qrcode';
 
 export const PaymentGatewaysManager: React.FC = () => {
   const {
@@ -38,6 +40,9 @@ export const PaymentGatewaysManager: React.FC = () => {
     resetPaymentGateways,
     paymentGatewayAuditLogs,
     currentUser,
+    settings,
+    updateUpiSettings,
+    updatePaymentChargeSettings,
   } = useStore();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -50,6 +55,71 @@ export const PaymentGatewaysManager: React.FC = () => {
   });
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [showLivePreview, setShowLivePreview] = useState(false);
+
+  const upiGateway = paymentGateways.find((g) => g.provider === 'upi_qr');
+  const [upiIdInput, setUpiIdInput] = useState(upiGateway?.upiVpa || settings.upiId || 'javed.electronics@okhdfcbank');
+  const [upiNameInput, setUpiNameInput] = useState(settings.upiName || 'Javed Electronics');
+  const [sampleQrDataUrl, setSampleQrDataUrl] = useState<string>('');
+
+  React.useEffect(() => {
+    const uri = buildUpiPaymentUri({
+      upiId: upiIdInput.trim() || settings.upiId,
+      payeeName: upiNameInput.trim() || 'Javed Electronics',
+      amount: 1499,
+      transactionRef: 'JE-SAMPLE',
+      note: 'Dynamic QR Preview',
+    });
+    generateQrDataUrl(uri, { width: 140 }).then(setSampleQrDataUrl);
+  }, [upiIdInput, upiNameInput, settings.upiId]);
+
+  const [codChargeEnabled, setCodChargeEnabled] = useState<boolean>(
+    settings.codExtraChargeEnabled !== false
+  );
+  const [codChargeType, setCodChargeType] = useState<'fixed' | 'percentage'>(
+    settings.codExtraChargeType || 'fixed'
+  );
+  const [codChargeValue, setCodChargeValue] = useState<number>(
+    settings.codExtraChargeValue ?? 49
+  );
+
+  const [prepaidDiscEnabled, setPrepaidDiscEnabled] = useState<boolean>(
+    settings.prepaidDiscountEnabled !== false
+  );
+  const [prepaidDiscType, setPrepaidDiscType] = useState<'percentage' | 'fixed'>(
+    settings.prepaidDiscountType || 'percentage'
+  );
+  const [prepaidDiscValue, setPrepaidDiscValue] = useState<number>(
+    settings.prepaidDiscountValue ?? 2
+  );
+  const [prepaidMaxCap, setPrepaidMaxCap] = useState<number>(
+    settings.prepaidMaxDiscountAmount ?? 500
+  );
+
+  const handleSaveQuickUpi = (e: React.FormEvent) => {
+    e.preventDefault();
+    const res = updateUpiSettings(upiIdInput, upiNameInput);
+    if (res.success) {
+      showToast(res.message, 'success');
+    } else {
+      showToast(res.message, 'error');
+    }
+  };
+
+  const handleSaveChargeAndDiscountRules = (e: React.FormEvent) => {
+    e.preventDefault();
+    const res = updatePaymentChargeSettings({
+      codExtraChargeEnabled: codChargeEnabled,
+      codExtraChargeType: codChargeType,
+      codExtraChargeValue: Number(codChargeValue) || 0,
+      prepaidDiscountEnabled: prepaidDiscEnabled,
+      prepaidDiscountType: prepaidDiscType,
+      prepaidDiscountValue: Number(prepaidDiscValue) || 0,
+      prepaidMaxDiscountAmount: Number(prepaidMaxCap) || 0,
+    });
+    if (res.success) {
+      showToast(res.message, 'success');
+    }
+  };
 
   const showToast = (text: string, type: 'success' | 'info' | 'error' = 'success') => {
     setToastMessage({ text, type });
@@ -141,6 +211,8 @@ export const PaymentGatewaysManager: React.FC = () => {
         return <Banknote className="w-5 h-5 text-amber-600" />;
       case 'store_pickup_pay':
         return <Store className="w-5 h-5 text-teal-600" />;
+      case 'je_cash':
+        return <Wallet className="w-5 h-5 text-emerald-600" />;
       default:
         return <CreditCard className="w-5 h-5 text-slate-600" />;
     }
@@ -148,6 +220,8 @@ export const PaymentGatewaysManager: React.FC = () => {
 
   const getProviderColorClass = (provider: PaymentGatewayProviderType) => {
     switch (provider) {
+      case 'je_cash':
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
       case 'upi_qr':
         return 'bg-purple-50 text-purple-700 border-purple-200';
       case 'razorpay':
@@ -250,6 +324,233 @@ export const PaymentGatewaysManager: React.FC = () => {
           </button>
         </div>
       )}
+
+      {/* Dynamic QR Payment Gateway — Receive UPI ID Configuration */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex-1 space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                <QrCode className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Dynamic QR Payment Gateway — Receive UPI ID
+                </h3>
+                <p className="text-xs text-slate-500">
+                  QR code automatically updates with exact cart/product value on checkout.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveQuickUpi} className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                  Merchant UPI ID (VPA) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={upiIdInput}
+                  onChange={(e) => setUpiIdInput(e.target.value)}
+                  placeholder="e.g. merchant@upi"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono focus:outline-none focus:ring-1 focus:ring-blue-600"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                  Receiver / Store Name
+                </label>
+                <input
+                  type="text"
+                  value={upiNameInput}
+                  onChange={(e) => setUpiNameInput(e.target.value)}
+                  placeholder="Javed Electronics"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                />
+              </div>
+
+              <div className="flex items-end">
+                <button
+                  type="submit"
+                  className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Save UPI ID</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Sample Dynamic QR Preview */}
+          <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 shrink-0">
+            {sampleQrDataUrl && (
+              <img
+                src={sampleQrDataUrl}
+                alt="Sample Dynamic QR"
+                className="w-20 h-20 rounded-lg bg-white border border-slate-200 p-1 shrink-0"
+              />
+            )}
+            <div className="text-xs space-y-0.5">
+              <span className="text-[10px] font-bold uppercase text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded inline-block">
+                Auto-Amount Active
+              </span>
+              <div className="font-mono font-bold text-slate-900 truncate max-w-[180px]">
+                {upiIdInput || settings.upiId}
+              </div>
+              <div className="text-[11px] text-slate-500">
+                Sample: ₹1,499.00
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Extra Charge on COD Order & Discount on Prepaid Order Setup */}
+      <form
+        onSubmit={handleSaveChargeAndDiscountRules}
+        className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-4"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">
+              COD Extra Charge & Prepaid Order Discount Setup
+            </h3>
+            <p className="text-xs text-slate-500">
+              Automatically apply an extra handling charge on Cash on Delivery (COD) orders and an instant discount on Prepaid orders at checkout.
+            </p>
+          </div>
+          <button
+            type="submit"
+            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+          >
+            <Check className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Save COD & Prepaid Rules</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* COD Extra Charge Box */}
+          <div className="p-3.5 rounded-xl bg-amber-50/60 border border-amber-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Banknote className="w-4 h-4 text-amber-700" />
+                <span className="text-xs font-bold text-slate-900">
+                  Extra Charge on COD Order
+                </span>
+              </div>
+              <label className="inline-flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-amber-900">
+                <input
+                  type="checkbox"
+                  checked={codChargeEnabled}
+                  onChange={(e) => setCodChargeEnabled(e.target.checked)}
+                  className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+                />
+                <span>{codChargeEnabled ? 'Enabled' : 'Disabled'}</span>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 text-xs">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                  Charge Type
+                </label>
+                <select
+                  value={codChargeType}
+                  disabled={!codChargeEnabled}
+                  onChange={(e) => setCodChargeType(e.target.value as 'fixed' | 'percentage')}
+                  className="w-full px-2.5 py-1.5 border border-amber-300 rounded-lg bg-white text-xs font-medium disabled:opacity-50"
+                >
+                  <option value="fixed">Fixed Amount (₹)</option>
+                  <option value="percentage">Percentage (%)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                  {codChargeType === 'fixed' ? 'Extra Charge (₹)' : 'Extra Charge (%)'}
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  disabled={!codChargeEnabled}
+                  value={codChargeValue}
+                  onChange={(e) => setCodChargeValue(Number(e.target.value))}
+                  className="w-full px-2.5 py-1.5 border border-amber-300 rounded-lg bg-white text-xs font-mono font-bold disabled:opacity-50"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Prepaid Order Discount Box */}
+          <div className="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-700" />
+                <span className="text-xs font-bold text-slate-900">
+                  Discount on Prepaid Order
+                </span>
+              </div>
+              <label className="inline-flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-emerald-900">
+                <input
+                  type="checkbox"
+                  checked={prepaidDiscEnabled}
+                  onChange={(e) => setPrepaidDiscEnabled(e.target.checked)}
+                  className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                />
+                <span>{prepaidDiscEnabled ? 'Enabled' : 'Disabled'}</span>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                  Discount Type
+                </label>
+                <select
+                  value={prepaidDiscType}
+                  disabled={!prepaidDiscEnabled}
+                  onChange={(e) => setPrepaidDiscType(e.target.value as 'percentage' | 'fixed')}
+                  className="w-full px-2 py-1.5 border border-emerald-300 rounded-lg bg-white text-xs font-medium disabled:opacity-50"
+                >
+                  <option value="percentage">Percentage (%)</option>
+                  <option value="fixed">Fixed (₹)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                  {prepaidDiscType === 'percentage' ? 'Discount (%)' : 'Discount (₹)'}
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  disabled={!prepaidDiscEnabled}
+                  value={prepaidDiscValue}
+                  onChange={(e) => setPrepaidDiscValue(Number(e.target.value))}
+                  className="w-full px-2.5 py-1.5 border border-emerald-300 rounded-lg bg-white text-xs font-mono font-bold disabled:opacity-50"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                  Max Cap (₹)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  disabled={!prepaidDiscEnabled || prepaidDiscType === 'fixed'}
+                  value={prepaidMaxCap}
+                  onChange={(e) => setPrepaidMaxCap(Number(e.target.value))}
+                  placeholder="0 = No cap"
+                  className="w-full px-2.5 py-1.5 border border-emerald-300 rounded-lg bg-white text-xs font-mono font-bold disabled:opacity-50"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </form>
 
       {/* KPI Cards Row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -561,10 +862,37 @@ export const PaymentGatewaysManager: React.FC = () => {
                     <span className="font-semibold text-slate-800">{gw.settlementCycle}</span>
                   </div>
 
-                  {gw.feeOrDiscountValue > 0 && (
-                    <div className="col-span-2 text-emerald-700 font-semibold flex items-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>{gw.feeOrDiscountValue}% Instant Shopper Savings Configured</span>
+                  {gw.feeOrDiscountValue > 0 && gw.feeOrDiscountType !== 'none' && (
+                    <div
+                      className={`col-span-2 font-semibold flex items-center gap-1 ${
+                        gw.feeOrDiscountType === 'surcharge' ||
+                        gw.feeOrDiscountType === 'percentage_surcharge'
+                          ? 'text-amber-700'
+                          : 'text-emerald-700'
+                      }`}
+                    >
+                      {gw.feeOrDiscountType === 'surcharge' ||
+                      gw.feeOrDiscountType === 'percentage_surcharge' ? (
+                        <>
+                          <Banknote className="w-3.5 h-3.5 text-amber-600" />
+                          <span>
+                            +{gw.feeOrDiscountType === 'percentage_surcharge'
+                              ? `${gw.feeOrDiscountValue}%`
+                              : formatINR(gw.feeOrDiscountValue)}{' '}
+                            Extra Charge Configured
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>
+                            {gw.feeOrDiscountType === 'fixed_discount'
+                              ? formatINR(gw.feeOrDiscountValue)
+                              : `${gw.feeOrDiscountValue}%`}{' '}
+                            Prepaid Order Discount Configured
+                          </span>
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -629,6 +957,10 @@ export const PaymentGatewaysManager: React.FC = () => {
               onSubmit={(e) => {
                 e.preventDefault();
                 updatePaymentGateway(editingGateway.id, editingGateway);
+                if (editingGateway.provider === 'upi_qr' && editingGateway.upiVpa) {
+                  setUpiIdInput(editingGateway.upiVpa);
+                  updateUpiSettings(editingGateway.upiVpa, upiNameInput);
+                }
                 setEditingGateway(null);
                 showToast(`Settings for ${editingGateway.shortName} updated successfully!`, 'success');
               }}
@@ -807,6 +1139,50 @@ export const PaymentGatewaysManager: React.FC = () => {
                     onChange={(e) => setEditingGateway({ ...editingGateway, badgeText: e.target.value.toUpperCase() })}
                     placeholder="e.g. 0% FEE / POPULAR"
                     className="w-full p-2 border border-slate-300 rounded-lg uppercase"
+                  />
+                </div>
+              </div>
+
+              {/* Extra Charge / Discount Rule per Gateway */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Fee or Discount Rule
+                  </label>
+                  <select
+                    value={editingGateway.feeOrDiscountType}
+                    onChange={(e) =>
+                      setEditingGateway({
+                        ...editingGateway,
+                        feeOrDiscountType: e.target.value as any,
+                      })
+                    }
+                    className="w-full p-2 border border-slate-300 rounded-lg bg-white font-semibold"
+                  >
+                    <option value="none">None (Standard)</option>
+                    <option value="percentage_discount">Prepaid Percentage Discount (%)</option>
+                    <option value="fixed_discount">Prepaid Fixed Discount (₹)</option>
+                    <option value="surcharge">COD / Extra Fixed Charge (₹)</option>
+                    <option value="percentage_surcharge">COD / Extra Percentage Charge (%)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Fee / Discount Value
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    disabled={editingGateway.feeOrDiscountType === 'none'}
+                    value={editingGateway.feeOrDiscountValue}
+                    onChange={(e) =>
+                      setEditingGateway({
+                        ...editingGateway,
+                        feeOrDiscountValue: Number(e.target.value),
+                      })
+                    }
+                    className="w-full p-2 border border-slate-300 rounded-lg font-mono bg-white disabled:opacity-50"
                   />
                 </div>
               </div>

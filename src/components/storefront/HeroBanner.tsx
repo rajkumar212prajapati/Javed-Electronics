@@ -246,7 +246,7 @@ export const HeroBanner: React.FC = () => {
                       {currentSlide.brand}
                     </span>
                     <span className="text-slate-300">|</span>
-                    <span className="text-[10px] sm:text-xs font-bold text-blue-700 bg-yellow-300/90 px-1.5 py-0.5 rounded">
+                    <span className="text-[10px] sm:text-xs font-semibold text-slate-600 bg-white/90 border border-slate-200 px-2 py-0.5 rounded-full">
                       Store Verified
                     </span>
                   </div>

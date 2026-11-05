@@ -3,25 +3,87 @@ export interface Coordinates {
   lng: number;
 }
 
-// Store Coordinates for Lucknow Outlets
+// Store Coordinates for Javed Electronics Flagship (Shop 09 Sai Dham Apt Vijaynagar Nalasopara East 401209)
 export const DEFAULT_STORE_COORDINATES: Coordinates = {
-  lat: 26.8467,
-  lng: 80.9462, // Hazratganj Flagship Outlet
+  lat: 19.4180,
+  lng: 72.8290, // Shop 09 Sai Dham Apt, Vijaynagar, Nalasopara East 401209, Palghar Mumbai Maharashtra
 };
 
-// Popular Lucknow Landmarks with exact coordinates for easy customer pin selection
-export const LUCKNOW_POPULAR_LANDMARKS = [
-  { name: 'Hazratganj Main Market', lat: 26.8467, lng: 80.9462, pincode: '226001', area: 'Hazratganj' },
-  { name: 'Patrakarpuram, Gomti Nagar', lat: 26.8524, lng: 80.9984, pincode: '226010', area: 'Gomti Nagar' },
-  { name: 'Bhootnath Market, Indira Nagar', lat: 26.8742, lng: 80.9856, pincode: '226016', area: 'Indira Nagar' },
-  { name: 'Alambagh Bus Station', lat: 26.8142, lng: 80.9023, pincode: '226005', area: 'Alambagh' },
-  { name: 'Mahanagar Gol Chauraha', lat: 26.8721, lng: 80.9528, pincode: '226006', area: 'Mahanagar' },
-  { name: 'Aminabad Market', lat: 26.8443, lng: 80.9261, pincode: '226018', area: 'Aminabad' },
-  { name: 'Chowk Clock Tower', lat: 26.8687, lng: 80.9085, pincode: '226003', area: 'Chowk' },
-  { name: 'Lulu Mall Lucknow, Amar Shaheed Path', lat: 26.7725, lng: 80.9998, pincode: '226030', area: 'Sushant Golf City' },
-  { name: 'Charbagh Railway Station', lat: 26.8315, lng: 80.9221, pincode: '226004', area: 'Charbagh' },
-  { name: 'Jankipuram Extension', lat: 26.9142, lng: 80.9482, pincode: '226021', area: 'Jankipuram' },
+// All 45 Serviceable Delivery Areas across Nalasopara, Vasai, Virar, Palghar & Mumbai MMR
+export const POPULAR_DELIVERY_LANDMARKS = [
+  { id: 0, name: 'Shop 09 Sai Dham Apt, Vijaynagar', area: 'Nalasopara East', pincode: '401209', lat: 19.4180, lng: 72.8290, isStore: true },
+  { id: 1, name: 'Nalasopara East', area: 'Nalasopara East', pincode: '401209', lat: 19.4180, lng: 72.8290 },
+  { id: 2, name: 'Nalasopara West', area: 'Nalasopara West', pincode: '401203', lat: 19.4165, lng: 72.8050 },
+  { id: 3, name: 'Tulinj', area: 'Tulinj, Nalasopara East', pincode: '401209', lat: 19.4210, lng: 72.8235 },
+  { id: 4, name: 'Achole Road', area: 'Achole Road, Nalasopara East', pincode: '401209', lat: 19.4250, lng: 72.8260 },
+  { id: 5, name: 'Moregaon', area: 'Moregaon, Nalasopara East', pincode: '401209', lat: 19.4120, lng: 72.8310 },
+  { id: 6, name: 'Alkapuri', area: 'Alkapuri, Nalasopara East', pincode: '401209', lat: 19.4150, lng: 72.8270 },
+  { id: 7, name: 'Nilemore', area: 'Nilemore, Nalasopara West', pincode: '401203', lat: 19.4230, lng: 72.8020 },
+  { id: 8, name: 'Agarwal Nagar', area: 'Agarwal Nagar, Nalasopara East', pincode: '401209', lat: 19.4190, lng: 72.8340 },
+  { id: 9, name: 'Pragati Nagar', area: 'Pragati Nagar, Nalasopara East', pincode: '401209', lat: 19.4225, lng: 72.8295 },
+  { id: 10, name: 'Sopara Gaon', area: 'Sopara Gaon', pincode: '401304', lat: 19.4080, lng: 72.7980 },
+  { id: 11, name: 'Pelhar', area: 'Pelhar, Vasai East', pincode: '401208', lat: 19.4150, lng: 72.8650 },
+  { id: 12, name: 'Vasai West', area: 'Vasai West', pincode: '401201', lat: 19.3680, lng: 72.8120 },
+  { id: 13, name: 'Vasai Road', area: 'Vasai Road', pincode: '401202', lat: 19.3820, lng: 72.8320 },
+  { id: 14, name: 'Vasai East', area: 'Vasai East', pincode: '401208', lat: 19.3850, lng: 72.8550 },
+  { id: 15, name: 'Naigaon', area: 'Naigaon', pincode: '401207', lat: 19.3510, lng: 72.8460 },
+  { id: 16, name: 'Papdi', area: 'Papdi, Vasai', pincode: '401207', lat: 19.3620, lng: 72.8040 },
+  { id: 17, name: 'Manickpur', area: 'Manickpur, Vasai', pincode: '401202', lat: 19.3780, lng: 72.8220 },
+  { id: 18, name: 'Ambadi Road', area: 'Ambadi Road, Vasai', pincode: '401202', lat: 19.3795, lng: 72.8275 },
+  { id: 19, name: 'Bhabola Naka', area: 'Bhabola Naka, Vasai', pincode: '401202', lat: 19.3720, lng: 72.8190 },
+  { id: 20, name: 'Gokhivare', area: 'Gokhivare, Vasai East', pincode: '401208', lat: 19.3980, lng: 72.8620 },
+  { id: 21, name: 'Valiv', area: 'Valiv, Vasai East', pincode: '401208', lat: 19.3920, lng: 72.8680 },
+  { id: 22, name: 'Sativali', area: 'Sativali, Vasai East', pincode: '401208', lat: 19.4050, lng: 72.8720 },
+  { id: 23, name: 'Kaman', area: 'Kaman, Vasai East', pincode: '401208', lat: 19.3620, lng: 72.9050 },
+  { id: 24, name: 'Juchandra', area: 'Juchandra, Naigaon East', pincode: '401208', lat: 19.3540, lng: 72.8640 },
+  { id: 25, name: 'Bhuigaon', area: 'Bhuigaon, Vasai West', pincode: '401201', lat: 19.3580, lng: 72.7840 },
+  { id: 26, name: 'Giriz', area: 'Giriz, Vasai West', pincode: '401201', lat: 19.3650, lng: 72.7950 },
+  { id: 27, name: 'Nirmal', area: 'Nirmal, Nalasopara West', pincode: '401304', lat: 19.4350, lng: 72.7820 },
+  { id: 28, name: 'Rajodi', area: 'Rajodi Beach Road', pincode: '401304', lat: 19.4480, lng: 72.7720 },
+  { id: 29, name: 'Virar West', area: 'Virar West', pincode: '401303', lat: 19.4680, lng: 72.8010 },
+  { id: 30, name: 'Virar East', area: 'Virar East', pincode: '401305', lat: 19.4620, lng: 72.8250 },
+  { id: 31, name: 'Bolinj', area: 'Bolinj, Virar West', pincode: '401303', lat: 19.4750, lng: 72.8090 },
+  { id: 32, name: 'Chandansar', area: 'Chandansar, Virar East', pincode: '401303', lat: 19.4820, lng: 72.8280 },
+  { id: 33, name: 'Vartak Ward', area: 'Vartak Ward, Virar West', pincode: '401303', lat: 19.4650, lng: 72.8120 },
+  { id: 34, name: 'Global City', area: 'Global City, Virar West', pincode: '401303', lat: 19.4720, lng: 72.8050 },
+  { id: 36, name: 'Agashi', area: 'Agashi, Virar', pincode: '401301', lat: 19.4850, lng: 72.7860 },
+  { id: 37, name: 'Arnala', area: 'Arnala, Virar West', pincode: '401302', lat: 19.4520, lng: 72.7620 },
+  { id: 38, name: 'Chikhal Dongre', area: 'Chikhal Dongre, Agashi', pincode: '401301', lat: 19.4920, lng: 72.7780 },
+  { id: 39, name: 'Kophrad', area: 'Kophrad, Virar West', pincode: '401301', lat: 19.4780, lng: 72.7880 },
+  { id: 40, name: 'Vatar', area: 'Vatar, Agashi Road', pincode: '401301', lat: 19.4880, lng: 72.7710 },
+  { id: 41, name: 'Mandvi', area: 'Mandvi, Virar East', pincode: '401303', lat: 19.4580, lng: 72.9150 },
+  { id: 42, name: 'Parol', area: 'Parol, Virar East', pincode: '401303', lat: 19.4420, lng: 72.9450 },
+  { id: 43, name: 'Bhatane', area: 'Bhatane, Virar', pincode: '401303', lat: 19.4650, lng: 72.9750 },
+  { id: 44, name: 'Kalamb', area: 'Kalamb Beach Road', pincode: '401304', lat: 19.4210, lng: 72.7740 },
+  { id: 45, name: 'Virar East extended areas', area: 'Virar East Extended', pincode: '401309', lat: 19.4710, lng: 72.8420 },
 ];
+
+// Backward-compatible alias
+export const LUCKNOW_POPULAR_LANDMARKS = POPULAR_DELIVERY_LANDMARKS;
+
+/**
+ * Checks if coordinates are missing, invalid, or pointing to legacy Lucknow seed coordinates
+ */
+export function isLegacyOrInvalidCoord(coords?: Coordinates | null): boolean {
+  if (!coords || typeof coords.lat !== 'number' || typeof coords.lng !== 'number') return true;
+  if (Number.isNaN(coords.lat) || Number.isNaN(coords.lng)) return true;
+  // Legacy Lucknow coordinates are around lat 26.8, lng 80.9
+  if (coords.lat > 23 && coords.lat < 28 && coords.lng > 78 && coords.lng < 83) return true;
+  return false;
+}
+
+/**
+ * Ensures coordinates are valid and within the active store region (falls back to Nalasopara East)
+ */
+export function sanitizeStoreCoordinates(
+  coords?: Coordinates | null,
+  fallback: Coordinates = DEFAULT_STORE_COORDINATES
+): Coordinates {
+  if (isLegacyOrInvalidCoord(coords)) {
+    return { ...fallback };
+  }
+  return { lat: coords!.lat, lng: coords!.lng };
+}
 
 /**
  * Calculates Great-Circle distance between two coordinates using the Haversine formula (km)
@@ -48,6 +110,42 @@ export function calculateHaversineDistanceKm(
 }
 
 /**
+ * Finds the nearest serviceable landmark/locality to a given coordinate
+ */
+export function findNearestDeliveryLandmark(coords: Coordinates): {
+  landmark: (typeof POPULAR_DELIVERY_LANDMARKS)[0];
+  distanceKm: number;
+  area: string;
+  pincode: string;
+  suggestedAddress: string;
+} {
+  let best = POPULAR_DELIVERY_LANDMARKS[1] || POPULAR_DELIVERY_LANDMARKS[0];
+  let minDistance = Infinity;
+
+  for (const item of POPULAR_DELIVERY_LANDMARKS) {
+    const d = calculateHaversineDistanceKm(coords, { lat: item.lat, lng: item.lng });
+    if (d < minDistance) {
+      minDistance = d;
+      best = item;
+    }
+  }
+
+  const distRounded = Math.round(minDistance * 10) / 10;
+  const suggestedAddress =
+    distRounded <= 0.6
+      ? `Near ${best.name}, ${best.area}`
+      : `${best.area} (${distRounded} km from ${best.name})`;
+
+  return {
+    landmark: best,
+    distanceKm: distRounded,
+    area: best.area,
+    pincode: best.pincode,
+    suggestedAddress,
+  };
+}
+
+/**
  * Estimates delivery time based on distance, packing/prep time, and average city speed (25 km/h)
  */
 export function estimateDeliveryMinutes(
@@ -71,17 +169,68 @@ export function estimateDeliveryMinutes(
 
 /**
  * Interpolates a coordinate between origin and destination by progress ratio (0.0 to 1.0)
+ * If a multi-point route path is provided, interpolates smoothly along the polyline vertices!
  */
 export function interpolateCoordinates(
   start: Coordinates,
   end: Coordinates,
-  progress: number
+  progress: number,
+  routePath?: Coordinates[]
 ): Coordinates {
   const clampedProgress = Math.max(0, Math.min(1, progress));
+
+  if (routePath && routePath.length >= 2) {
+    if (clampedProgress <= 0) return routePath[0];
+    if (clampedProgress >= 1) return routePath[routePath.length - 1];
+    const exactIdx = clampedProgress * (routePath.length - 1);
+    const lowerIdx = Math.floor(exactIdx);
+    const upperIdx = Math.min(routePath.length - 1, lowerIdx + 1);
+    const segmentFraction = exactIdx - lowerIdx;
+    const p1 = routePath[lowerIdx];
+    const p2 = routePath[upperIdx];
+    return {
+      lat: p1.lat + (p2.lat - p1.lat) * segmentFraction,
+      lng: p1.lng + (p2.lng - p1.lng) * segmentFraction,
+    };
+  }
+
   return {
     lat: start.lat + (end.lat - start.lat) * clampedProgress,
     lng: start.lng + (end.lng - start.lng) * clampedProgress,
   };
+}
+
+/**
+ * Generates realistic intermediate arterial road waypoints between store and customer
+ * when live Directions/Routes API polylines are still loading or unavailable.
+ */
+export function generateArterialRouteWaypoints(
+  origin: Coordinates,
+  destination: Coordinates
+): Coordinates[] {
+  const dLat = destination.lat - origin.lat;
+  const dLng = destination.lng - origin.lng;
+  const dist = calculateHaversineDistanceKm(origin, destination);
+
+  if (dist < 0.3) {
+    return [origin, destination];
+  }
+
+  // Create realistic road-grid dogleg waypoints simulating local arterial turns
+  const wp1: Coordinates = {
+    lat: origin.lat + dLat * 0.25 + dLng * 0.06,
+    lng: origin.lng + dLng * 0.18 - dLat * 0.04,
+  };
+  const wp2: Coordinates = {
+    lat: origin.lat + dLat * 0.55 - dLng * 0.04,
+    lng: origin.lng + dLng * 0.52 + dLat * 0.05,
+  };
+  const wp3: Coordinates = {
+    lat: origin.lat + dLat * 0.82 + dLng * 0.03,
+    lng: origin.lng + dLng * 0.85 - dLat * 0.02,
+  };
+
+  return [origin, wp1, wp2, wp3, destination];
 }
 
 /**
@@ -96,34 +245,41 @@ export function getGoogleMapsNavigationUrl(
 }
 
 /**
- * Generates turn-by-turn simulated routing steps for rider navigation
+ * Generates turn-by-turn routing steps for rider navigation in Nalasopara, Vasai & Virar
  */
 export function generateSuggestedRouteSteps(
   originName: string,
   destinationArea: string,
   distanceKm: number
 ): string[] {
+  const cleanOrigin = originName.includes('Hazratganj')
+    ? 'Shop 09 Sai Dham Apt, Vijaynagar (Nalasopara East)'
+    : originName;
+  const cleanDest = destinationArea.includes('Hazratganj') || destinationArea.includes('Gomti')
+    ? 'Nalasopara East'
+    : destinationArea;
+
   if (distanceKm <= 2) {
     return [
-      `Depart from ${originName} and proceed straight on main avenue (400m)`,
-      `Turn towards ${destinationArea} service lane`,
-      `Arrive at customer delivery pin (Destination on right)`,
+      `Depart from ${cleanOrigin} onto Vijaynagar Main Road (350m)`,
+      `Continue via Tulinj / Achole arterial road towards ${cleanDest}`,
+      `Turn into customer society lane and arrive at pinned doorstep`,
     ];
   } else if (distanceKm <= 6) {
     return [
-      `Depart from ${originName} via commercial arterial link (800m)`,
-      `Take flyover / bypass heading towards ${destinationArea}`,
-      `Exit onto ${destinationArea} sector main road (2.1 km)`,
-      `Turn into customer colony / landmark gate`,
-      `Arrive at customer delivery doorstep`,
+      `Depart from ${cleanOrigin} via Vijaynagar - Achole Link Road (750m)`,
+      `Take the flyover / Vasai-Virar Link Road heading towards ${cleanDest}`,
+      `Proceed for ${(distanceKm * 0.55).toFixed(1)} km along main sector road`,
+      `Turn at ${cleanDest} landmark junction into residential lane`,
+      `Arrive at customer delivery pin (Verify 4-digit OTP & POD)`,
     ];
   } else {
     return [
-      `Depart from ${originName} towards Ring Road / Amar Shaheed Path expressway (1.5 km)`,
-      `Merge onto expressway and proceed for ${(distanceKm * 0.6).toFixed(1)} km`,
-      `Take exit towards ${destinationArea} junction`,
-      `Continue through sector market road to customer colony`,
-      `Arrive at destination coordinates`,
+      `Depart from ${cleanOrigin} towards Pelhar / NH-48 Western Express Highway link (1.4 km)`,
+      `Merge onto Vasai-Virar arterial corridor for ${(distanceKm * 0.6).toFixed(1)} km`,
+      `Take exit towards ${cleanDest} main road`,
+      `Continue past local station/market chowk towards customer building`,
+      `Arrive at customer pinned coordinates (${distanceKm} km total)`,
     ];
   }
 }

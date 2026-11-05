@@ -23,25 +23,25 @@ import {
   ChevronDown,
 } from 'lucide-react';
 
+import { INITIAL_CHATBOT_AI_SETTINGS } from '../../data/chatbotKnowledgeData';
+import { safeLocalStorageSetItem } from '../../utils/storage';
+
+interface ChatMessageAction {
+  label: string;
+  actionType?: 'order_tracking' | 'pincode_check' | 'whatsapp' | 'promotional_page';
+  orderId?: string;
+  actionTarget?: string;
+  url?: string;
+  iconType?: 'package' | 'truck' | 'whatsapp' | 'link';
+}
+
 interface ChatMessage {
   id: string;
   sender: 'user' | 'bot';
   text: string;
   timestamp: string;
-  actionButtons?: Array<{
-    label: string;
-    action?: () => void;
-    url?: string;
-    icon?: React.ReactNode;
-  }>;
+  actionButtons?: ChatMessageAction[];
 }
-
-const INITIAL_GREETING: ChatMessage = {
-  id: 'msg_welcome',
-  sender: 'bot',
-  text: "Hello! 👋 I'm **Javed**, your digital assistant for Javed Electronics Lucknow.\n\nHow can I help you today? You can ask me about **4-hour local delivery**, **tracking your order**, **bulk volume discounts**, **Lucknow branch timings**, or **B2B GST invoices**.",
-  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-};
 
 export const CustomerSupportChatbot: React.FC = () => {
   const {
@@ -50,17 +50,71 @@ export const CustomerSupportChatbot: React.FC = () => {
     cart,
     bulkDiscountRules,
     outlets,
+    activeOutlet,
     setActiveModal,
     setSelectedOrderForModal,
     brandingSettings,
+    chatbotAiSettings,
+    updateKnowledgeItem,
+    openPromotionalPageBySlug,
   } = useStore();
 
   const [isOpen, setIsOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
+
+  const defaultGreetingText = chatbotAiSettings?.welcomeGreeting || INITIAL_CHATBOT_AI_SETTINGS.welcomeGreeting;
+
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    const saved = localStorage.getItem('je_support_chat_history');
-    return saved ? JSON.parse(saved) : [INITIAL_GREETING];
+    try {
+      const saved = localStorage.getItem('je_support_chat_history');
+      if (!saved) {
+        return [
+          {
+            id: 'msg_welcome',
+            sender: 'bot',
+            text: INITIAL_CHATBOT_AI_SETTINGS.welcomeGreeting,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ];
+      }
+      const parsed = JSON.parse(saved);
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        return [
+          {
+            id: 'msg_welcome',
+            sender: 'bot',
+            text: INITIAL_CHATBOT_AI_SETTINGS.welcomeGreeting,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ];
+      }
+      return parsed.map((m: any) => ({
+        id: String(m.id || Date.now()),
+        sender: m.sender === 'user' ? 'user' : 'bot',
+        text: typeof m.text === 'string' ? m.text : '',
+        timestamp: typeof m.timestamp === 'string' ? m.timestamp : '',
+        actionButtons: Array.isArray(m.actionButtons)
+          ? m.actionButtons.map((b: any) => ({
+              label: typeof b.label === 'string' ? b.label : 'Action',
+              actionType: b.actionType,
+              orderId: b.orderId,
+              actionTarget: b.actionTarget,
+              url: typeof b.url === 'string' ? b.url : undefined,
+              iconType: typeof b.iconType === 'string' ? b.iconType : undefined,
+            }))
+          : undefined,
+      }));
+    } catch {
+      return [
+        {
+          id: 'msg_welcome',
+          sender: 'bot',
+          text: INITIAL_CHATBOT_AI_SETTINGS.welcomeGreeting,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ];
+    }
   });
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -85,9 +139,13 @@ export const CustomerSupportChatbot: React.FC = () => {
     }
   }, [messages, isOpen, isLoading]);
 
-  // Persist chat history to localStorage
+  // Persist chat history to localStorage safely
   useEffect(() => {
-    localStorage.setItem('je_support_chat_history', JSON.stringify(messages));
+    try {
+      safeLocalStorageSetItem('je_support_chat_history', JSON.stringify(messages.slice(-20)));
+    } catch {
+      // ignore
+    }
   }, [messages]);
 
   // Focus input when modal opens
@@ -99,14 +157,19 @@ export const CustomerSupportChatbot: React.FC = () => {
     }
   }, [isOpen]);
 
-  // Quick Action Prompts
-  const quickPrompts = [
-    { label: '📦 Track an order', query: 'Can you help me track my recent order?' },
-    { label: '⚡ 4-Hour delivery', query: 'How does 4-hour express delivery in Lucknow work?' },
-    { label: '🏪 Branch locations', query: 'Where are your store branches in Lucknow and what are the timings?' },
-    { label: '🏷️ Bulk discounts', query: 'What bulk order volume discount rules do you offer?' },
-    { label: '🧾 B2B GST tax credit', query: 'How do I get a B2B GST invoice with Input Tax Credit?' },
+  // Quick Action Prompts (Admin configurable)
+  const defaultQuickPrompts = [
+    { id: 'qp1', label: '📦 Track an order', query: 'Can you help me track my recent order?' },
+    { id: 'qp2', label: '⚡ Fast Delivery', query: 'How does fast express delivery work and what are the delivery charges?' },
+    { id: 'qp3', label: '🛡️ JE Assured Guarantee', query: 'What is JE Assured quality guarantee and brand warranty?' },
+    { id: 'qp4', label: '🏪 Branch Locations', query: 'Where are your store branches located and what are opening hours?' },
+    { id: 'qp5', label: '🎁 Refer & Coupons', query: 'How does Refer & Earn work and what coupon codes can I use?' },
   ];
+
+  const activeQuickPrompts =
+    chatbotAiSettings?.quickPromptPills && chatbotAiSettings.quickPromptPills.length > 0
+      ? chatbotAiSettings.quickPromptPills
+      : defaultQuickPrompts;
 
   const handleSendMessage = async (customText?: string) => {
     const textToSend = (customText || inputText).trim();
@@ -124,20 +187,122 @@ export const CustomerSupportChatbot: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Build history for API
+      const lowerText = textToSend.toLowerCase();
+
+      // 1. Direct Order Tracking Intelligence
+      // Check if user entered an Order ID pattern like JE-2026-XXXXXX or asked for their order
+      const orderIdMatch = textToSend.match(/JE-\d{4}-\d{6}/i);
+      if (orderIdMatch) {
+        const targetId = orderIdMatch[0].toUpperCase();
+        const matchedOrder = orders.find((o) => o.id.toUpperCase() === targetId);
+        if (matchedOrder) {
+          const statusLabel = matchedOrder.orderStatus.replace(/_/g, ' ').toUpperCase();
+          const itemCount = matchedOrder.items.reduce((s, i) => s + i.quantity, 0);
+          const reply = `I found your Order **#${matchedOrder.id}**!\n\n• **Status:** ${statusLabel}\n• **Items:** ${itemCount} items (${matchedOrder.items.map((i) => i.productName).slice(0, 2).join(', ')}${itemCount > 2 ? '...' : ''})\n• **Order Total:** ${formatINR(matchedOrder.finalTotal)}\n• **Delivery Slot:** ${matchedOrder.deliverySlot || 'Express Hyperlocal'}\n${matchedOrder.deliveryStaffName ? `• **Delivery Rider:** ${matchedOrder.deliveryStaffName}` : ''}\n\nClick below to view live road tracking or download your tax invoice.`;
+
+          const botMsg: ChatMessage = {
+            id: `msg_b_${Date.now()}`,
+            sender: 'bot',
+            text: reply,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            actionButtons: [
+              {
+                label: `Track Order #${matchedOrder.id}`,
+                actionType: 'order_tracking',
+                orderId: matchedOrder.id,
+                iconType: 'package',
+              },
+            ],
+          };
+          setMessages((prev) => [...prev, botMsg]);
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // 2. High-Accuracy Match against Admin Trained Q&A Knowledge Base
+      const activeKb = chatbotAiSettings?.knowledgeBase?.filter((k) => k.isActive) || [];
+      let bestKbMatch: { item: any; score: number } | null = null;
+      const cleanLowerQ = lowerText.trim();
+
+      for (const kb of activeKb) {
+        let score = 0;
+        const qLower = kb.question.toLowerCase().trim();
+
+        if (cleanLowerQ === qLower) {
+          score += 100;
+        } else if (cleanLowerQ.includes(qLower) || qLower.includes(cleanLowerQ)) {
+          score += 45;
+        }
+
+        if (Array.isArray(kb.keywords)) {
+          for (const kw of kb.keywords) {
+            const kwClean = kw.toLowerCase().trim();
+            if (kwClean && cleanLowerQ.includes(kwClean)) {
+              score += 25;
+            }
+          }
+        }
+
+        score += (kb.priority || 1) * 2;
+
+        if (score >= 25 && (!bestKbMatch || score > bestKbMatch.score)) {
+          bestKbMatch = { item: kb, score };
+        }
+      }
+
+      // If high-confidence match (score >= 45) or Gemini is disabled, answer immediately from trained knowledge base!
+      if (bestKbMatch && (bestKbMatch.score >= 45 || !chatbotAiSettings?.enableGeminiAi)) {
+        updateKnowledgeItem(bestKbMatch.item.id, {
+          timesAnswered: (bestKbMatch.item.timesAnswered || 0) + 1,
+        });
+
+        const actionButtons: ChatMessageAction[] = [];
+        if (bestKbMatch.item.suggestedAction) {
+          actionButtons.push({
+            label: bestKbMatch.item.suggestedAction.label,
+            actionType: bestKbMatch.item.suggestedAction.actionType,
+            actionTarget: bestKbMatch.item.suggestedAction.actionTarget,
+            iconType: bestKbMatch.item.suggestedAction.iconType || 'link',
+          });
+        }
+
+        const botMsg: ChatMessage = {
+          id: `msg_b_${Date.now()}`,
+          sender: 'bot',
+          text: bestKbMatch.item.answer,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          actionButtons: actionButtons.length > 0 ? actionButtons : undefined,
+        };
+
+        setMessages((prev) => [...prev, botMsg]);
+        setIsLoading(false);
+        return;
+      }
+
+      // 3. Fallback or Generative Query via server /api/chat with timeout
       const history = messages.slice(-6).map((m) => ({
         role: m.sender === 'user' ? 'user' : 'model',
         text: m.text,
       }));
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           message: textToSend,
           history,
+          knowledgeBase: activeKb,
+          customSystemInstruction: chatbotAiSettings?.systemPersonaPrompt,
+          temperature: chatbotAiSettings?.temperature || 0.5,
         }),
       });
+
+      clearTimeout(timeoutId);
 
       if (!res.ok) {
         throw new Error(`Server returned ${res.status}`);
@@ -147,47 +312,46 @@ export const CustomerSupportChatbot: React.FC = () => {
       const botReply = data.reply || "I'm here to help! Could you please clarify your request?";
 
       // Determine contextual action buttons based on query / answer
-      const actionButtons: ChatMessage['actionButtons'] = [];
-      const lowerText = textToSend.toLowerCase();
+      const actionButtons: ChatMessageAction[] = [];
 
-      // If user is asking about order tracking and has recent orders
-      if (
-        (lowerText.includes('order') || lowerText.includes('track') || lowerText.includes('status')) &&
-        orders.length > 0
-      ) {
-        const latestOrder = orders[0];
+      if (data.suggestedAction) {
         actionButtons.push({
-          label: `Track Order #${latestOrder.id}`,
-          icon: <Package className="w-3.5 h-3.5" />,
-          action: () => {
-            setSelectedOrderForModal(latestOrder);
-            setActiveModal('order_tracking');
-          },
+          label: data.suggestedAction.label,
+          actionType: data.suggestedAction.actionType,
+          actionTarget: data.suggestedAction.actionTarget,
+          iconType: data.suggestedAction.iconType || 'link',
         });
-      }
+      } else {
+        if ((lowerText.includes('order') || lowerText.includes('track') || lowerText.includes('status')) && orders.length > 0) {
+          const latestOrder = orders[0];
+          actionButtons.push({
+            label: `Track Order #${latestOrder.id}`,
+            iconType: 'package',
+            actionType: 'order_tracking',
+            orderId: latestOrder.id,
+          });
+        }
 
-      // If user asks about delivery / pincode
-      if (lowerText.includes('delivery') || lowerText.includes('pincode') || lowerText.includes('area')) {
-        actionButtons.push({
-          label: 'Check Pincode Serviceability',
-          icon: <Truck className="w-3.5 h-3.5" />,
-          action: () => {
-            setActiveModal('pincode_check');
-          },
-        });
-      }
+        if (lowerText.includes('delivery') || lowerText.includes('pincode') || lowerText.includes('area')) {
+          actionButtons.push({
+            label: 'Check Pincode Serviceability',
+            iconType: 'truck',
+            actionType: 'pincode_check',
+          });
+        }
 
-      // WhatsApp escalation button always available if human help is needed
-      if (lowerText.includes('human') || lowerText.includes('staff') || lowerText.includes('manager') || lowerText.includes('speak') || lowerText.includes('call')) {
-        const waUrl = getWhatsAppClickToChatUrl(
-          brandingSettings.supportWhatsApp || settings.whatsappNumber,
-          `Hello Javed Electronics support! I am chatting on the website and need assistance regarding: "${textToSend}"`
-        );
-        actionButtons.push({
-          label: 'Chat with Human Support on WhatsApp',
-          icon: <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />,
-          url: waUrl,
-        });
+        if (lowerText.includes('human') || lowerText.includes('staff') || lowerText.includes('manager') || lowerText.includes('whatsapp') || lowerText.includes('call')) {
+          const waUrl = getWhatsAppClickToChatUrl(
+            chatbotAiSettings?.fallbackWhatsapp || brandingSettings.supportWhatsApp || settings.whatsappNumber,
+            `Hello Javed Electronics support! I need assistance regarding: "${textToSend}"`
+          );
+          actionButtons.push({
+            label: 'Chat with Human Support on WhatsApp',
+            iconType: 'whatsapp',
+            url: waUrl,
+            actionType: 'whatsapp',
+          });
+        }
       }
 
       const botMsg: ChatMessage = {
@@ -200,20 +364,31 @@ export const CustomerSupportChatbot: React.FC = () => {
 
       setMessages((prev) => [...prev, botMsg]);
     } catch (err) {
-      console.error('Failed to get bot response', err);
+      console.error('Chatbot error, using trained fallback:', err);
 
-      // Graceful offline fallback
-      const waUrl = getWhatsAppClickToChatUrl(settings.whatsappNumber, 'Hello Javed Electronics support!');
+      // Graceful trained fallback: check if we had any partial KB match
+      const activeKb = chatbotAiSettings?.knowledgeBase?.filter((k) => k.isActive) || [];
+      const fallbackKb = activeKb[0];
+      const fallbackText = fallbackKb
+        ? fallbackKb.answer
+        : `Our store support team is active live!\n\n• **Store Flagship:** ${settings.address || 'Shop 09, Sai Dham Apt, Vijaynagar, Nalasopara East'}\n• **Customer Helpline:** ${chatbotAiSettings?.fallbackHelpline || '+91 98390 12345'}\n• **Store Hours:** 10:00 AM - 9:30 PM (Mon - Sun)\n• **WhatsApp Support:** Instant click-to-chat available anytime.`;
+
+      const waUrl = getWhatsAppClickToChatUrl(
+        chatbotAiSettings?.fallbackWhatsapp || settings.whatsappNumber,
+        'Hello Javed Electronics support!'
+      );
+
       const botMsg: ChatMessage = {
         id: `msg_b_${Date.now()}`,
         sender: 'bot',
-        text: "I'm having trouble connecting right now, but our support team is available live!\n\n• **Customer Helpline:** +91 98390 12345\n• **Hazratganj Flagship:** 10:00 AM - 9:30 PM\n• **WhatsApp Support:** Instant click-to-chat available anytime.",
+        text: fallbackText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         actionButtons: [
           {
             label: 'Open WhatsApp Support',
-            icon: <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />,
+            iconType: 'whatsapp',
             url: waUrl,
+            actionType: 'whatsapp',
           },
         ],
       };
@@ -224,35 +399,86 @@ export const CustomerSupportChatbot: React.FC = () => {
     }
   };
 
+  const renderActionIcon = (iconType?: string) => {
+    switch (iconType) {
+      case 'package':
+        return <Package className="w-3.5 h-3.5" />;
+      case 'truck':
+        return <Truck className="w-3.5 h-3.5" />;
+      case 'whatsapp':
+        return <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />;
+      case 'link':
+        return <Sparkles className="w-3.5 h-3.5 text-amber-500" />;
+      default:
+        return null;
+    }
+  };
+
+  const handleActionClick = (btn: ChatMessageAction) => {
+    if (btn.actionType === 'order_tracking') {
+      const orderToTrack = orders.find((o) => o.id === btn.orderId) || orders[0];
+      if (orderToTrack) {
+        setSelectedOrderForModal(orderToTrack);
+      }
+      setActiveModal('order_tracking');
+    } else if (btn.actionType === 'pincode_check') {
+      setActiveModal('pincode_check');
+    } else if (btn.actionType === 'whatsapp') {
+      const waUrl =
+        btn.url ||
+        getWhatsAppClickToChatUrl(
+          chatbotAiSettings?.fallbackWhatsapp || brandingSettings.supportWhatsApp || settings.whatsappNumber,
+          'Hello Javed Electronics support!'
+        );
+      window.open(waUrl, '_blank');
+    } else if (btn.actionType === 'promotional_page') {
+      openPromotionalPageBySlug(btn.actionTarget || 'weekend-flash-hours');
+    }
+  };
+
   const handleClearHistory = () => {
-    setMessages([INITIAL_GREETING]);
+    setMessages([
+      {
+        id: 'msg_welcome',
+        sender: 'bot',
+        text: defaultGreetingText,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    ]);
     localStorage.removeItem('je_support_chat_history');
   };
 
-  // Simple formatting helper for bold text and bullet points
+  // Robust formatting helper for bold text and bullet points without slicing or blank dots
   const renderFormattedText = (rawText: string) => {
     const lines = rawText.split('\n');
     return lines.map((line, idx) => {
+      const isBullet = line.startsWith('• ') || line.startsWith('- ') || line.startsWith('* ');
+      const contentToParse = isBullet ? line.replace(/^[•\-\*]\s+/, '') : line;
+
       // Parse **bold** parts
-      const parts = line.split(/(\*\*.*?\*\*)/g);
+      const parts = contentToParse.split(/(\*\*.*?\*\*)/g);
       const formattedParts = parts.map((part, pIdx) => {
         if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={pIdx} className="font-bold text-slate-900">{part.slice(2, -2)}</strong>;
+          return (
+            <strong key={pIdx} className="font-bold text-slate-900">
+              {part.slice(2, -2)}
+            </strong>
+          );
         }
         return part;
       });
 
-      if (line.startsWith('• ') || line.startsWith('- ')) {
+      if (isBullet) {
         return (
-          <div key={idx} className="flex items-start gap-1.5 ml-1 my-0.5">
-            <span className="text-blue-600 font-bold">•</span>
-            <span>{formattedParts.slice(1)}</span>
+          <div key={idx} className="flex items-start gap-1.5 ml-1 my-1">
+            <span className="text-blue-600 font-bold shrink-0 mt-0.5">•</span>
+            <span className="text-slate-800 leading-relaxed flex-1">{formattedParts}</span>
           </div>
         );
       }
 
       return (
-        <p key={idx} className={line.trim() === '' ? 'h-2' : 'my-0.5'}>
+        <p key={idx} className={line.trim() === '' ? 'h-2' : 'my-0.5 text-slate-800 leading-relaxed'}>
           {formattedParts}
         </p>
       );
@@ -261,8 +487,8 @@ export const CustomerSupportChatbot: React.FC = () => {
 
   return (
     <>
-      {/* Floating Trigger Button (Bottom Right, above MobileBottomNav on mobile) */}
-      <div className="fixed bottom-16 md:bottom-5 right-3.5 sm:right-6 z-40 flex flex-col items-end no-print">
+      {/* Floating Trigger Button (Bottom Right, above Customer Portal Bottom Menu) */}
+      <div className="fixed bottom-16 right-3.5 sm:right-6 z-40 flex flex-col items-end no-print">
         {/* Welcome Tooltip Bubble (Dismissible) */}
         {showTooltip && !isOpen && (
           <div className="mb-2 bg-white text-slate-800 p-3 rounded-2xl shadow-xl border border-slate-200 max-w-xs text-xs animate-in slide-in-from-bottom-2 duration-300 relative">
@@ -330,10 +556,10 @@ export const CustomerSupportChatbot: React.FC = () => {
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
                   <h3 className="font-extrabold text-xs sm:text-sm tracking-tight truncate">
-                    Javed Support AI
+                    {chatbotAiSettings?.botName || 'Javed Support AI'}
                   </h3>
                   <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-500/30 text-blue-300 border border-blue-400/30 uppercase">
-                    Lucknow Hub
+                    {activeOutlet?.city || settings.city || 'MMR & Lucknow'}
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-300 truncate">
@@ -363,9 +589,9 @@ export const CustomerSupportChatbot: React.FC = () => {
 
           {/* Quick FAQ Prompts Chips Bar */}
           <div className="bg-slate-50 border-b border-slate-200 px-3 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0 text-[11px]">
-            {quickPrompts.map((p, idx) => (
+            {activeQuickPrompts.map((p, idx) => (
               <button
-                key={idx}
+                key={p.id || idx}
                 onClick={() => handleSendMessage(p.query)}
                 disabled={isLoading}
                 className="shrink-0 bg-white hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 text-slate-700 px-2.5 py-1 rounded-full border border-slate-200 transition-colors cursor-pointer whitespace-nowrap shadow-2xs disabled:opacity-50"
@@ -420,17 +646,17 @@ export const CustomerSupportChatbot: React.FC = () => {
                               rel="noopener noreferrer"
                               className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 hover:border-emerald-400 rounded-xl text-xs font-semibold shadow-2xs transition-all text-left"
                             >
-                              {btn.icon}
+                              {renderActionIcon(btn.iconType)}
                               <span>{btn.label}</span>
                               <ExternalLink className="w-3 h-3 ml-auto text-emerald-500" />
                             </a>
                           ) : (
                             <button
                               key={btnIdx}
-                              onClick={btn.action}
+                              onClick={() => handleActionClick(btn)}
                               className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 hover:border-blue-400 rounded-xl text-xs font-semibold shadow-2xs transition-all cursor-pointer text-left"
                             >
-                              {btn.icon}
+                              {renderActionIcon(btn.iconType)}
                               <span>{btn.label}</span>
                               <ExternalLink className="w-3 h-3 ml-auto text-blue-400" />
                             </button>

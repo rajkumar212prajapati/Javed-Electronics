@@ -38,6 +38,7 @@ export const BulkDiscountManager: React.FC = () => {
     resetBulkDiscountRules,
     products,
     outlets,
+    categories,
   } = useStore();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -821,13 +822,11 @@ export const BulkDiscountManager: React.FC = () => {
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-900 cursor-pointer"
                     >
                       <option value="all">All Categories</option>
-                      <option value="smartphones">Smartphones</option>
-                      <option value="audio">Audio & Headphones</option>
-                      <option value="chargers_cables">Chargers & Cables</option>
-                      <option value="smartwatches">Smartwatches</option>
-                      <option value="tvs_accessories">Smart TVs</option>
-                      <option value="computer_accessories">Computer Accessories</option>
-                      <option value="home_electronics">Home Electronics</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 )}

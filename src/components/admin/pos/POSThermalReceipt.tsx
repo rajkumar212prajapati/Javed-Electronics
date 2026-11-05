@@ -89,9 +89,10 @@ Thank you for shopping local with Javed Electronics!`;
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+            className="flex items-center gap-1 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
+            <span>Close Preview</span>
           </button>
         </div>
 
@@ -261,11 +262,11 @@ Thank you for shopping local with Javed Electronics!`;
         </div>
 
         {/* Action Controls */}
-        <div className="p-3.5 sm:p-4 bg-white border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-2.5 shrink-0">
+        <div className="p-3.5 sm:p-4 bg-white border-t border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-2 shrink-0">
           {/* Print Button */}
           <button
             onClick={handlePrint}
-            className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+            className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
           >
             <Printer className="w-4 h-4 text-slate-200" />
             <span>Print 80mm Bill</span>
@@ -276,19 +277,28 @@ Thank you for shopping local with Javed Electronics!`;
             href={whatsappUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+            className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
           >
             <MessageCircle className="w-4 h-4 fill-white text-emerald-600" />
-            <span>Send on WhatsApp</span>
+            <span>WhatsApp</span>
           </a>
 
           {/* Next New Sale Button */}
           <button
             onClick={onNewSale}
-            className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+            className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
           >
             <RotateCcw className="w-4 h-4" />
-            <span>Start Next Sale (F2)</span>
+            <span>Next Sale</span>
+          </button>
+
+          {/* Close Preview Button */}
+          <button
+            onClick={onClose}
+            className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+            <span>Close Preview</span>
           </button>
         </div>
       </div>

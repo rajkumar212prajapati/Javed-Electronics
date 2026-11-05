@@ -50,7 +50,7 @@ export const PincodeCheckModal: React.FC = () => {
         </div>
 
         <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-          Enter your 6-digit Indian PIN code to check if our 4-hour express courier delivers to your address in Lucknow.
+          Enter your 6-digit PIN code to check express same-day courier delivery across 45 locations in Nalasopara, Vasai & Virar.
         </p>
 
         <form onSubmit={handleCheck} className="flex gap-2">
@@ -61,7 +61,7 @@ export const PincodeCheckModal: React.FC = () => {
               setPinInput(e.target.value.replace(/\D/g, ''));
               setResult(null);
             }}
-            placeholder="e.g. 226001"
+            placeholder="e.g. 401209"
             maxLength={6}
             className="flex-1 px-3 py-2 text-xs font-mono font-bold border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
           />
@@ -87,16 +87,16 @@ export const PincodeCheckModal: React.FC = () => {
                     Covered Localities: {matchedZone.areaName}
                   </div>
                   <div className="text-emerald-800 text-[10px] mt-0.5">
-                    Dispatched from: <strong>{matchedZone.outletName || 'Nearest Store'}</strong> • Speed: <strong>{matchedZone.estimatedHours || 3} Hours Express</strong>
+                    Dispatched from: <strong>{matchedZone.outletName || 'Nalasopara Flagship (Sai Dham Apt)'}</strong> • Speed: <strong>{matchedZone.estimatedHours || 1} Hours Express</strong>
                   </div>
                 </div>
                 <p className="text-emerald-700">
-                  Cutoff: Orders before {matchedZone.cutoffTime || '5:00 PM'} delivered today. Free delivery above ₹{matchedZone.freeDeliveryThreshold ?? settings.freeDeliveryThreshold}.
+                  Cutoff: Orders before {matchedZone.cutoffTime || '6:00 PM'} delivered today. Free delivery above ₹{matchedZone.freeDeliveryThreshold ?? settings.freeDeliveryThreshold}.
                 </p>
               </div>
             ) : (
               <p className="text-emerald-700 text-[11px]">
-                Same-day local delivery available! Orders placed before 5:00 PM are delivered today. Free delivery above ₹{settings.freeDeliveryThreshold}.
+                Same-day local delivery available! Orders placed before 6:00 PM are delivered today. Free delivery above ₹{settings.freeDeliveryThreshold}.
               </p>
             )}
           </div>
@@ -109,7 +109,7 @@ export const PincodeCheckModal: React.FC = () => {
               <span>Courier Delivery Currently Unavailable in {pinInput}</span>
             </div>
             <p className="text-amber-800 text-[11px]">
-              You can still place an order and choose <strong>Free Store Pickup</strong> at our Hazratganj shop ({settings.address}).
+              You can still place an order and choose <strong>Free Store Pickup</strong> at our Flagship store ({settings.address}).
             </p>
           </div>
         )}

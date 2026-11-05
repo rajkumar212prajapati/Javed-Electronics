@@ -31,6 +31,7 @@ import {
   createShiprocketOrder,
   generateShiprocketAWB,
 } from '../../services/shiprocketService';
+import { cleanCustomerName, cleanAddressDisplay } from '../../utils/cleaners';
 
 interface OrderDispatchModalProps {
   order: Order;
@@ -306,12 +307,12 @@ export const OrderDispatchModal: React.FC<OrderDispatchModalProps> = ({
         <div className="p-4 bg-slate-100/70 border-b border-slate-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
           <div className="space-y-0.5">
             <div className="flex items-center gap-2">
-              <span className="font-bold text-slate-900">{order.customer.name}</span>
+              <span className="font-bold text-slate-900">{cleanCustomerName(order.customer.name)}</span>
               <span className="text-slate-500 font-mono text-[11px]">{order.customer.phone}</span>
             </div>
             <div className="text-slate-500 text-[11px] flex items-center gap-1">
               <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-              <span>{order.customer.address}, {order.customer.area}, {order.customer.city} - {order.customer.pincode}</span>
+              <span>{cleanAddressDisplay(order.customer)}</span>
             </div>
           </div>
 
@@ -355,13 +356,13 @@ export const OrderDispatchModal: React.FC<OrderDispatchModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-5 text-xs flex-1">
-          {/* Dispatch Mode Selector: 2 Options */}
+          {/* Dispatch Mode Selector */}
           <div>
             <label className="font-bold text-slate-900 uppercase text-[10px] tracking-wider block mb-2">
               Select Dispatch & Fulfillment Option *
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Option 1: In-House Rider */}
+              {/* Local Rider */}
               <div
                 onClick={() => setFulfillmentType('rider')}
                 className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
@@ -375,7 +376,7 @@ export const OrderDispatchModal: React.FC<OrderDispatchModalProps> = ({
                     <div className={`p-1.5 rounded-lg ${fulfillmentType === 'rider' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700'}`}>
                       <User className="w-4 h-4" />
                     </div>
-                    <span className="font-bold text-slate-900 text-xs">Option 1: In-House Rider Delivery</span>
+                    <span className="font-bold text-slate-900 text-xs">Local Store Rider Delivery</span>
                   </div>
                   <input
                     type="radio"
@@ -386,11 +387,11 @@ export const OrderDispatchModal: React.FC<OrderDispatchModalProps> = ({
                   />
                 </div>
                 <p className="text-[11px] text-slate-500 pl-8">
-                  Assign to internal Lucknow store fleet for fast 45-90 min hyperlocal delivery.
+                  Assign to store delivery team for fast same-day hyperlocal doorstep dispatch.
                 </p>
               </div>
 
-              {/* Option 2: Express Shiprocket */}
+              {/* Express Shiprocket */}
               <div
                 onClick={() => setFulfillmentType('express_partner')}
                 className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
@@ -404,7 +405,7 @@ export const OrderDispatchModal: React.FC<OrderDispatchModalProps> = ({
                     <div className={`p-1.5 rounded-lg ${fulfillmentType === 'express_partner' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}`}>
                       <Truck className="w-4 h-4" />
                     </div>
-                    <span className="font-bold text-slate-900 text-xs">Option 2: Express Shiprocket Delivery</span>
+                    <span className="font-bold text-slate-900 text-xs">Shiprocket Courier Delivery</span>
                   </div>
                   <input
                     type="radio"
@@ -415,7 +416,7 @@ export const OrderDispatchModal: React.FC<OrderDispatchModalProps> = ({
                   />
                 </div>
                 <p className="text-[11px] text-slate-500 pl-8">
-                  Connect with Shiprocket, paste AWB ID & tracking link visible directly to customer.
+                  Shiprocket partner carrier with automated AWB generation and tracking.
                 </p>
               </div>
             </div>

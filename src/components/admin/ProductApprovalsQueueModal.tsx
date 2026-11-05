@@ -201,6 +201,14 @@ export const ProductApprovalsQueueModal: React.FC<ProductApprovalsQueueModalProp
                           <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
                             {p.brand}
                           </span>
+                          <span className="text-[10px] font-bold uppercase bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200">
+                            {p.categoryId.replace(/_/g, ' ')}
+                          </span>
+                          {p.subCategoryName && (
+                            <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200">
+                              {p.subCategoryName}
+                            </span>
+                          )}
                           <span
                             className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
                               p.approvalStatus === 'pending'
@@ -256,13 +264,38 @@ export const ProductApprovalsQueueModal: React.FC<ProductApprovalsQueueModalProp
                     </div>
                   </div>
 
-                  {/* SEO & Description Preview */}
-                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-xs space-y-1">
-                    <div className="flex items-center gap-1.5 text-slate-700 font-semibold">
-                      <Tag className="w-3 h-3 text-indigo-600" />
-                      <span>SEO Title:</span>
-                      <span className="font-mono text-slate-900 font-normal">{p.seoTitle || p.name}</span>
+                  {/* SEO, Description & Submitted Category Format Details Preview */}
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 text-slate-700 font-semibold">
+                        <Tag className="w-3 h-3 text-indigo-600" />
+                        <span>Category:</span>
+                        <span className="font-bold text-indigo-800 uppercase text-[11px]">
+                          {p.categoryId.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                      {(p.partNumber || p.modelNumber) && (
+                        <span className="font-mono text-[11px] text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
+                          Part No: {p.partNumber || p.modelNumber}
+                        </span>
+                      )}
                     </div>
+
+                    {p.specifications && Object.keys(p.specifications).length > 0 && (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-1">
+                        {Object.entries(p.specifications).map(([specKey, specVal]) => (
+                          <div
+                            key={specKey}
+                            className="bg-white px-2 py-1 rounded border border-slate-200/80 text-[11px] truncate"
+                            title={`${specKey}: ${specVal}`}
+                          >
+                            <span className="text-slate-400 font-semibold">{specKey}: </span>
+                            <span className="text-slate-900 font-bold">{specVal}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     <p className="text-[11px] text-slate-600 line-clamp-2">{p.description}</p>
                   </div>
 

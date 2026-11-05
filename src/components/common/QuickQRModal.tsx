@@ -19,9 +19,10 @@ export const QuickQRModal: React.FC = () => {
       <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 relative text-center animate-in zoom-in-95 duration-150">
         <button
           onClick={closeQrModal}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 cursor-pointer"
+          className="absolute top-3.5 right-3.5 px-2.5 py-1 bg-slate-100 hover:bg-rose-600 text-slate-600 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" />
+          <span>Close</span>
         </button>
 
         <div className="flex items-center justify-center gap-1.5 text-blue-600 mb-1">
@@ -60,7 +61,7 @@ export const QuickQRModal: React.FC = () => {
           Point any Android / iPhone camera or Google Lens to open link.
         </p>
 
-        {/* Copy / Link actions */}
+        {/* Copy / Close actions */}
         <div className="mt-4 flex items-center gap-2">
           <button
             onClick={handleCopy}
@@ -68,6 +69,13 @@ export const QuickQRModal: React.FC = () => {
           >
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
             <span>{copied ? 'Link Copied' : 'Copy Link'}</span>
+          </button>
+          <button
+            onClick={closeQrModal}
+            className="flex items-center justify-center gap-1 py-2 px-3 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+            <span>Close Preview</span>
           </button>
         </div>
       </div>

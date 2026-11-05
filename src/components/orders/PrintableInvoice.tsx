@@ -44,32 +44,33 @@ export const PrintableInvoice: React.FC = () => {
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 print:p-0 print:bg-white print:static">
       <div className="bg-white rounded-xl max-w-4xl w-full overflow-hidden shadow-2xl border border-slate-300 relative my-6 print:shadow-none print:border-none print:my-0">
         {/* Top Control Bar (Hidden on print) */}
-        <div className="p-4 bg-slate-900 text-white flex items-center justify-between no-print">
-          <div className="flex items-center gap-2">
-            <Printer className="w-4 h-4 text-blue-400" />
-            <span className="text-xs font-bold uppercase tracking-wider">
+        <div className="p-3.5 sm:p-4 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-2 no-print">
+          <div className="flex items-center gap-2 min-w-0">
+            <Printer className="w-4 h-4 text-blue-400 shrink-0" />
+            <span className="text-xs font-bold uppercase tracking-wider truncate">
               {isB2B ? 'B2B GST Tax Invoice' : 'Retail Tax Invoice'} • {order.invoiceNumber}
             </span>
             {isB2B && (
-              <span className="px-2 py-0.5 rounded bg-blue-600 text-white font-bold text-[10px] uppercase">
+              <span className="px-2 py-0.5 rounded bg-blue-600 text-white font-bold text-[10px] uppercase shrink-0">
                 Input Tax Credit (ITC)
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-auto">
             <button
               onClick={handlePrint}
               className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-sm"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>Print Tax Invoice</span>
+              <span>Print Invoice</span>
             </button>
             <button
               onClick={() => setActiveModal(null)}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer"
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer shadow-sm"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
+              <span>Close Preview</span>
             </button>
           </div>
         </div>
@@ -506,6 +507,24 @@ export const PrintableInvoice: React.FC = () => {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Bottom Control Bar (Hidden on print) */}
+        <div className="p-3.5 bg-slate-900 text-white flex items-center justify-end gap-2 border-t border-slate-800 no-print">
+          <button
+            onClick={handlePrint}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+          >
+            <Printer className="w-4 h-4" />
+            <span>Print Tax Invoice</span>
+          </button>
+          <button
+            onClick={() => setActiveModal(null)}
+            className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+            <span>Close Preview</span>
+          </button>
         </div>
       </div>
     </div>

@@ -113,20 +113,20 @@ export const POSReturnsModal: React.FC<POSReturnsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-4 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col my-auto">
+    <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+      <div className="bg-white border border-slate-200 rounded-2xl max-w-xl w-full p-4 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] flex flex-col my-auto text-slate-900">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3 shrink-0">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-blue-600/30 text-blue-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-800 border border-yellow-300 flex items-center justify-center">
               <RotateCcw className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white">Returns, Exchanges & Credit Notes</h3>
-              <p className="text-[11px] text-slate-400">Process partial or full order return against invoice</p>
+              <h3 className="text-sm font-bold text-slate-900">Returns, Exchanges & Credit Notes</h3>
+              <p className="text-[11px] text-slate-500">Process partial or full order return against invoice</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-white cursor-pointer">
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -135,35 +135,35 @@ export const POSReturnsModal: React.FC<POSReturnsModalProps> = ({
         <div className="flex-1 overflow-y-auto space-y-4 text-xs pr-1">
           {completedCreditNote ? (
             /* Return Completed Credit Note Screen */
-            <div className="p-4 bg-slate-950 rounded-2xl border border-emerald-800/80 text-center space-y-3">
-              <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center">
+            <div className="p-4 bg-slate-50 rounded-2xl border border-emerald-300 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
-              <h4 className="text-base font-bold text-white">Return Successfully Processed</h4>
-              <p className="text-xs text-slate-400">
+              <h4 className="text-base font-bold text-slate-900">Return Successfully Processed</h4>
+              <p className="text-xs text-slate-600">
                 Credit Note <strong>{completedCreditNote.creditNoteNumber}</strong> generated for {completedCreditNote.customerName}.
               </p>
-              <div className="p-3 bg-slate-900 rounded-xl text-left font-mono space-y-1 border border-slate-800 text-[11px]">
+              <div className="p-3 bg-white rounded-xl text-left font-mono space-y-1 border border-slate-200 text-[11px]">
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Return ID:</span>
-                  <span className="text-white font-bold">{completedCreditNote.returnNumber}</span>
+                  <span className="text-slate-500">Return ID:</span>
+                  <span className="text-slate-900 font-bold">{completedCreditNote.returnNumber}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Original Invoice:</span>
-                  <span className="text-white">{completedCreditNote.originalInvoiceNumber}</span>
+                  <span className="text-slate-500">Original Invoice:</span>
+                  <span className="text-slate-900">{completedCreditNote.originalInvoiceNumber}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Refund Tender:</span>
-                  <span className="uppercase text-blue-400 font-bold">{completedCreditNote.refundMethod}</span>
+                  <span className="text-slate-500">Refund Tender:</span>
+                  <span className="uppercase text-sky-800 font-bold">{completedCreditNote.refundMethod}</span>
                 </div>
-                <div className="flex justify-between text-sm font-bold text-emerald-400 border-t border-slate-800 pt-1 mt-1">
+                <div className="flex justify-between text-sm font-bold text-emerald-700 border-t border-slate-200 pt-1 mt-1">
                   <span>Refund Disbursed:</span>
                   <span>{formatINR(completedCreditNote.totalRefund)}</span>
                 </div>
               </div>
               <button
                 onClick={onClose}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs cursor-pointer shadow-lg"
+                className="w-full py-2.5 bg-sky-200 hover:bg-sky-300 text-sky-950 border-2 border-yellow-400 rounded-xl font-black text-xs cursor-pointer shadow-xs"
               >
                 Done / Close Return
               </button>
@@ -180,7 +180,7 @@ export const POSReturnsModal: React.FC<POSReturnsModalProps> = ({
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search Invoice Number (JE-POS-...) or Customer Phone..."
-                      className="w-full pl-9 pr-3 py-2 bg-slate-950 text-white rounded-xl border border-slate-700 text-xs font-mono"
+                      className="w-full pl-9 pr-3 py-2 bg-slate-50 text-slate-900 rounded-xl border border-slate-300 text-xs font-mono"
                     />
                   </div>
 
@@ -194,18 +194,18 @@ export const POSReturnsModal: React.FC<POSReturnsModalProps> = ({
                         <div
                           key={r.invoiceNumber}
                           onClick={() => handleSelectReceipt(r)}
-                          className="p-3 bg-slate-950 hover:bg-slate-800/80 rounded-xl border border-slate-800 hover:border-blue-500 transition-all cursor-pointer flex items-center justify-between"
+                          className="p-3 bg-slate-50 hover:bg-sky-50 rounded-xl border border-slate-200 hover:border-yellow-300 transition-all cursor-pointer flex items-center justify-between"
                         >
                           <div>
-                            <div className="font-mono font-bold text-blue-400">{r.invoiceNumber}</div>
-                            <div className="text-white font-medium">{r.customer.name} ({r.customer.phone || 'Walk-in'})</div>
-                            <div className="text-[10px] text-slate-400">
+                            <div className="font-mono font-bold text-sky-800">{r.invoiceNumber}</div>
+                            <div className="text-slate-900 font-medium">{r.customer.name} ({r.customer.phone || 'Walk-in'})</div>
+                            <div className="text-[10px] text-slate-500">
                               {new Date(r.createdAt).toLocaleString()} • {r.items.length} items
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="font-mono font-bold text-emerald-400">{formatINR(r.finalTotal)}</div>
-                            <span className="text-[10px] uppercase font-mono text-slate-400">Select →</span>
+                            <div className="font-mono font-bold text-slate-900">{formatINR(r.finalTotal)}</div>
+                            <span className="text-[10px] uppercase font-mono text-sky-800 font-bold">Select →</span>
                           </div>
                         </div>
                       ))
@@ -215,22 +215,22 @@ export const POSReturnsModal: React.FC<POSReturnsModalProps> = ({
               ) : (
                 /* Step 2: Select Items to Return */
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between p-2.5 bg-slate-950 rounded-xl border border-slate-800">
+                  <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Selected Invoice</span>
-                      <span className="font-mono font-bold text-white text-xs">{selectedReceipt.invoiceNumber}</span>
-                      <span className="text-slate-400 text-[11px] block">{selectedReceipt.customer.name}</span>
+                      <span className="text-[10px] uppercase font-bold text-slate-500 block">Selected Invoice</span>
+                      <span className="font-mono font-bold text-slate-900 text-xs">{selectedReceipt.invoiceNumber}</span>
+                      <span className="text-slate-600 text-[11px] block">{selectedReceipt.customer.name}</span>
                     </div>
                     <button
                       onClick={() => setSelectedReceipt(null)}
-                      className="text-xs text-blue-400 hover:underline cursor-pointer"
+                      className="text-xs text-sky-800 hover:underline font-bold cursor-pointer"
                     >
                       Change Invoice
                     </button>
                   </div>
 
                   <div className="space-y-2">
-                    <span className="font-bold text-slate-300 uppercase tracking-wider text-[10px] block">
+                    <span className="font-bold text-slate-700 uppercase tracking-wider text-[10px] block">
                       Select Item Quantities & Condition to Return:
                     </span>
                     {selectedReceipt.items.map((item) => {
@@ -238,16 +238,16 @@ export const POSReturnsModal: React.FC<POSReturnsModalProps> = ({
                       return (
                         <div
                           key={item.id}
-                          className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 space-y-2"
+                          className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2"
                         >
                           <div className="flex justify-between items-start gap-2">
                             <div>
-                              <div className="font-bold text-white">{item.product.name}</div>
-                              <div className="text-[10px] text-slate-400 font-mono">
+                              <div className="font-bold text-slate-900">{item.product.name}</div>
+                              <div className="text-[10px] text-slate-500 font-mono">
                                 Original Qty: {item.quantity} • Unit Price: {formatINR(item.unitPrice)}
                               </div>
                             </div>
-                            <div className="flex items-center gap-1 bg-slate-900 rounded-lg p-0.5 border border-slate-700">
+                            <div className="flex items-center gap-1 bg-white rounded-lg p-0.5 border border-slate-300">
                               <button
                                 type="button"
                                 onClick={() =>
@@ -256,11 +256,11 @@ export const POSReturnsModal: React.FC<POSReturnsModalProps> = ({
                                     [item.id]: { ...state, qty: Math.max(0, state.qty - 1) },
                                   }))
                                 }
-                                className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-white"
+                                className="w-6 h-6 rounded flex items-center justify-center bg-sky-100 hover:bg-sky-200 text-sky-950 border border-yellow-300 font-bold"
                               >
                                 -
                               </button>
-                              <span className="w-6 text-center font-mono font-bold text-white">{state.qty}</span>
+                              <span className="w-6 text-center font-mono font-bold text-slate-900">{state.qty}</span>
                               <button
                                 type="button"
                                 onClick={() =>
@@ -269,7 +269,7 @@ export const POSReturnsModal: React.FC<POSReturnsModalProps> = ({
                                     [item.id]: { ...state, qty: Math.min(item.quantity, state.qty + 1) },
                                   }))
                                 }
-                                className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-white"
+                                className="w-6 h-6 rounded flex items-center justify-center bg-sky-100 hover:bg-sky-200 text-sky-950 border border-yellow-300 font-bold"
                               >
                                 +
                               </button>
@@ -277,9 +277,9 @@ export const POSReturnsModal: React.FC<POSReturnsModalProps> = ({
                           </div>
 
                           {state.qty > 0 && (
-                            <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                            <div className="pt-2 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11px]">
                               <div className="flex items-center gap-2">
-                                <span className="text-slate-400">Condition:</span>
+                                <span className="text-slate-500">Condition:</span>
                                 <select
                                   value={state.condition}
                                   onChange={(e) =>
@@ -292,7 +292,7 @@ export const POSReturnsModal: React.FC<POSReturnsModalProps> = ({
                                       },
                                     }))
                                   }
-                                  className="bg-slate-900 text-white rounded px-2 py-0.5 border border-slate-700"
+                                  className="bg-white text-slate-900 rounded px-2 py-0.5 border border-slate-300"
                                 >
                                   <option value="resellable">Resellable / New (Restock)</option>
                                   <option value="defective">Defective / RMA (Do Not Restock)</option>
@@ -300,7 +300,7 @@ export const POSReturnsModal: React.FC<POSReturnsModalProps> = ({
                                 </select>
                               </div>
 
-                              <span className="font-mono font-bold text-emerald-400">
+                              <span className="font-mono font-bold text-slate-900">
                                 Refund: {formatINR(state.qty * item.unitPrice)}
                               </span>
                             </div>
@@ -312,10 +312,10 @@ export const POSReturnsModal: React.FC<POSReturnsModalProps> = ({
 
                   {/* Refund Tender Mode & Reason */}
                   {totalRefundAmount > 0 && (
-                    <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2.5">
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
                       <div className="flex justify-between items-center text-xs">
-                        <span className="font-bold text-slate-300">Total Refund Payable:</span>
-                        <span className="font-mono font-black text-emerald-400 text-sm">
+                        <span className="font-bold text-slate-700">Total Refund Payable:</span>
+                        <span className="font-mono font-black text-slate-900 text-sm">
                           {formatINR(totalRefundAmount)}
                         </span>
                       </div>
@@ -330,10 +330,10 @@ export const POSReturnsModal: React.FC<POSReturnsModalProps> = ({
                             key={m.id}
                             type="button"
                             onClick={() => setRefundMethod(m.id as any)}
-                            className={`p-2 rounded-lg border text-center flex flex-col items-center justify-center gap-1 cursor-pointer font-bold ${
+                            className={`p-2 rounded-lg border-2 text-center flex flex-col items-center justify-center gap-1 cursor-pointer font-bold ${
                               refundMethod === m.id
-                                ? 'bg-blue-600 text-white border-blue-500'
-                                : 'bg-slate-900 text-slate-400 border-slate-800'
+                                ? 'bg-sky-200 text-sky-950 border-yellow-400 font-black shadow-2xs'
+                                : 'bg-sky-50 text-sky-900 border-yellow-200/80 hover:bg-sky-100'
                             }`}
                           >
                             {m.icon}
@@ -343,12 +343,12 @@ export const POSReturnsModal: React.FC<POSReturnsModalProps> = ({
                       </div>
 
                       <div>
-                        <label className="text-[11px] text-slate-400 block mb-1">Return Reason / Notes:</label>
+                        <label className="text-[11px] text-slate-600 block mb-1">Return Reason / Notes:</label>
                         <input
                           type="text"
                           value={returnReason}
                           onChange={(e) => setReturnReason(e.target.value)}
-                          className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs"
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 text-xs"
                         />
                       </div>
                     </div>
@@ -361,10 +361,10 @@ export const POSReturnsModal: React.FC<POSReturnsModalProps> = ({
 
         {/* Footer Actions */}
         {!completedCreditNote && (
-          <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-2 shrink-0">
+          <div className="pt-3 border-t border-slate-200 flex items-center justify-between gap-2 shrink-0">
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 cursor-pointer"
             >
               Cancel
             </button>
@@ -372,7 +372,7 @@ export const POSReturnsModal: React.FC<POSReturnsModalProps> = ({
               <button
                 disabled={totalRefundAmount <= 0}
                 onClick={handleProcessRefund}
-                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-lg"
+                className="px-5 py-2.5 bg-sky-200 hover:bg-sky-300 disabled:opacity-40 disabled:cursor-not-allowed text-sky-950 border-2 border-yellow-400 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-xs"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 <span>Process Refund ({formatINR(totalRefundAmount)})</span>

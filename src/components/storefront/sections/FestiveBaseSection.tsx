@@ -68,75 +68,62 @@ export const FestiveBaseSection: React.FC = () => {
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-rose-400/20 rounded-full blur-3xl pointer-events-none" />
 
         {/* Header Bar */}
-        <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
-          <div className="space-y-2 max-w-2xl min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400/20 border border-amber-300/40 text-amber-200 text-xs font-bold rounded-full uppercase tracking-wider">
-                <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-                {config.badge || section.badge || 'FESTIVE SPECIAL'}
+        <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4 mb-5">
+          <div className="space-y-1.5 max-w-2xl min-w-0">
+            {(config.badge || section.badge) && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/15 text-white text-[11px] font-bold rounded uppercase tracking-wider">
+                {config.badge || section.badge}
               </span>
-              <span className="text-xs text-amber-200/90 font-medium hidden sm:inline">
-                {config.greeting}
-              </span>
-            </div>
+            )}
 
             <h2 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight text-white leading-tight">
               {config.bannerHeadline || section.title}
             </h2>
 
-            <p className="text-xs sm:text-sm text-slate-100/90 leading-relaxed">
-              {config.bannerSubtext || section.subtitle}
-            </p>
+            {(config.bannerSubtext || section.subtitle) && (
+              <p className="text-xs sm:text-sm text-slate-100/90 leading-relaxed">
+                {config.bannerSubtext || section.subtitle}
+              </p>
+            )}
           </div>
 
           {/* Festive Coupon Box */}
           {config.couponCode && (
-            <div className="bg-slate-950/80 backdrop-blur-md border border-amber-400/30 rounded-xl p-3 sm:p-4 text-center sm:text-right shrink-0">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 block mb-1">
-                FESTIVE COUPON DISCOUNT
-              </span>
+            <div className="bg-slate-950/80 backdrop-blur-md border border-white/20 rounded-xl p-3 text-center sm:text-right shrink-0">
               <div className="flex items-center justify-center sm:justify-end gap-2">
-                <span className="font-mono text-base sm:text-lg font-black text-white bg-slate-900 px-3 py-1 rounded-md border border-slate-700">
+                <span className="font-mono text-sm sm:text-base font-black text-white bg-slate-900 px-2.5 py-1 rounded border border-slate-700">
                   {config.couponCode}
                 </span>
                 <button
                   onClick={handleCopyCode}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-md transition-colors cursor-pointer"
-                  title="Click to apply"
+                  className="flex items-center gap-1 px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded transition-colors cursor-pointer"
                 >
-                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-950" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copied ? 'Applied!' : 'Copy & Apply'}</span>
+                  {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copied ? 'Applied' : 'Copy'}</span>
                 </button>
               </div>
               <span className="text-[10px] text-slate-300 block mt-1">
-                Flat {config.discountPercentage}% OFF on orders ₹{config.minSpend}+
+                {config.discountPercentage}% OFF on orders ₹{config.minSpend}+
               </span>
             </div>
           )}
         </div>
 
-        {/* Complimentary Gift Packaging Pill */}
+        {/* Gift Packaging Option */}
         {config.giftPackagingAvailable && (
-          <div className="relative z-10 mb-6 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-950 flex items-center justify-center shrink-0 font-bold shadow-xs">
-                <Gift className="w-4 h-4" />
-              </div>
-              <div>
-                <span className="font-bold text-amber-200 block sm:inline mr-2">
-                  Complimentary Gift Packaging:
-                </span>
-                <span className="text-slate-100">{config.giftPackNote}</span>
-              </div>
+          <div className="relative z-10 mb-5 bg-white/10 backdrop-blur-sm border border-white/15 rounded-xl px-3 py-2.5 flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <Gift className="w-4 h-4 text-amber-300 shrink-0" />
+              <span className="text-white font-medium">{config.giftPackNote || 'Complimentary Gift Packaging'}</span>
             </div>
-            <label className="flex items-center gap-2 cursor-pointer select-none shrink-0 bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-white/10 hover:bg-slate-900/80 transition-colors">
+            <label className="flex items-center gap-2 cursor-pointer select-none shrink-0">
               <input
                 type="checkbox"
                 checked={giftPackChecked}
                 onChange={(e) => setGiftPackChecked(e.target.checked)}
-                className="w-4 h-4 text-amber-500 rounded focus:ring-amber-400"
+                className="w-4 h-4 text-amber-500 rounded"
               />
-              <span className="text-white font-medium text-xs">Include Free Gift Box & Ribbon</span>
+              <span className="text-white font-medium text-xs">Include Gift Box</span>
             </label>
           </div>
         )}

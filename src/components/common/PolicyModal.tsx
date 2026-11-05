@@ -14,16 +14,16 @@ export const PolicyModal: React.FC = () => {
           <div className="space-y-4 text-xs text-slate-700 leading-relaxed">
             <h3 className="text-base font-bold text-slate-900">About Javed Electronics</h3>
             <p>
-              Founded in 2008 in the heart of Hazratganj, Lucknow, <strong>Javed Electronics</strong> has grown from a neighborhood consumer electronics retail outlet into one of the city's most trusted destinations for authentic smartphones, audio systems, smart TVs, and home appliances.
+              Founded in the vibrant trade hub of Nalasopara East, <strong>Javed Electronics</strong> (Shop 09, Sai Dham Apt, Vijaynagar, Nalasopara East - 401209, Palghar, Mumbai, Maharashtra) is one of the region's most trusted destinations for authentic smartphones, audio systems, smart TVs, and home appliances.
             </p>
             <p>
               Unlike faceless national aggregator platforms, we believe in real local accountability. Every product on our shelves is sourced directly from brand authorized distributors with valid GST tax invoices and 100% manufacturer warranty.
             </p>
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-1 text-blue-900">
               <span className="font-bold block">Our Core Pillars:</span>
-              <p>• <strong>Same-Day 4-Hour Delivery:</strong> Dispatched from our own physical store in Lucknow by our dedicated delivery fleet.</p>
+              <p>• <strong>Same-Day Express Delivery:</strong> Dispatched from our physical flagship store at Shop 09 Sai Dham Apt, Vijaynagar by our dedicated delivery fleet.</p>
               <p>• <strong>WhatsApp Ordering:</strong> Frictionless, conversational shopping for local customers with live human assistance.</p>
-              <p>• <strong>Physical In-Store Support:</strong> Walk into our Hazratganj shop any day of the week for unboxing, setup, or warranty help.</p>
+              <p>• <strong>Physical In-Store Support:</strong> Walk into our Nalasopara East store any day of the week for unboxing, setup, or warranty help.</p>
             </div>
           </div>
         );
@@ -36,12 +36,12 @@ export const PolicyModal: React.FC = () => {
               Local Shipping & Delivery Policy
             </h3>
             <p>
-              Javed Electronics offers dedicated express local courier delivery across Lucknow city covering PIN codes 226001 through 226024.
+              Javed Electronics offers dedicated express local courier delivery across 45 designated zones in Nalasopara East & West, Vasai, Virar, and Palghar Mumbai MMR covering PIN codes 401209, 401203, 401201, 401202, 401207, 401208, 401301, 401302, 401303, 401304, 401305, and 401309.
             </p>
             <ul className="list-disc pl-5 space-y-1.5">
-              <li><strong>Delivery Slots:</strong> Orders placed before 5:00 PM are dispatched same day in our 4:00 PM - 7:00 PM evening delivery window.</li>
+              <li><strong>Delivery Slots:</strong> Orders placed before 6:00 PM are dispatched same day in our rapid delivery window.</li>
               <li><strong>Free Delivery Threshold:</strong> Free courier delivery on all orders above ₹{settings.freeDeliveryThreshold}. Orders below this value incur a flat ₹{settings.deliveryFee} delivery charge.</li>
-              <li><strong>Store Pickup:</strong> Always 100% FREE. Orders are packaged and kept ready at our Hazratganj store counter within 30 minutes.</li>
+              <li><strong>Store Pickup:</strong> Always 100% FREE. Orders are packaged and kept ready at our Shop 09 Sai Dham Apt, Vijaynagar, Nalasopara East store counter within 30 minutes.</li>
               <li><strong>Cash on Delivery (COD):</strong> Customers can inspect sealed manufacturer packaging before handing over cash to our delivery rider.</li>
             </ul>
           </div>

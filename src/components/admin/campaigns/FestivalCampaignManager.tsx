@@ -4,8 +4,6 @@ import {
   FestivalCampaignRecord,
   CampaignStatus,
   ComputedCampaignStatus,
-  CampaignThemeColors,
-  CampaignValidationResult,
 } from '../../../types/festivalCampaign';
 import {
   fetchFestivalCampaigns,
@@ -17,7 +15,6 @@ import {
   DEFAULT_TIMEZONE,
   selectActiveFestivalCampaign,
 } from '../../../services/festivalCampaignService';
-import { testSupabaseConnection, isSupabaseConfigured } from '../../../services/supabaseClient';
 import {
   Sparkles,
   Plus,
@@ -25,36 +22,20 @@ import {
   Archive,
   Eye,
   Edit2,
-  Trash2,
-  CheckCircle2,
   Clock,
   AlertTriangle,
-  RotateCcw,
   Smartphone,
   Monitor,
-  ExternalLink,
-  ShieldAlert,
-  Database,
   Calendar,
-  Layers,
-  ArrowRight,
-  Gift,
-  Tag,
-  Check,
   X,
 } from 'lucide-react';
 import { formatINR } from '../../../utils/currency';
 
 export const FestivalCampaignManager: React.FC = () => {
-  const { products, categories, setActiveModal } = useStore();
+  const { products } = useStore();
 
   const [campaignsList, setCampaignsList] = useState<FestivalCampaignRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [supabaseStatus, setSupabaseStatus] = useState<{ checked: boolean; ok: boolean; message: string }>({
-    checked: false,
-    ok: false,
-    message: '',
-  });
 
   // Modal states
   const [editingCampaign, setEditingCampaign] = useState<Partial<FestivalCampaignRecord> | null>(null);
@@ -71,15 +52,11 @@ export const FestivalCampaignManager: React.FC = () => {
     setTimeout(() => setNotification(null), 3500);
   };
 
-  // Load campaigns & check database connection
   const loadData = async () => {
     setLoading(true);
     try {
       const data = await fetchFestivalCampaigns();
       setCampaignsList(data);
-
-      const dbCheck = await testSupabaseConnection();
-      setSupabaseStatus({ checked: true, ok: dbCheck.ok, message: dbCheck.message });
     } catch (err: any) {
       showNotification('Failed to load campaigns: ' + err.message, 'error');
     } finally {
@@ -91,7 +68,6 @@ export const FestivalCampaignManager: React.FC = () => {
     loadData();
   }, []);
 
-  // Compute live computed statuses for each campaign
   const enrichedCampaigns = useMemo(() => {
     const now = new Date();
     return campaignsList.map((c) => ({
@@ -100,21 +76,17 @@ export const FestivalCampaignManager: React.FC = () => {
     }));
   }, [campaignsList]);
 
-  // Active live campaign according to deterministic selection rules
   const activeLiveCampaign = useMemo(() => {
     return selectActiveFestivalCampaign(campaignsList, new Date());
   }, [campaignsList]);
 
-  // Filtered view
   const filteredCampaigns = useMemo(() => {
     if (filterStatus === 'all') return enrichedCampaigns;
     return enrichedCampaigns.filter((c) => c.computed_status === filterStatus || c.status === filterStatus);
   }, [enrichedCampaigns, filterStatus]);
 
-  // Handler: Open new campaign form
   const handleOpenCreateModal = () => {
     const now = new Date();
-    // Default start now, end in 7 days
     const startIso = now.toISOString().slice(0, 16);
     const endIso = new Date(now.getTime() + 86400000 * 7).toISOString().slice(0, 16);
 
@@ -139,14 +111,14 @@ export const FestivalCampaignManager: React.FC = () => {
       mobile_banner_url: 'https://images.unsplash.com/photo-1543807535-eceef0bc6599?auto=format&fit=crop&w=800&q=80',
       hero_headline: '',
       hero_subtitle: '',
-      badge_text: 'FESTIVE UTSAV',
-      cta_text: 'Explore Festival Offers',
+      badge_text: 'FESTIVE SALE',
+      cta_text: 'Shop Deals',
       cta_destination: '#products-section',
       coupon_code: '',
       discount_percentage: 10,
       min_cart_value: 999,
       gift_packaging_enabled: true,
-      gift_packaging_note: 'Complimentary festive gift packaging and greeting card included!',
+      gift_packaging_note: 'Complimentary gift packaging included',
       featured_category_ids: ['smartphones', 'audio'],
       featured_product_ids: products.slice(0, 4).map((p) => p.id),
     });
@@ -155,7 +127,6 @@ export const FestivalCampaignManager: React.FC = () => {
     setValidationWarnings([]);
   };
 
-  // Handler: Edit existing campaign
   const handleOpenEditModal = (camp: FestivalCampaignRecord) => {
     setEditingCampaign({
       ...camp,
@@ -167,12 +138,10 @@ export const FestivalCampaignManager: React.FC = () => {
     setValidationWarnings([]);
   };
 
-  // Handler: Save campaign (create or update)
   const handleSaveCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingCampaign) return;
 
-    // Convert local datetime-local format back to standard ISO
     const startDate = new Date(editingCampaign.start_at || '');
     const endDate = new Date(editingCampaign.end_at || '');
 
@@ -199,8 +168,8 @@ export const FestivalCampaignManager: React.FC = () => {
       mobile_banner_url: editingCampaign.mobile_banner_url || undefined,
       hero_headline: editingCampaign.hero_headline?.trim() || '',
       hero_subtitle: editingCampaign.hero_subtitle?.trim() || '',
-      badge_text: editingCampaign.badge_text?.trim() || 'FESTIVE SPECIAL',
-      cta_text: editingCampaign.cta_text?.trim() || 'Shop Festival Deals',
+      badge_text: editingCampaign.badge_text?.trim() || 'FESTIVE SALE',
+      cta_text: editingCampaign.cta_text?.trim() || 'Shop Deals',
       cta_destination: editingCampaign.cta_destination || '#products-section',
       coupon_code: editingCampaign.coupon_code?.trim().toUpperCase() || undefined,
       discount_percentage: Number(editingCampaign.discount_percentage || 0),
@@ -213,7 +182,6 @@ export const FestivalCampaignManager: React.FC = () => {
       updated_at: new Date().toISOString(),
     };
 
-    // Validate
     const validation = validateCampaign(recordToSave, campaignsList);
     if (!validation.isValid) {
       setValidationErrors(validation.errors);
@@ -224,7 +192,7 @@ export const FestivalCampaignManager: React.FC = () => {
     try {
       const res = await persistFestivalCampaign(recordToSave);
       if (res.success) {
-        showNotification(`Campaign "${recordToSave.name}" saved successfully.`);
+        showNotification(`Campaign "${recordToSave.name}" saved.`);
         setEditingCampaign(null);
         await loadData();
       }
@@ -233,19 +201,17 @@ export const FestivalCampaignManager: React.FC = () => {
     }
   };
 
-  // Handler: Duplicate campaign
   const handleDuplicate = async (source: FestivalCampaignRecord) => {
     const clone = duplicateCampaignRecord(source);
     try {
       await persistFestivalCampaign(clone);
-      showNotification(`Duplicated "${source.name}" as new draft.`);
+      showNotification(`Duplicated "${source.name}".`);
       await loadData();
     } catch (err: any) {
       showNotification('Duplicate failed: ' + err.message, 'error');
     }
   };
 
-  // Handler: Toggle Publish / Unpublish
   const handleTogglePublish = async (camp: FestivalCampaignRecord) => {
     const newStatus: CampaignStatus = camp.status === 'published' ? 'draft' : 'published';
     const updated: FestivalCampaignRecord = { ...camp, status: newStatus };
@@ -260,8 +226,8 @@ export const FestivalCampaignManager: React.FC = () => {
       await persistFestivalCampaign(updated);
       showNotification(
         newStatus === 'published'
-          ? `Campaign "${camp.name}" published! It will be live when schedule matches.`
-          : `Campaign "${camp.name}" unpublished (switched to Draft).`
+          ? `Campaign "${camp.name}" published.`
+          : `Campaign "${camp.name}" switched to draft.`
       );
       await loadData();
     } catch (err: any) {
@@ -269,7 +235,6 @@ export const FestivalCampaignManager: React.FC = () => {
     }
   };
 
-  // Handler: Archive campaign
   const handleArchive = async (camp: FestivalCampaignRecord) => {
     const updated: FestivalCampaignRecord = { ...camp, status: 'archived' };
     try {
@@ -281,91 +246,72 @@ export const FestivalCampaignManager: React.FC = () => {
     }
   };
 
-  // Helper status color badges
   const getStatusBadge = (status: ComputedCampaignStatus) => {
     switch (status) {
       case 'live':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 animate-pulse">
-            <span className="w-2 h-2 rounded-full bg-emerald-600" />
-            LIVE ON HOMEPAGE
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+            Live
           </span>
         );
       case 'scheduled':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
             <Clock className="w-3 h-3 text-blue-600" />
-            SCHEDULED
+            Scheduled
           </span>
         );
       case 'draft':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
-            DRAFT (HIDDEN)
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+            Draft
           </span>
         );
       case 'expired':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-            EXPIRED
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+            Expired
           </span>
         );
       case 'archived':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-            ARCHIVED
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+            Archived
           </span>
         );
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner & Supabase Connection Health Status */}
-      <div className="bg-slate-900 rounded-2xl p-5 text-white flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg border border-slate-800">
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-black uppercase tracking-wider bg-amber-500 text-slate-950 px-2 py-0.5 rounded">
-              FESTIVAL CAMPAIGN AUTOMATION
-            </span>
-            <span className="text-xs text-slate-400 font-mono">
-              Timezone: {DEFAULT_TIMEZONE}
-            </span>
-          </div>
-
-          <h2 className="text-xl sm:text-2xl font-black mt-1 text-white tracking-tight">
-            Festival Homepage Campaign Architect
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="bg-white rounded-xl p-4 sm:p-5 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg sm:text-xl font-black text-slate-900">
+            Festive Campaigns
           </h2>
-          <p className="text-xs text-slate-400 mt-1 max-w-2xl">
-            Automate festive promotions (Diwali, Eid, Holi, Navratri, New Year) with priority-based homepage switching, live countdown timers, and Supabase database synchronization.
-          </p>
-
-          {/* Supabase status indicator */}
-          <div className="mt-3 flex items-center gap-2 text-xs">
-            <Database className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-            <span className="text-slate-300">Database:</span>
-            {isSupabaseConfigured ? (
-              <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Supabase Connected
-              </span>
-            ) : (
-              <span className="text-amber-400 font-semibold flex items-center gap-1">
-                <AlertTriangle className="w-3.5 h-3.5" /> Local Resilient Mode (Supabase offline/not configured)
-              </span>
-            )}
-            <button
-              onClick={loadData}
-              className="text-[11px] text-blue-300 underline hover:text-white cursor-pointer ml-2"
-            >
-              Test Connection
-            </button>
-          </div>
+          {activeLiveCampaign && (
+            <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-md flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Active: {activeLiveCampaign.name}
+            </span>
+          )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
+          {activeLiveCampaign && (
+            <button
+              onClick={() => setPreviewCampaign(activeLiveCampaign)}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>Preview Active</span>
+            </button>
+          )}
           <button
             onClick={handleOpenCreateModal}
-            className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Create Campaign</span>
@@ -387,51 +333,11 @@ export const FestivalCampaignManager: React.FC = () => {
         </div>
       )}
 
-      {/* Live Authority Status Card */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
-            <Sparkles className="w-5 h-5 text-amber-600" />
-          </div>
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Current Live Homepage Campaign (Authority Status)
-            </span>
-            <div className="text-sm sm:text-base font-extrabold text-slate-900 mt-0.5">
-              {activeLiveCampaign ? (
-                <span className="text-emerald-700 flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                  {activeLiveCampaign.name} (Priority {activeLiveCampaign.priority})
-                </span>
-              ) : (
-                <span className="text-slate-500">
-                  No active festival campaign scheduled right now. Default homepage is showing.
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {activeLiveCampaign && (
-            <button
-              onClick={() => {
-                setPreviewCampaign(activeLiveCampaign);
-              }}
-              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
-            >
-              <Eye className="w-3.5 h-3.5" />
-              <span>Preview Live View</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Filter Chips */}
+      {/* Filter Tabs */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
         {[
-          { id: 'all', label: `All Campaigns (${campaignsList.length})` },
-          { id: 'live', label: 'Live Now' },
+          { id: 'all', label: `All (${campaignsList.length})` },
+          { id: 'live', label: 'Live' },
           { id: 'scheduled', label: 'Scheduled' },
           { id: 'draft', label: 'Drafts' },
           { id: 'expired', label: 'Expired' },
@@ -442,7 +348,7 @@ export const FestivalCampaignManager: React.FC = () => {
             onClick={() => setFilterStatus(f.id)}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
               filterStatus === f.id
-                ? 'bg-slate-900 text-white shadow-xs'
+                ? 'bg-slate-900 text-white'
                 : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
             }`}
           >
@@ -454,92 +360,64 @@ export const FestivalCampaignManager: React.FC = () => {
       {/* Campaigns List */}
       {loading ? (
         <div className="py-12 text-center text-slate-400 text-xs">
-          Loading festival campaigns from database...
+          Loading campaigns...
         </div>
       ) : filteredCampaigns.length === 0 ? (
-        <div className="bg-white rounded-2xl p-10 text-center border border-dashed border-slate-300">
-          <Sparkles className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+        <div className="bg-white rounded-xl p-10 text-center border border-slate-200">
+          <Sparkles className="w-7 h-7 text-slate-300 mx-auto mb-2" />
           <h3 className="text-sm font-bold text-slate-800">No campaigns found</h3>
-          <p className="text-xs text-slate-500 mt-1">
-            Create your first festival campaign to automate your homepage during Diwali, Eid, or Holi.
-          </p>
           <button
             onClick={handleOpenCreateModal}
-            className="mt-4 px-4 py-2 bg-amber-500 text-slate-950 font-bold text-xs rounded-xl"
+            className="mt-3 px-4 py-2 bg-slate-900 text-white font-bold text-xs rounded-lg cursor-pointer"
           >
-            Create New Campaign
+            Create Campaign
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3.5">
+        <div className="grid grid-cols-1 gap-3">
           {filteredCampaigns.map((camp) => (
             <div
               key={camp.id}
-              className={`bg-white rounded-2xl p-4 sm:p-5 border transition-all shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
-                camp.computed_status === 'live'
-                  ? 'border-emerald-300 ring-2 ring-emerald-500/10'
-                  : 'border-slate-200'
-              }`}
+              className="bg-white rounded-xl p-4 border border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
             >
-              {/* Left Info Column */}
               <div className="space-y-1.5 min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-sm sm:text-base font-black text-slate-900">
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900">
                     {camp.name}
                   </h3>
                   {getStatusBadge(camp.computed_status || 'draft')}
-                  <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                    Festival: {camp.festival_name}
-                  </span>
-                  <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                    Priority: {camp.priority}
+                  <span className="text-xs text-slate-500 font-medium">
+                    • {camp.festival_name}
                   </span>
                 </div>
 
-                <p className="text-xs text-slate-600 line-clamp-1">
-                  {camp.hero_headline}
-                </p>
+                {camp.hero_headline && (
+                  <p className="text-xs text-slate-600 line-clamp-1">
+                    {camp.hero_headline}
+                  </p>
+                )}
 
-                {/* Schedule & Timing in Asia/Kolkata */}
-                <div className="flex items-center gap-3 text-[11px] text-slate-500 flex-wrap pt-1 font-mono">
-                  <span className="flex items-center gap-1">
+                <div className="flex items-center gap-3 text-[11px] text-slate-500 flex-wrap pt-0.5">
+                  <span className="flex items-center gap-1 font-mono">
                     <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    Start: <strong>{formatKolkataDateTime(camp.start_at)}</strong>
-                  </span>
-                  <span>→</span>
-                  <span>
-                    End: <strong>{formatKolkataDateTime(camp.end_at)}</strong>
+                    {formatKolkataDateTime(camp.start_at)} — {formatKolkataDateTime(camp.end_at)}
                   </span>
                   {camp.coupon_code && (
-                    <span className="text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded font-bold">
-                      Coupon: {camp.coupon_code} ({camp.discount_percentage}% OFF)
+                    <span className="text-slate-700 font-mono font-semibold">
+                      Code: {camp.coupon_code} ({camp.discount_percentage}% OFF)
                     </span>
                   )}
-                </div>
-
-                <div className="text-[10px] text-slate-400 flex items-center gap-2">
                   <span>
-                    Categories: <strong>{camp.featured_category_ids?.length || 0}</strong>
+                    Products: {camp.featured_product_ids?.length || 0}
                   </span>
-                  <span>•</span>
-                  <span>
-                    Products: <strong>{camp.featured_product_ids?.length || 0}</strong>
-                  </span>
-                  {camp.gift_packaging_enabled && (
-                    <>
-                      <span>•</span>
-                      <span className="text-emerald-700 font-medium">Free Gift Packaging Enabled</span>
-                    </>
-                  )}
                 </div>
               </div>
 
-              {/* Right Action Buttons */}
+              {/* Action Buttons */}
               <div className="flex items-center gap-2 flex-wrap shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
                 <button
                   onClick={() => setPreviewCampaign(camp)}
                   className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-lg transition-colors cursor-pointer flex items-center gap-1"
-                  title="Preview on desktop/mobile"
                 >
                   <Eye className="w-3.5 h-3.5" />
                   <span>Preview</span>
@@ -547,7 +425,7 @@ export const FestivalCampaignManager: React.FC = () => {
 
                 <button
                   onClick={() => handleOpenEditModal(camp)}
-                  className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-lg transition-colors cursor-pointer flex items-center gap-1"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
                   <span>Edit</span>
@@ -556,7 +434,6 @@ export const FestivalCampaignManager: React.FC = () => {
                 <button
                   onClick={() => handleDuplicate(camp)}
                   className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer flex items-center gap-1"
-                  title="Duplicate as new draft"
                 >
                   <Copy className="w-3.5 h-3.5" />
                   <span>Duplicate</span>
@@ -567,8 +444,8 @@ export const FestivalCampaignManager: React.FC = () => {
                     onClick={() => handleTogglePublish(camp)}
                     className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
                       camp.status === 'published'
-                        ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
-                        : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                        ? 'bg-slate-200 hover:bg-slate-300 text-slate-800'
+                        : 'bg-emerald-600 hover:bg-emerald-700 text-white'
                     }`}
                   >
                     {camp.status === 'published' ? 'Unpublish' : 'Publish'}
@@ -578,8 +455,8 @@ export const FestivalCampaignManager: React.FC = () => {
                 {camp.status !== 'archived' && (
                   <button
                     onClick={() => handleArchive(camp)}
-                    className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
-                    title="Archive Campaign"
+                    className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                    title="Archive"
                   >
                     <Archive className="w-4 h-4" />
                   </button>
@@ -590,56 +467,50 @@ export const FestivalCampaignManager: React.FC = () => {
         </div>
       )}
 
-      {/* CREATE / EDIT MODAL */}
+      {/* CREATE / EDIT FULL-SCREEN MODAL */}
       {editingCampaign && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[92vh] overflow-y-auto p-5 sm:p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b pb-3">
-              <div>
-                <h3 className="text-base font-black text-slate-900">
-                  {isNewCampaign ? 'Create Festival Campaign' : `Edit Campaign: ${editingCampaign.name}`}
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Configure scheduling, festive banners, theme colors, and product showcases in Asia/Kolkata timezone.
-                </p>
-              </div>
-              <button
-                onClick={() => setEditingCampaign(null)}
-                className="text-slate-400 hover:text-slate-700"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+        <div className="fixed inset-0 z-50 bg-white flex flex-col overflow-hidden">
+          <div className="px-4 sm:px-6 py-4 border-b border-slate-200 flex items-center justify-between shrink-0">
+            <h3 className="text-base sm:text-lg font-black text-slate-900">
+              {isNewCampaign ? 'Create Festive Campaign' : `Edit Campaign: ${editingCampaign.name}`}
+            </h3>
+            <button
+              onClick={() => setEditingCampaign(null)}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
 
-            {/* Form Validation Warnings */}
-            {validationWarnings.length > 0 && (
-              <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 text-xs text-amber-900 space-y-1">
-                <div className="font-bold flex items-center gap-1 text-amber-950">
-                  <AlertTriangle className="w-4 h-4 text-amber-600" />
-                  <span>Scheduling Warnings:</span>
+          <form onSubmit={handleSaveCampaign} className="flex-1 overflow-y-auto p-4 sm:p-6">
+            <div className="max-w-4xl mx-auto space-y-5 text-xs">
+              {validationWarnings.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 space-y-1">
+                  <div className="font-bold flex items-center gap-1">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    <span>Schedule Notice</span>
+                  </div>
+                  {validationWarnings.map((w, idx) => (
+                    <p key={idx}>{w}</p>
+                  ))}
                 </div>
-                {validationWarnings.map((w, idx) => (
-                  <p key={idx}>{w}</p>
-                ))}
-              </div>
-            )}
+              )}
 
-            <form onSubmit={handleSaveCampaign} className="space-y-4 text-xs">
-              {/* Section 1: Campaign Identity */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Campaign Identity */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="sm:col-span-2">
                   <label className="font-bold text-slate-700 block mb-1">
-                    Internal Campaign Name *
+                    Campaign Name *
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Diwali Tech Dhamaka 2026"
+                    placeholder="e.g. Diwali Sale 2026"
                     value={editingCampaign.name || ''}
                     onChange={(e) =>
                       setEditingCampaign({ ...editingCampaign, name: e.target.value })
                     }
-                    className="w-full p-2 border rounded-lg"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg"
                   />
                   {validationErrors.name && (
                     <span className="text-rose-600 text-[10px] font-bold">{validationErrors.name}</span>
@@ -648,87 +519,81 @@ export const FestivalCampaignManager: React.FC = () => {
 
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">
-                    Festival Name *
+                    Festival *
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Diwali / Eid / Holi"
+                    placeholder="Diwali / Eid / Holi"
                     value={editingCampaign.festival_name || ''}
                     onChange={(e) =>
                       setEditingCampaign({ ...editingCampaign, festival_name: e.target.value })
                     }
-                    className="w-full p-2 border rounded-lg"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg"
                   />
                 </div>
               </div>
 
-              {/* Section 2: Timezone & Scheduling */}
-              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                <span className="text-[10px] font-black uppercase text-slate-500 block">
-                  Authoritative Schedule (Asia/Kolkata Timezone)
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">
-                      Start Date & Time (IST) *
-                    </label>
-                    <input
-                      type="datetime-local"
-                      required
-                      value={editingCampaign.start_at || ''}
-                      onChange={(e) =>
-                        setEditingCampaign({ ...editingCampaign, start_at: e.target.value })
-                      }
-                      className="w-full p-2 border rounded-lg bg-white font-mono"
-                    />
-                    {validationErrors.start_at && (
-                      <span className="text-rose-600 text-[10px] font-bold">{validationErrors.start_at}</span>
-                    )}
-                  </div>
+              {/* Schedule */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Start Date & Time *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={editingCampaign.start_at || ''}
+                    onChange={(e) =>
+                      setEditingCampaign({ ...editingCampaign, start_at: e.target.value })
+                    }
+                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-white font-mono"
+                  />
+                  {validationErrors.start_at && (
+                    <span className="text-rose-600 text-[10px] font-bold">{validationErrors.start_at}</span>
+                  )}
+                </div>
 
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">
-                      End Date & Time (IST) *
-                    </label>
-                    <input
-                      type="datetime-local"
-                      required
-                      value={editingCampaign.end_at || ''}
-                      onChange={(e) =>
-                        setEditingCampaign({ ...editingCampaign, end_at: e.target.value })
-                      }
-                      className="w-full p-2 border rounded-lg bg-white font-mono"
-                    />
-                    {validationErrors.end_at && (
-                      <span className="text-rose-600 text-[10px] font-bold">{validationErrors.end_at}</span>
-                    )}
-                  </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    End Date & Time *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={editingCampaign.end_at || ''}
+                    onChange={(e) =>
+                      setEditingCampaign({ ...editingCampaign, end_at: e.target.value })
+                    }
+                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-white font-mono"
+                  />
+                  {validationErrors.end_at && (
+                    <span className="text-rose-600 text-[10px] font-bold">{validationErrors.end_at}</span>
+                  )}
+                </div>
 
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">
-                      Priority Rank (Higher Wins)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={editingCampaign.priority ?? 5}
-                      onChange={(e) =>
-                        setEditingCampaign({ ...editingCampaign, priority: Number(e.target.value) })
-                      }
-                      className="w-full p-2 border rounded-lg bg-white font-mono"
-                    />
-                    <span className="text-[10px] text-slate-400">Default: 5</span>
-                  </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Priority
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={editingCampaign.priority ?? 5}
+                    onChange={(e) =>
+                      setEditingCampaign({ ...editingCampaign, priority: Number(e.target.value) })
+                    }
+                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-white font-mono"
+                  />
                 </div>
               </div>
 
-              {/* Section 3: Visual Theme */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Theme & Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">
-                    Theme Preset
+                    Theme
                   </label>
                   <select
                     value={editingCampaign.theme_colors?.style || 'diwali'}
@@ -741,20 +606,20 @@ export const FestivalCampaignManager: React.FC = () => {
                         },
                       })
                     }
-                    className="w-full p-2 border rounded-lg bg-white"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-white"
                   >
-                    <option value="diwali">Diwali (Golden / Amber / Maroon)</option>
-                    <option value="eid">Eid Mubarak (Emerald / Gold / Teal)</option>
-                    <option value="holi">Holi Color Fest (Pink / Orange / Purple)</option>
-                    <option value="navratri">Navratri (Fiery Red / Saffron)</option>
-                    <option value="new_year">New Year (Sky Blue / Midnight)</option>
-                    <option value="royal_gold">Royal Gold Luxe</option>
+                    <option value="diwali">Diwali</option>
+                    <option value="eid">Eid</option>
+                    <option value="holi">Holi</option>
+                    <option value="navratri">Navratri</option>
+                    <option value="new_year">New Year</option>
+                    <option value="royal_gold">Royal Gold</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">
-                    Badge Label
+                    Badge Text
                   </label>
                   <input
                     type="text"
@@ -762,44 +627,44 @@ export const FestivalCampaignManager: React.FC = () => {
                     onChange={(e) =>
                       setEditingCampaign({ ...editingCampaign, badge_text: e.target.value })
                     }
-                    placeholder="e.g. DIWALI DHAMAKA"
-                    className="w-full p-2 border rounded-lg"
+                    placeholder="FESTIVE SALE"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg"
                   />
                 </div>
 
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">
-                    Publish Status
+                    Status
                   </label>
                   <select
                     value={editingCampaign.status || 'draft'}
                     onChange={(e) =>
                       setEditingCampaign({ ...editingCampaign, status: e.target.value as any })
                     }
-                    className="w-full p-2 border rounded-lg bg-white font-bold"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-white font-semibold"
                   >
-                    <option value="draft">Draft (Hidden from customers)</option>
-                    <option value="published">Published (Live during schedule)</option>
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
                     <option value="archived">Archived</option>
                   </select>
                 </div>
               </div>
 
-              {/* Section 4: Creative Banners & Headline */}
-              <div className="space-y-3">
+              {/* Banners & Headline */}
+              <div className="space-y-4">
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">
-                    Hero Headline *
+                    Headline *
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Diwali Tech Utsav: Flat 15% Extra Savings & Free Gifts"
+                    placeholder="Campaign headline"
                     value={editingCampaign.hero_headline || ''}
                     onChange={(e) =>
                       setEditingCampaign({ ...editingCampaign, hero_headline: e.target.value })
                     }
-                    className="w-full p-2 border rounded-lg font-bold"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg font-semibold"
                   />
                   {validationErrors.hero_headline && (
                     <span className="text-rose-600 text-[10px] font-bold">{validationErrors.hero_headline}</span>
@@ -808,23 +673,23 @@ export const FestivalCampaignManager: React.FC = () => {
 
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">
-                    Hero Subtitle
+                    Subtitle
                   </label>
                   <textarea
                     rows={2}
-                    placeholder="Supporting details on 100% genuine electronics, official warranty, delivery..."
+                    placeholder="Optional subtitle"
                     value={editingCampaign.hero_subtitle || ''}
                     onChange={(e) =>
                       setEditingCampaign({ ...editingCampaign, hero_subtitle: e.target.value })
                     }
-                    className="w-full p-2 border rounded-lg"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg"
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">
-                      Desktop Banner Image URL *
+                      Desktop Banner URL *
                     </label>
                     <input
                       type="url"
@@ -834,13 +699,13 @@ export const FestivalCampaignManager: React.FC = () => {
                       onChange={(e) =>
                         setEditingCampaign({ ...editingCampaign, desktop_banner_url: e.target.value })
                       }
-                      className="w-full p-2 border rounded-lg"
+                      className="w-full p-2.5 border border-slate-300 rounded-lg"
                     />
                   </div>
 
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">
-                      Mobile Banner Image URL (Optional)
+                      Mobile Banner URL
                     </label>
                     <input
                       type="url"
@@ -849,14 +714,14 @@ export const FestivalCampaignManager: React.FC = () => {
                       onChange={(e) =>
                         setEditingCampaign({ ...editingCampaign, mobile_banner_url: e.target.value })
                       }
-                      className="w-full p-2 border rounded-lg"
+                      className="w-full p-2.5 border border-slate-300 rounded-lg"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Section 5: Deals & Gift Packaging */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Coupon & Discount */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">
                     Coupon Code
@@ -868,12 +733,12 @@ export const FestivalCampaignManager: React.FC = () => {
                     onChange={(e) =>
                       setEditingCampaign({ ...editingCampaign, coupon_code: e.target.value.toUpperCase() })
                     }
-                    className="w-full p-2 border rounded-lg font-mono font-bold"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg font-mono font-bold"
                   />
                 </div>
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">
-                    Discount Percentage (%)
+                    Discount (%)
                   </label>
                   <input
                     type="number"
@@ -883,7 +748,7 @@ export const FestivalCampaignManager: React.FC = () => {
                     onChange={(e) =>
                       setEditingCampaign({ ...editingCampaign, discount_percentage: Number(e.target.value) })
                     }
-                    className="w-full p-2 border rounded-lg"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg"
                   />
                 </div>
                 <div>
@@ -897,43 +762,38 @@ export const FestivalCampaignManager: React.FC = () => {
                     onChange={(e) =>
                       setEditingCampaign({ ...editingCampaign, min_cart_value: Number(e.target.value) })
                     }
-                    className="w-full p-2 border rounded-lg"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg"
                   />
                 </div>
               </div>
 
-              {/* Gift packaging */}
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between">
-                <div>
-                  <span className="font-bold text-amber-950 block">Complimentary Gift Packaging Perk</span>
-                  <span className="text-[11px] text-amber-800">
-                    Offers shoppers a free festive gold-embossed gift box and ribbon at checkout.
-                  </span>
-                </div>
+              {/* Gift Packaging */}
+              <label className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between cursor-pointer">
+                <span className="font-bold text-slate-800">Complimentary Gift Packaging</span>
                 <input
                   type="checkbox"
                   checked={Boolean(editingCampaign.gift_packaging_enabled)}
                   onChange={(e) =>
                     setEditingCampaign({ ...editingCampaign, gift_packaging_enabled: e.target.checked })
                   }
-                  className="w-5 h-5 text-amber-600 rounded"
+                  className="w-4 h-4 text-slate-900 rounded"
                 />
-              </div>
+              </label>
 
-              {/* Section 6: Existing Catalog Featured Products Selector (no record duplication) */}
+              {/* Featured Products */}
               <div className="space-y-2">
                 <label className="font-bold text-slate-700 block">
-                  Select Featured Catalog Products ({editingCampaign.featured_product_ids?.length || 0} selected)
+                  Featured Products ({editingCampaign.featured_product_ids?.length || 0} selected)
                 </label>
-                <div className="max-h-40 overflow-y-auto border rounded-xl p-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5 bg-slate-50">
+                <div className="max-h-56 overflow-y-auto border border-slate-200 rounded-lg p-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5 bg-slate-50">
                   {products.map((p) => {
                     const isSelected = editingCampaign.featured_product_ids?.includes(p.id);
                     return (
                       <label
                         key={p.id}
-                        className={`flex items-center gap-2 p-1.5 rounded-lg border text-xs cursor-pointer select-none ${
+                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer select-none ${
                           isSelected
-                            ? 'bg-amber-100 border-amber-400 font-bold text-amber-950'
+                            ? 'bg-white border-slate-900 font-semibold text-slate-900'
                             : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                         }`}
                       >
@@ -947,7 +807,7 @@ export const FestivalCampaignManager: React.FC = () => {
                               : cur.filter((id) => id !== p.id);
                             setEditingCampaign({ ...editingCampaign, featured_product_ids: next });
                           }}
-                          className="w-4 h-4 text-amber-600 rounded"
+                          className="w-4 h-4 text-slate-900 rounded"
                         />
                         <span className="truncate flex-1">{p.name}</span>
                         <span className="font-mono text-slate-500 text-[10px]">
@@ -958,121 +818,123 @@ export const FestivalCampaignManager: React.FC = () => {
                   })}
                 </div>
               </div>
+            </div>
 
-              {/* Footer Actions */}
-              <div className="flex justify-end gap-2 pt-3 border-t">
-                <button
-                  type="button"
-                  onClick={() => setEditingCampaign(null)}
-                  className="px-4 py-2 border rounded-xl text-slate-600 hover:bg-slate-100 font-semibold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl shadow-md transition-colors cursor-pointer"
-                >
-                  Save Campaign
-                </button>
-              </div>
-            </form>
-          </div>
+            <div className="max-w-4xl mx-auto flex justify-end gap-2 pt-5 mt-5 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setEditingCampaign(null)}
+                className="px-4 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-100 text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+              >
+                Save Campaign
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
-      {/* DESKTOP & MOBILE PREVIEW MODAL */}
+      {/* PREVIEW MODAL */}
       {previewCampaign && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-3 sm:p-6 overflow-hidden">
-          {/* Top Bar with viewport switcher & close */}
-          <div className="w-full max-w-5xl flex items-center justify-between text-white pb-3 shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-sm">Campaign Live Preview:</span>
-              <span className="text-amber-300 font-mono text-xs">{previewCampaign.name}</span>
+        <div className="fixed inset-0 z-50 bg-slate-950/80 flex flex-col">
+          <div className="w-full flex items-center justify-between gap-2 bg-slate-900 border-b border-slate-800 px-4 py-3 text-white shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-bold text-xs sm:text-sm truncate">{previewCampaign.name}</span>
             </div>
 
             <div className="flex items-center gap-2">
               <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
                 <button
+                  type="button"
                   onClick={() => setPreviewDevice('desktop')}
-                  className={`flex items-center gap-1 px-3 py-1 text-xs font-bold rounded ${
-                    previewDevice === 'desktop' ? 'bg-blue-600 text-white' : 'text-slate-300'
+                  className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md cursor-pointer ${
+                    previewDevice === 'desktop' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   <Monitor className="w-3.5 h-3.5" />
-                  <span>Desktop View</span>
+                  <span>Desktop</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => setPreviewDevice('mobile')}
-                  className={`flex items-center gap-1 px-3 py-1 text-xs font-bold rounded ${
-                    previewDevice === 'mobile' ? 'bg-blue-600 text-white' : 'text-slate-300'
+                  className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md cursor-pointer ${
+                    previewDevice === 'mobile' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   <Smartphone className="w-3.5 h-3.5" />
-                  <span>Mobile View</span>
+                  <span>Mobile</span>
                 </button>
               </div>
 
               <button
+                type="button"
                 onClick={() => setPreviewCampaign(null)}
-                className="p-1.5 text-slate-400 hover:text-white"
+                className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
+                <span>Close</span>
               </button>
             </div>
           </div>
 
-          {/* Viewport Frame */}
-          <div
-            className={`w-full overflow-y-auto bg-slate-100 rounded-2xl shadow-2xl transition-all duration-300 border border-slate-700 ${
-              previewDevice === 'mobile'
-                ? 'max-w-sm h-[750px] border-8 border-slate-800 rounded-[36px] overflow-x-hidden'
-                : 'max-w-5xl h-[85vh]'
-            }`}
-          >
-            {/* Embedded Preview Banner */}
-            <div className="p-3">
-              <div
-                className="relative overflow-hidden rounded-2xl text-white p-5 shadow-lg border"
-                style={{
-                  background: `linear-gradient(135deg, ${previewCampaign.theme_colors?.secondary || '#020617'} 0%, ${previewCampaign.theme_colors?.primary || '#b45309'} 100%)`,
-                }}
-              >
-                <span className="inline-block px-2.5 py-0.5 bg-amber-400/20 text-amber-200 border border-amber-400/40 rounded-full text-[10px] font-bold uppercase mb-2">
-                  {previewCampaign.badge_text || 'FESTIVE SALE'}
-                </span>
-                <h1 className="text-xl sm:text-2xl font-black">{previewCampaign.hero_headline}</h1>
-                <p className="text-xs text-slate-200 mt-1">{previewCampaign.hero_subtitle}</p>
+          <div className="flex-1 overflow-y-auto p-4 flex justify-center">
+            <div
+              className={`w-full overflow-y-auto bg-slate-50 rounded-xl border border-slate-200 ${
+                previewDevice === 'mobile' ? 'max-w-sm' : 'max-w-5xl'
+              }`}
+            >
+              <div className="p-4">
+                <div
+                  className="relative overflow-hidden rounded-xl text-white p-5 border"
+                  style={{
+                    background: `linear-gradient(135deg, ${previewCampaign.theme_colors?.secondary || '#020617'} 0%, ${previewCampaign.theme_colors?.primary || '#b45309'} 100%)`,
+                  }}
+                >
+                  {previewCampaign.badge_text && (
+                    <span className="inline-block px-2 py-0.5 bg-white/15 text-white rounded text-[10px] font-bold uppercase mb-2">
+                      {previewCampaign.badge_text}
+                    </span>
+                  )}
+                  <h1 className="text-xl sm:text-2xl font-black">{previewCampaign.hero_headline}</h1>
+                  {previewCampaign.hero_subtitle && (
+                    <p className="text-xs text-slate-200 mt-1">{previewCampaign.hero_subtitle}</p>
+                  )}
 
-                {previewCampaign.coupon_code && (
-                  <div className="mt-3 inline-flex items-center gap-2 bg-slate-950/80 px-2.5 py-1 rounded-lg text-xs">
-                    <span className="text-slate-400 text-[10px]">Code:</span>
-                    <span className="font-mono font-bold text-amber-300">{previewCampaign.coupon_code}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Featured Products in Preview */}
-            <div className="p-3">
-              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
-                Featured {previewCampaign.festival_name} Showcase:
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
-                {(previewCampaign.featured_product_ids || []).slice(0, 4).map((pid) => {
-                  const p = products.find((prod) => prod.id === pid);
-                  if (!p) return null;
-                  return (
-                    <div key={p.id} className="bg-white p-2.5 rounded-xl border border-slate-200">
-                      <div className="w-full h-24 rounded-lg overflow-hidden bg-slate-50 mb-1.5">
-                        <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover" />
-                      </div>
-                      <span className="text-[11px] font-bold text-slate-900 block truncate">{p.name}</span>
-                      <span className="text-xs font-black text-rose-600 font-mono">
-                        {formatINR(p.dealPrice || p.regularPrice)}
-                      </span>
+                  {previewCampaign.coupon_code && (
+                    <div className="mt-3 inline-flex items-center gap-2 bg-slate-950/70 px-2.5 py-1 rounded-lg text-xs">
+                      <span className="text-slate-300 text-[10px]">Code:</span>
+                      <span className="font-mono font-bold text-amber-300">{previewCampaign.coupon_code}</span>
                     </div>
-                  );
-                })}
+                  )}
+                </div>
+              </div>
+
+              <div className="p-4 pt-0">
+                <h3 className="text-xs font-bold text-slate-800 mb-2">
+                  Featured Products
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {(previewCampaign.featured_product_ids || []).slice(0, 4).map((pid) => {
+                    const p = products.find((prod) => prod.id === pid);
+                    if (!p) return null;
+                    return (
+                      <div key={p.id} className="bg-white p-2.5 rounded-lg border border-slate-200">
+                        <div className="w-full h-24 rounded-md overflow-hidden bg-slate-50 mb-1.5">
+                          <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover" />
+                        </div>
+                        <span className="text-[11px] font-bold text-slate-900 block truncate">{p.name}</span>
+                        <span className="text-xs font-black text-slate-900 font-mono">
+                          {formatINR(p.dealPrice || p.regularPrice)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>

@@ -3,6 +3,8 @@ import {
   Address,
   CartItem,
   CategoryItem,
+  SubCategoryItem,
+  CategoryCommissionStructure,
   Coupon,
   DeliveryType,
   FestiveCampaign,
@@ -17,7 +19,12 @@ import {
   StoreSettings,
   UserProfile,
   UserAccount,
+  AccountStatus,
+  AccountSanctionDuration,
+  AccountSanction,
   Outlet,
+  OutletStatus,
+  StoreOrderAcceptanceConfig,
   OutletOwnershipRules,
   BusinessCategory,
   CategoryApprovalStatus,
@@ -73,9 +80,59 @@ import {
   RiderRemittanceSubmission,
   CarrierCodSettlement,
   ShiprocketSyncResult,
+  OrderRtoDetails,
+  ReferralProgramConfig,
+  ReferralRecord,
+  PromotionalPage,
+  ChatbotAiSettings,
+  ChatbotKnowledgeItem,
+  CategoryReturnPolicy,
+  ReturnExchangeRequest,
+  ReturnPolicyType,
+  ReturnRequestStatus,
+  ReturnReasonCode,
+  MahaSaleParticipation,
+  MahaSaleStatus,
+  MahaSaleSlot,
+  PromotionType,
+  PromotionSlot,
+  StoreSlotProductBanner,
+  JeAssuredSopConfig,
+  JeAssuredHealthMetrics,
+  StorePromotionRequest,
+  CategoryListingFormat,
+  JeCashTransaction,
 } from '../types';
+import {
+  INITIAL_CATEGORY_LISTING_FORMATS,
+  resolveFormatForCategory,
+} from '../data/categoryFormatsData';
+import {
+  INITIAL_CATEGORY_RETURN_POLICIES,
+  INITIAL_RETURN_EXCHANGE_REQUESTS,
+} from '../data/returnPoliciesData';
+import {
+  INITIAL_MAHA_SALE_SLOTS,
+  INITIAL_MAHA_SALE_PARTICIPATIONS,
+  INITIAL_PROMOTION_TYPES,
+  INITIAL_PROMOTION_SLOTS,
+  INITIAL_STORE_SLOT_BANNERS,
+  INITIAL_JE_ASSURED_SOP_CONFIG,
+  INITIAL_STORE_PROMOTION_REQUESTS,
+  computeProductJeAssuredHealth,
+  getEligibilityTierFromScore,
+} from '../data/mahaSaleData';
+import { INITIAL_PROMOTIONAL_PAGES, isPromotionalPageCurrentlyActive } from '../utils/promotionalEngine';
+import { INITIAL_CHATBOT_AI_SETTINGS, INITIAL_CHATBOT_KNOWLEDGE_BASE } from '../data/chatbotKnowledgeData';
 import { syncShipmentStatus } from '../services/shiprocketService';
 import { formatINR } from '../utils/currency';
+import {
+  safeLocalStorageSetItem,
+  safeLocalStorageGetItem,
+  safeLocalStorageRemoveItem,
+  serializeCartSafely,
+  rehydrateCartSafely,
+} from '../utils/storage';
 import { verifyAdminOtp } from '../utils/authenticator';
 import {
   calculateHaversineDistanceKm,
@@ -83,6 +140,8 @@ import {
   generateSuggestedRouteSteps,
   getGoogleMapsNavigationUrl,
   DEFAULT_STORE_COORDINATES,
+  isLegacyOrInvalidCoord,
+  sanitizeStoreCoordinates,
 } from '../utils/geoUtils';
 import {
   INITIAL_PAYMENT_GATEWAYS,
@@ -99,6 +158,12 @@ import {
   InHouseRider,
   INITIAL_RIDER_REMITTANCES,
   INITIAL_CARRIER_SETTLEMENTS,
+  RiderEarningStructure,
+  RiderDeliverySlot,
+  RiderPayoutRecord,
+  INITIAL_RIDER_EARNING_STRUCTURE,
+  INITIAL_RIDER_SLOTS,
+  INITIAL_RIDER_PAYOUTS,
 } from '../data/mockDeliveryPartners';
 import {
   INITIAL_HOMEPAGE_SETTINGS,
@@ -123,6 +188,9 @@ import {
   INITIAL_ACCOUNTS,
   INITIAL_DELIVERY_ZONES,
   INITIAL_BULK_DISCOUNT_RULES,
+  INITIAL_REFERRAL_PROGRAM_CONFIG,
+  INITIAL_REFERRAL_RECORDS,
+  INITIAL_JE_CASH_TRANSACTIONS,
 } from '../data/mockData';
 import { evaluateCartBulkDiscount, EvaluatedBulkDiscount } from '../utils/bulkDiscountEngine';
 import {
@@ -136,6 +204,7 @@ import {
   INITIAL_STOCK_TRANSFERS,
   INITIAL_FRANCHISE_AGREEMENTS,
 } from '../data/multiOutletData';
+import { getDefaultOrderAcceptanceConfig } from '../data/storeTypesData';
 import {
   INITIAL_BRANDING_SETTINGS,
   INITIAL_BRANDING_HISTORY,
@@ -149,6 +218,7 @@ import {
 import { buildOrderTrackingUrl, buildUpiPaymentUri, generateQrDataUrl } from '../utils/qrcode';
 import { createDynamicUpiQrSession, RazorpayService, computeCartPriceChecksum } from '../services/paymentService';
 import { calculateOrderGstBreakdown, getHsnForProduct, DetailedTaxCalculation } from '../utils/gstTaxEngine';
+import { cleanCustomerName } from '../utils/cleaners';
 
 interface StoreContextType {
   // Master data
@@ -185,9 +255,28 @@ interface StoreContextType {
     activeSessionOtp?: string
   ) => { success: boolean; message: string; user?: UserProfile };
   registerCustomer: (data: { name: string; email: string; phone: string; password: string; city?: string; pincode?: string; addressLine?: string }) => { success: boolean; message: string; user?: UserProfile };
+  initiateCustomerSignupOtp: (data: { name: string; email: string; phone: string; password: string; city?: string; pincode?: string; addressLine?: string }) => { success: boolean; message: string; otpCode?: string; resendSeconds?: number };
+  resendCustomerSignupOtp: (email: string) => { success: boolean; message: string; otpCode?: string; resendSeconds?: number };
+  verifyCustomerSignupOtp: (email: string, enteredOtp: string) => { success: boolean; message: string; user?: UserProfile };
   createStoreStaffAccount: (data: { name: string; email: string; phone: string; password: string; role: Role; outletId?: string }) => { success: boolean; message: string };
   updateStoreStaffAccount: (id: string, updates: Partial<UserAccount>) => { success: boolean; message: string };
   deleteStoreStaffAccount: (id: string) => { success: boolean; message: string };
+  applyAccountSanction: (
+    accountId: string,
+    payload: {
+      status: AccountStatus;
+      reason: string;
+      duration: AccountSanctionDuration;
+      expiresAt?: string;
+      reVerificationRequirements?: string[];
+      notes?: string;
+      appliedBy?: string;
+    }
+  ) => { success: boolean; message: string; account?: UserAccount };
+  liftAccountSanction: (
+    accountId: string,
+    resolutionNote?: string
+  ) => { success: boolean; message: string; account?: UserAccount };
   logoutUser: () => void;
 
   // Multi-Outlet Management
@@ -198,6 +287,8 @@ interface StoreContextType {
   createOutlet: (outlet: Omit<Outlet, 'id' | 'createdAt'>) => void;
   updateOutlet: (outlet: Outlet) => void;
   deleteOutlet: (id: string) => void;
+  toggleOutletStatus: (id: string, newStatus?: OutletStatus) => void;
+  updateOutletOrderAcceptanceConfig: (id: string, config: StoreOrderAcceptanceConfig) => void;
 
   // Ownership Models
   ownershipModels: OutletOwnershipRules[];
@@ -207,6 +298,41 @@ interface StoreContextType {
   businessCategories: BusinessCategory[];
   createBusinessCategory: (cat: Omit<BusinessCategory, 'id' | 'itemCount'>) => void;
   updateCategoryApprovalStatus: (id: string, status: CategoryApprovalStatus, note?: string) => void;
+  addCategory: (data: {
+    name: string;
+    description?: string;
+    iconName?: string;
+    imageUrl?: string;
+    defaultGstRate?: number;
+    commissionStructure?: CategoryCommissionStructure;
+    subCategories?: SubCategoryItem[];
+  }) => { success: boolean; message: string; category?: CategoryItem };
+  updateCategory: (
+    categoryId: ProductCategory,
+    updates: Partial<CategoryItem>
+  ) => { success: boolean; message: string };
+  deleteCategory: (categoryId: ProductCategory) => { success: boolean; message: string };
+  addSubCategory: (
+    parentCategoryId: ProductCategory,
+    subCat: {
+      name: string;
+      description?: string;
+      imageUrl?: string;
+      iconName?: string;
+      commissionPercent?: number;
+    }
+  ) => { success: boolean; message: string; subCategory?: SubCategoryItem };
+  updateSubCategory: (
+    parentCategoryId: ProductCategory,
+    subCatId: string,
+    updates: Partial<SubCategoryItem>
+  ) => { success: boolean; message: string };
+  deleteSubCategory: (
+    parentCategoryId: ProductCategory,
+    subCatId: string
+  ) => { success: boolean; message: string };
+  fullScreenCategory: ProductCategory | 'all' | null;
+  setFullScreenCategory: (cat: ProductCategory | 'all' | null) => void;
 
   // Payout Management & Financial Subledger
   participants: Participant[];
@@ -243,6 +369,8 @@ interface StoreContextType {
   setSearchQuery: (q: string) => void;
   selectedCategory: ProductCategory | 'all';
   setSelectedCategory: (cat: ProductCategory | 'all') => void;
+  selectedSubCategory: string | 'all';
+  setSelectedSubCategory: (subCat: string | 'all') => void;
   selectedBrand: string | 'all';
   setSelectedBrand: (brand: string | 'all') => void;
   sortBy: 'featured' | 'price_low' | 'price_high' | 'rating' | 'discount';
@@ -276,14 +404,65 @@ interface StoreContextType {
     deliverySlot?: string;
     paymentMethod: PaymentMethod;
     isWhatsAppCheckout?: boolean;
+    informHubForDispatch?: boolean;
+    isPartialPrepaidCod?: boolean;
+    partialPrepaidAmount?: number;
+    codBalanceOnDelivery?: number;
+    partialPrepaidMethod?: string;
+    prepaidDiscount?: number;
+    codExtraCharge?: number;
+    paymentProof?: {
+      screenshotUrl?: string;
+      utrNumber?: string;
+    };
   }) => Promise<Order>;
   updateOrderStatus: (orderId: string, status: OrderStatus, note?: string, updatedBy?: string) => void;
   verifyOrderPayment: (orderId: string, transactionId?: string) => void;
   assignDeliveryStaff: (orderId: string, staffId: string, staffName: string) => void;
-  completeDelivery: (orderId: string, proof: { collectedAmount?: number; note?: string; receiverName?: string }) => void;
+  completeDelivery: (
+    orderId: string,
+    proof: {
+      collectedAmount?: number;
+      paymentMethodCollected?: 'cash' | 'doorstep_upi_qr';
+      note?: string;
+      receiverName?: string;
+      podImageUrl?: string;
+      deliveryPinEntered?: string;
+      verifiedOtp?: boolean;
+      customerFeedback?: {
+        rating: number;
+        tags: string[];
+        comment?: string;
+        submittedAt: string;
+      };
+    }
+  ) => void;
+  submitDeliveryCustomerFeedback: (
+    orderId: string,
+    feedback: {
+      rating: number;
+      tags: string[];
+      comment?: string;
+      submittedAt?: string;
+    }
+  ) => void;
   reportDeliveryFailure: (orderId: string, reason: string) => void;
   requestOrderCancellation: (orderId: string, reason: string) => void;
-  requestOrderReturn: (orderId: string, reason: string) => void;
+  requestOrderReturn: (
+    orderId: string,
+    reason: string,
+    details?: {
+      issueType?: string;
+      productId?: string;
+      productName?: string;
+      sku?: string;
+      serialNumber?: string;
+      unboxingVideoUrl?: string;
+      unboxingVideoName?: string;
+      proofImages?: string[];
+      requestType?: 'refund' | 'replacement' | 'exchange';
+    }
+  ) => void;
   cancelOrderOrItems: (
     orderId: string,
     cancellations: CancelItemRequest[],
@@ -327,6 +506,40 @@ interface StoreContextType {
   toggleCampaignStatus: (campaignId: string) => void;
   addCoupon: (coupon: Omit<Coupon, 'id' | 'timesUsed'>) => void;
   toggleCouponStatus: (couponId: string) => void;
+  updateCoupon: (couponId: string, updates: Partial<Coupon>) => { success: boolean; message: string };
+  deleteCoupon: (couponId: string) => { success: boolean; message: string };
+
+  // Referral Program Structure & Operations
+  referralProgramConfig: ReferralProgramConfig;
+  updateReferralProgramConfig: (updates: Partial<ReferralProgramConfig>, updatedBy?: string) => { success: boolean; message: string };
+  referralRecords: ReferralRecord[];
+  awardReferralBonus: (recordId: string, notes?: string) => { success: boolean; message: string };
+  cancelReferralRecord: (recordId: string, reason?: string) => { success: boolean; message: string };
+  adjustCustomerWalletBalance: (targetPhoneOrId: string, amountDiff: number, reason: string) => { success: boolean; message: string };
+
+  // JE Cash (Store Wallet & Instant Payment)
+  jeCashTransactions: JeCashTransaction[];
+  refillJeCashBalance: (amount: number, paymentMethodName?: string, transactionNote?: string) => { success: boolean; message: string; transactionId: string; newBalance: number };
+  deductJeCashBalance: (amount: number, orderId?: string, reason?: string) => { success: boolean; message: string; newBalance: number };
+
+  // Promotional Landing Pages & Marketing Spaces
+  promotionalPages: PromotionalPage[];
+  activePromotionalPage: PromotionalPage | null;
+  setActivePromotionalPage: (page: PromotionalPage | null) => void;
+  addPromotionalPage: (page: Omit<PromotionalPage, 'id' | 'createdAt' | 'updatedAt'>) => { success: boolean; message: string; page?: PromotionalPage };
+  updatePromotionalPage: (pageId: string, updates: Partial<PromotionalPage>) => { success: boolean; message: string };
+  deletePromotionalPage: (pageId: string) => { success: boolean; message: string };
+  togglePromotionalPageStatus: (pageId: string) => { success: boolean; message: string };
+  openPromotionalPageBySlug: (slug: string) => boolean;
+
+  // Chatbot AI & Knowledge Base Training
+  chatbotAiSettings: ChatbotAiSettings;
+  updateChatbotAiSettings: (updates: Partial<ChatbotAiSettings>) => { success: boolean; message: string };
+  addKnowledgeItem: (item: Omit<ChatbotKnowledgeItem, 'id' | 'lastUpdated'>) => { success: boolean; message: string; item?: ChatbotKnowledgeItem };
+  updateKnowledgeItem: (itemId: string, updates: Partial<ChatbotKnowledgeItem>) => { success: boolean; message: string };
+  deleteKnowledgeItem: (itemId: string) => { success: boolean; message: string };
+  toggleKnowledgeItemStatus: (itemId: string) => { success: boolean; message: string };
+  resetKnowledgeBaseToDefaults: () => { success: boolean; message: string };
 
   // Settings
   updateSettings: (newSettings: Partial<StoreSettings>) => void;
@@ -334,6 +547,10 @@ interface StoreContextType {
   // User actions
   toggleWishlist: (productId: string) => void;
   addSavedAddress: (address: Omit<Address, 'id'>) => void;
+  updateUserProfile: (updates: Partial<Pick<UserProfile, 'name' | 'phone' | 'email'>>) => { success: boolean; message: string };
+  deleteSavedAddress: (addressId: string) => void;
+  setDefaultAddress: (addressId: string) => void;
+  redeemReferralCode: (code: string) => { success: boolean; message: string; bonusAdded?: number };
 
   // Active UI modal controls
   activeModal: string | null;
@@ -362,6 +579,18 @@ interface StoreContextType {
   activeUpiSession: DynamicUpiQrSession | null;
   setActiveUpiSession: (session: DynamicUpiQrSession | null) => void;
   createUpiCheckoutSession: (orderId: string, amount: number) => Promise<DynamicUpiQrSession>;
+  approveUpiPayment: (orderId: string, notes?: string, adminName?: string) => { success: boolean; message: string };
+  rejectUpiPayment: (orderId: string, reason: string, adminName?: string) => { success: boolean; message: string };
+  updateUpiSettings: (upiId: string, upiName?: string) => { success: boolean; message: string };
+  updatePaymentChargeSettings: (config: {
+    codExtraChargeEnabled: boolean;
+    codExtraChargeType: 'fixed' | 'percentage';
+    codExtraChargeValue: number;
+    prepaidDiscountEnabled: boolean;
+    prepaidDiscountType: 'percentage' | 'fixed';
+    prepaidDiscountValue: number;
+    prepaidMaxDiscountAmount?: number;
+  }) => { success: boolean; message: string };
   paymentTransactions: PaymentTransactionRecord[];
   verifyPaymentTransaction: (orderId: string, provider: PaymentGatewayProvider, txnRef: string, payerDetails?: any) => void;
   initiateOrderRefund: (orderId: string, reason: string) => void;
@@ -503,6 +732,262 @@ interface StoreContextType {
   }) => { success: boolean; message: string };
   updateDeliveryPartnerConfig: (partnerId: string, updates: Partial<DeliveryPartnerAccount>) => { success: boolean; message: string };
   addInHouseRider: (rider: InHouseRider) => { success: boolean; message: string };
+  onboardNewRider: (riderData: {
+    name: string;
+    phone: string;
+    email?: string;
+    password?: string;
+    vehicleNo: string;
+    outletId: string;
+    outletName: string;
+    aadharNumber: string;
+    panNumber: string;
+    bankAccountNo: string;
+    ifscCode: string;
+    selfieUrl?: string;
+  }) => { success: boolean; message: string; rider?: InHouseRider };
+  transferRiderStore: (riderId: string, targetOutletId: string, targetOutletName: string) => { success: boolean; message: string };
+  requestRiderStoreTransfer: (riderId: string, targetOutletId: string, targetOutletName: string, reason: string) => { success: boolean; message: string };
+  approveRiderStoreTransfer: (riderId: string) => { success: boolean; message: string };
+  rejectRiderStoreTransfer: (riderId: string, reviewNotes?: string) => { success: boolean; message: string };
+  toggleRiderOnlineStatus: (riderId: string, isOnline: boolean) => void;
+  autoAssignOrdersToRiders: () => { success: boolean; message: string; count: number };
+  requestOrderRto: (orderId: string, rtoPayload: OrderRtoDetails) => { success: boolean; message: string };
+  reviewOrderRto: (orderId: string, decision: 'approved' | 'rejected', reviewNotes?: string) => { success: boolean; message: string };
+
+  // Rider Earning Structure, Slot Management & Payout Module
+  riderEarningStructure: RiderEarningStructure;
+  updateRiderEarningStructure: (updates: Partial<RiderEarningStructure>, updatedBy?: string) => { success: boolean; message: string };
+  recalculateAllRidersEarningsFromStructure: () => { success: boolean; message: string };
+  updateIndividualRiderEarnings: (
+    riderId: string,
+    earningsUpdate: {
+      slotEarnings: number;
+      orderEarnings: number;
+      distanceEarnings: number;
+      incentiveEarnings: number;
+      surgeEarnings: number;
+      milestoneEarnings: number;
+    }
+  ) => { success: boolean; message: string };
+
+  riderSlots: RiderDeliverySlot[];
+  createRiderSlot: (slotData: Omit<RiderDeliverySlot, 'id' | 'createdAt' | 'enrolledRiderIds'> & { enrolledRiderIds?: string[] }) => { success: boolean; message: string; slot?: RiderDeliverySlot };
+  updateRiderSlot: (slotId: string, updates: Partial<RiderDeliverySlot>) => { success: boolean; message: string };
+  deleteRiderSlot: (slotId: string) => { success: boolean; message: string };
+  toggleRiderSlotEnrollment: (slotId: string, riderId: string) => { success: boolean; message: string; enrolled: boolean };
+
+  riderPayouts: RiderPayoutRecord[];
+  createRiderPayout: (payload: {
+    riderId: string;
+    periodLabel: string;
+    paymentMethod: 'IMPS' | 'NEFT' | 'UPI_INSTANT';
+    codDeductionsOrPenalties?: number;
+    notes?: string;
+    utrReference?: string;
+    markPaidImmediately?: boolean;
+  }) => { success: boolean; message: string; payout?: RiderPayoutRecord };
+  createBatchRiderPayouts: (periodLabel: string, paymentMethod: 'IMPS' | 'NEFT' | 'UPI_INSTANT') => { success: boolean; message: string; count: number };
+  processRiderPayoutStatus: (
+    payoutId: string,
+    status: 'pending_approval' | 'processing' | 'paid' | 'on_hold',
+    utrReference?: string,
+    approvedBy?: string,
+    notes?: string
+  ) => { success: boolean; message: string };
+
+  // Return, Refund & Replacement Structure as per Category
+  categoryReturnPolicies: CategoryReturnPolicy[];
+  returnExchangeRequests: ReturnExchangeRequest[];
+  updateCategoryReturnPolicy: (categoryId: ProductCategory, updates: Partial<CategoryReturnPolicy>) => { success: boolean; message: string };
+  resetCategoryReturnPolicies: () => { success: boolean; message: string };
+  getCategoryReturnPolicy: (categoryId: ProductCategory) => CategoryReturnPolicy;
+  submitReturnExchangeRequest: (reqData: {
+    orderId: string;
+    invoiceNumber: string;
+    outletId?: string;
+    outletName?: string;
+    customerId?: string;
+    customerName: string;
+    customerPhone: string;
+    customerEmail?: string;
+    productId: string;
+    productName: string;
+    productSku: string;
+    productImage: string;
+    categoryId: ProductCategory;
+    categoryName: string;
+    quantity: number;
+    itemUnitPrice: number;
+    itemTotal: number;
+    requestType: 'refund' | 'replacement' | 'exchange';
+    reason: ReturnReasonCode;
+    reasonDescription: string;
+    conditionChecklistConfirmed: boolean;
+    customerConditionNotes?: string;
+    serialNumber?: string;
+    unboxingVideoUrl?: string;
+    unboxingVideoName?: string;
+    evidenceImages?: string[];
+    exchangeOptions?: {
+      requestedSize?: string;
+      requestedColor?: string;
+      notes?: string;
+    };
+    refundMethod: 'original_payment' | 'wallet_credits' | 'bank_transfer_upi';
+    refundAmount: number;
+    walletBonusAmount?: number;
+    bankUpiDetails?: {
+      upiId?: string;
+      accountNumber?: string;
+      ifscCode?: string;
+      accountHolderName?: string;
+    };
+    deliveredAt: string;
+    pickupAddress: string;
+    pickupSlot?: string;
+  }) => { success: boolean; message: string; request?: ReturnExchangeRequest };
+  updateReturnRequestStatus: (
+    requestId: string,
+    status: ReturnRequestStatus,
+    note?: string,
+    staffName?: string,
+    assignedRider?: { id: string; name: string }
+  ) => { success: boolean; message: string };
+  processReturnRefund: (
+    requestId: string,
+    refundMethod: 'original_payment' | 'wallet_credits' | 'bank_transfer_upi',
+    transactionId?: string,
+    approverName?: string
+  ) => { success: boolean; message: string };
+  dispatchReturnReplacement: (
+    requestId: string,
+    replacementOrderId?: string,
+    approverName?: string
+  ) => { success: boolean; message: string };
+
+  // Maha Sale Slots & Restructured Participation Module
+  mahaSaleSlots: MahaSaleSlot[];
+  createMahaSaleSlot: (
+    slotData: Omit<MahaSaleSlot, 'id' | 'createdAt' | 'createdBy' | 'participatingStoreCount' | 'participatingProductCount'>
+  ) => { success: boolean; message: string; slot?: MahaSaleSlot };
+  updateMahaSaleSlot: (slotId: string, updates: Partial<MahaSaleSlot>) => { success: boolean; message: string };
+  deleteMahaSaleSlot: (slotId: string) => { success: boolean; message: string };
+  participateInMahaSaleSlot: (data: {
+    slotId: string;
+    storeId?: string;
+    storeName?: string;
+    items: Array<{
+      productId: string;
+      discountType: 'percentage' | 'fixed_value';
+      discountValue: number;
+    }>;
+    storeNotes?: string;
+  }) => { success: boolean; message: string; count: number };
+
+  // Promotion Types & Slots Architecture (Admin manages types & slots; Store participates with product + banner)
+  promotionTypes: PromotionType[];
+  createPromotionType: (data: Omit<PromotionType, 'id' | 'createdAt'>) => { success: boolean; message: string; type?: PromotionType };
+  updatePromotionType: (id: string, updates: Partial<PromotionType>) => { success: boolean; message: string };
+  deletePromotionType: (id: string) => { success: boolean; message: string };
+
+  promotionSlots: PromotionSlot[];
+  createPromotionSlot: (data: Omit<PromotionSlot, 'id' | 'createdAt' | 'createdBy' | 'participatingProductsCount'>) => { success: boolean; message: string; slot?: PromotionSlot };
+  updatePromotionSlot: (id: string, updates: Partial<PromotionSlot>) => { success: boolean; message: string };
+  deletePromotionSlot: (id: string) => { success: boolean; message: string };
+
+  storeSlotProductBanners: StoreSlotProductBanner[];
+  addStoreSlotBanner: (data: Omit<StoreSlotProductBanner, 'id' | 'createdAt' | 'updatedAt' | 'isActive'>) => { success: boolean; message: string; banner?: StoreSlotProductBanner };
+  updateStoreSlotBanner: (id: string, updates: Partial<StoreSlotProductBanner>) => { success: boolean; message: string };
+  deleteStoreSlotBanner: (id: string) => { success: boolean; message: string };
+
+  // Maha Sale Participation & Live Flash Deals Module
+  mahaSaleParticipations: MahaSaleParticipation[];
+  requestMahaSaleParticipation: (data: {
+    productId: string;
+    requestedDiscountPct: number;
+    requestedDurationHours: number;
+    storeNotes?: string;
+    storeId?: string;
+  }) => { success: boolean; message: string; participation?: MahaSaleParticipation };
+  adminSuggestMahaSaleDiscount: (
+    participationId: string,
+    suggestion: {
+      adminSuggestedDiscountPct: number;
+      adminSuggestedDurationHours: number;
+      adminNotes?: string;
+      reviewedBy?: string;
+    }
+  ) => { success: boolean; message: string };
+  adminApproveMahaSaleDirectly: (
+    participationId: string,
+    adminNotes?: string
+  ) => { success: boolean; message: string };
+  adminRejectMahaSale: (participationId: string, reason: string) => { success: boolean; message: string };
+  storeAcceptMahaSaleAndGoLive: (participationId: string) => { success: boolean; message: string };
+  storeDeclineAdminSuggestion: (participationId: string, reason?: string) => { success: boolean; message: string };
+  endMahaSaleEarly: (participationId: string) => { success: boolean; message: string };
+  checkAndExpireMahaSales: () => { expiredCount: number };
+
+  // JE Assured Badge 4-Pillar SOP Health & Store Promotion Landing Page Requests
+  jeAssuredSopConfig: JeAssuredSopConfig;
+  updateJeAssuredSopConfig: (updates: Partial<JeAssuredSopConfig>) => { success: boolean; message: string };
+  getProductJeAssuredHealth: (product: Product) => JeAssuredHealthMetrics;
+  requestJeAssuredReviewForProduct: (
+    productId: string,
+    storeNotes?: string
+  ) => { success: boolean; message: string };
+  adminReviewJeAssuredProduct: (
+    productId: string,
+    payload: {
+      catalogueHealth: number;
+      inventoryHealth: number;
+      orderHealth: number;
+      feedbackReviewHealth: number;
+      goLiveWithBadge?: boolean;
+      adminNotes?: string;
+    }
+  ) => { success: boolean; message: string };
+  toggleProductJeAssuredLive: (
+    productId: string,
+    makeLive: boolean
+  ) => { success: boolean; message: string };
+  storePromotionRequests: StorePromotionRequest[];
+  submitStorePromotionRequest: (payload: {
+    productId: string;
+    salePrice: number;
+    startTime: string;
+    endTime: string;
+    bannerImages?: string[];
+    campaignHeadline?: string;
+    targetPlacement?: 'top' | 'middle' | 'bottom';
+    requestJeAssuredBadge?: boolean;
+    storeNotes?: string;
+  }) => { success: boolean; message: string; request?: StorePromotionRequest };
+  reviewStorePromotionRequest: (
+    requestId: string,
+    payload: {
+      decision: 'approved_live' | 'rejected';
+      bannerImages?: string[];
+      salePrice?: number;
+      startTime?: string;
+      endTime?: string;
+      approveJeAssuredBadge?: boolean;
+      adminNotes?: string;
+    }
+  ) => { success: boolean; message: string };
+
+  // Category-Based Product Listing Formats (Admin Create / Edit / Delete + Store Use)
+  categoryFormats: CategoryListingFormat[];
+  getFormatForCategory: (categoryId: ProductCategory, subCategoryId?: string) => CategoryListingFormat;
+  createCategoryFormat: (
+    formatData: Omit<CategoryListingFormat, 'id' | 'updatedAt'>
+  ) => { success: boolean; message: string; format?: CategoryListingFormat };
+  updateCategoryFormat: (
+    formatId: string,
+    updates: Partial<CategoryListingFormat>
+  ) => { success: boolean; message: string };
+  deleteCategoryFormat: (formatId: string) => { success: boolean; message: string };
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -512,20 +997,135 @@ const STORAGE_KEY_PREFIX = 'je_retail_store_';
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Load state from localStorage or use initial seeds
   const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}products`);
-    return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}products`);
+      if (saved) {
+        const parsed: Product[] = JSON.parse(saved);
+        const existingIds = new Set(parsed.map((p) => p.id));
+        const missing = INITIAL_PRODUCTS.filter((p) => !existingIds.has(p.id));
+        return missing.length > 0 ? [...parsed, ...missing] : parsed;
+      }
+      return INITIAL_PRODUCTS;
+    } catch {
+      return INITIAL_PRODUCTS;
+    }
   });
 
-  const [categories] = useState<CategoryItem[]>(INITIAL_CATEGORIES);
+  const [categories, setCategories] = useState<CategoryItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}categories`);
+      if (saved) {
+        const parsed: CategoryItem[] = JSON.parse(saved);
+        const hydrated = parsed.map((cat) => {
+          const seed = INITIAL_CATEGORIES.find((s) => s.id === cat.id);
+          if (!seed) return cat;
+          const mergedSubs =
+            cat.subCategories && cat.subCategories.length > 0
+              ? cat.subCategories.map((sub) => {
+                  const seedSub = seed.subCategories?.find((ss) => ss.id === sub.id);
+                  return {
+                    ...seedSub,
+                    ...sub,
+                    imageUrl: sub.imageUrl || seedSub?.imageUrl,
+                    iconName: sub.iconName || seedSub?.iconName,
+                  };
+                })
+              : seed.subCategories;
+          return {
+            ...seed,
+            ...cat,
+            imageUrl: cat.imageUrl || seed.imageUrl,
+            commissionStructure: cat.commissionStructure || seed.commissionStructure,
+            subCategories: mergedSubs,
+          };
+        });
+        const existingIds = new Set(hydrated.map((c) => c.id));
+        const missing = INITIAL_CATEGORIES.filter((c) => !existingIds.has(c.id));
+        return missing.length > 0 ? [...hydrated, ...missing] : hydrated;
+      }
+      return INITIAL_CATEGORIES;
+    } catch {
+      return INITIAL_CATEGORIES;
+    }
+  });
+
+  const [categoryFormats, setCategoryFormats] = useState<CategoryListingFormat[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}category_formats_v1`);
+      if (saved) {
+        const parsed: CategoryListingFormat[] = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed : INITIAL_CATEGORY_LISTING_FORMATS;
+      }
+      return INITIAL_CATEGORY_LISTING_FORMATS;
+    } catch {
+      return INITIAL_CATEGORY_LISTING_FORMATS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}category_formats_v1`, JSON.stringify(categoryFormats));
+    } catch {
+      // ignore storage errors
+    }
+  }, [categoryFormats]);
 
   const [cart, setCart] = useState<CartItem[]>(() => {
-    const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}cart`);
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}cart`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return rehydrateCartSafely(parsed, INITIAL_PRODUCTS);
+      }
+    } catch (e) {
+      console.warn('Failed to parse cart from storage, falling back to empty cart', e);
+    }
+    return [];
   });
 
   const [orders, setOrders] = useState<Order[]>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}orders`);
-    return saved ? JSON.parse(saved) : INITIAL_ORDERS;
+    if (saved) {
+      try {
+        const parsed: Order[] = JSON.parse(saved);
+        return parsed.map((ord) => {
+          const cleanOutletCoords = sanitizeStoreCoordinates(ord.outletCoordinates, DEFAULT_STORE_COORDINATES);
+          const cleanCustCoords = sanitizeStoreCoordinates(
+            ord.deliveryCoordinates || ord.customer?.coordinates,
+            { lat: 19.4210, lng: 72.8235 }
+          );
+          const cleanArea =
+            ord.customer?.area && /hazratganj|gomti|mahanagar|aliganj|lucknow/i.test(ord.customer.area)
+              ? 'Nalasopara East'
+              : ord.customer?.area || 'Nalasopara East';
+          const cleanCity =
+            ord.customer?.city && /lucknow/i.test(ord.customer.city)
+              ? 'Nalasopara'
+              : ord.customer?.city || 'Nalasopara';
+          const cleanPincode =
+            ord.customer?.pincode && ord.customer.pincode.startsWith('226')
+              ? '401209'
+              : ord.customer?.pincode || '401209';
+
+          return {
+            ...ord,
+            outletCoordinates: cleanOutletCoords,
+            deliveryCoordinates: cleanCustCoords,
+            customer: {
+              ...ord.customer,
+              name: cleanCustomerName(ord.customer?.name),
+              area: cleanArea,
+              city: cleanCity,
+              pincode: cleanPincode,
+              coordinates: cleanCustCoords,
+            },
+          };
+        });
+      } catch {
+        return INITIAL_ORDERS;
+      }
+    }
+    return INITIAL_ORDERS;
   });
 
   const [stockMovements, setStockMovements] = useState<StockMovement[]>(() => {
@@ -543,14 +1143,178 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return saved ? JSON.parse(saved) : INITIAL_COUPONS;
   });
 
+  const [referralProgramConfig, setReferralProgramConfig] = useState<ReferralProgramConfig>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}referral_config`);
+      return saved ? JSON.parse(saved) : INITIAL_REFERRAL_PROGRAM_CONFIG;
+    } catch {
+      return INITIAL_REFERRAL_PROGRAM_CONFIG;
+    }
+  });
+
+  const [referralRecords, setReferralRecords] = useState<ReferralRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}referral_records`);
+      return saved ? JSON.parse(saved) : INITIAL_REFERRAL_RECORDS;
+    } catch {
+      return INITIAL_REFERRAL_RECORDS;
+    }
+  });
+
+  const [promotionalPages, setPromotionalPages] = useState<PromotionalPage[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}promotional_pages`);
+      return saved ? JSON.parse(saved) : INITIAL_PROMOTIONAL_PAGES;
+    } catch {
+      return INITIAL_PROMOTIONAL_PAGES;
+    }
+  });
+
+  const [activePromotionalPage, setActivePromotionalPage] = useState<PromotionalPage | null>(null);
+
+  // Return, Refund, Replacement & Exchange Structure as per Category
+  const [categoryReturnPolicies, setCategoryReturnPolicies] = useState<CategoryReturnPolicy[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}category_return_policies`);
+      if (saved) {
+        const parsed: CategoryReturnPolicy[] = JSON.parse(saved);
+        const existingCatIds = new Set(parsed.map((p) => p.categoryId));
+        const missing = INITIAL_CATEGORY_RETURN_POLICIES.filter((p) => !existingCatIds.has(p.categoryId));
+        return missing.length > 0 ? [...parsed, ...missing] : parsed;
+      }
+      return INITIAL_CATEGORY_RETURN_POLICIES;
+    } catch {
+      return INITIAL_CATEGORY_RETURN_POLICIES;
+    }
+  });
+
+  const [returnExchangeRequests, setReturnExchangeRequests] = useState<ReturnExchangeRequest[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}return_exchange_requests`);
+      return saved ? JSON.parse(saved) : INITIAL_RETURN_EXCHANGE_REQUESTS;
+    } catch {
+      return INITIAL_RETURN_EXCHANGE_REQUESTS;
+    }
+  });
+
+  useEffect(() => {
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}category_return_policies`, JSON.stringify(categoryReturnPolicies));
+  }, [categoryReturnPolicies]);
+
+  useEffect(() => {
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}return_exchange_requests`, JSON.stringify(returnExchangeRequests));
+  }, [returnExchangeRequests]);
+
+  const [chatbotAiSettings, setChatbotAiSettings] = useState<ChatbotAiSettings>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}chatbot_ai_settings`);
+      if (saved) {
+        const parsed: ChatbotAiSettings = JSON.parse(saved);
+        return {
+          ...INITIAL_CHATBOT_AI_SETTINGS,
+          ...parsed,
+          knowledgeBase: Array.isArray(parsed.knowledgeBase) && parsed.knowledgeBase.length > 0
+            ? parsed.knowledgeBase
+            : INITIAL_CHATBOT_KNOWLEDGE_BASE,
+        };
+      }
+      return INITIAL_CHATBOT_AI_SETTINGS;
+    } catch {
+      return INITIAL_CHATBOT_AI_SETTINGS;
+    }
+  });
+
   const [settings, setSettings] = useState<StoreSettings>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}settings`);
-    return saved ? JSON.parse(saved) : INITIAL_SETTINGS;
+    if (saved) {
+      try {
+        const parsed: StoreSettings = JSON.parse(saved);
+        const hydrated: StoreSettings = {
+          ...INITIAL_SETTINGS,
+          ...parsed,
+          codExtraChargeEnabled:
+            parsed.codExtraChargeEnabled !== undefined
+              ? parsed.codExtraChargeEnabled
+              : INITIAL_SETTINGS.codExtraChargeEnabled,
+          codExtraChargeType: parsed.codExtraChargeType || INITIAL_SETTINGS.codExtraChargeType,
+          codExtraChargeValue:
+            parsed.codExtraChargeValue !== undefined
+              ? parsed.codExtraChargeValue
+              : INITIAL_SETTINGS.codExtraChargeValue,
+          prepaidDiscountEnabled:
+            parsed.prepaidDiscountEnabled !== undefined
+              ? parsed.prepaidDiscountEnabled
+              : INITIAL_SETTINGS.prepaidDiscountEnabled,
+          prepaidDiscountType: parsed.prepaidDiscountType || INITIAL_SETTINGS.prepaidDiscountType,
+          prepaidDiscountValue:
+            parsed.prepaidDiscountValue !== undefined
+              ? parsed.prepaidDiscountValue
+              : INITIAL_SETTINGS.prepaidDiscountValue,
+          prepaidMaxDiscountAmount:
+            parsed.prepaidMaxDiscountAmount !== undefined
+              ? parsed.prepaidMaxDiscountAmount
+              : INITIAL_SETTINGS.prepaidMaxDiscountAmount,
+        };
+        if (hydrated.city?.toLowerCase().includes('lucknow') || hydrated.pincode?.startsWith('226')) {
+          return {
+            ...hydrated,
+            address: INITIAL_SETTINGS.address,
+            city: INITIAL_SETTINGS.city,
+            state: INITIAL_SETTINGS.state,
+            pincode: INITIAL_SETTINGS.pincode,
+            serviceablePincodes: Array.from(
+              new Set([...INITIAL_SETTINGS.serviceablePincodes, ...(hydrated.serviceablePincodes || [])])
+            ),
+          };
+        }
+        return hydrated;
+      } catch {
+        return INITIAL_SETTINGS;
+      }
+    }
+    return INITIAL_SETTINGS;
   });
 
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}user`);
-    return saved ? JSON.parse(saved) : INITIAL_USER;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        const rawAddresses: Address[] = Array.isArray(parsed.savedAddresses) ? parsed.savedAddresses : INITIAL_USER.savedAddresses;
+        const sanitizedAddresses: Address[] = rawAddresses.map((addr, idx) => {
+          const isLegacyLucknow =
+            isLegacyOrInvalidCoord(addr.coordinates) ||
+            /hazratganj|gomti|lucknow|alambagh|indira|mahanagar/i.test(
+              `${addr.area || ''} ${addr.city || ''} ${addr.addressLine || ''}`
+            ) ||
+            addr.pincode?.startsWith('226');
+
+          if (isLegacyLucknow) {
+            return idx === 0
+              ? {
+                  ...INITIAL_USER.savedAddresses[0],
+                  fullName: cleanCustomerName(parsed.name) || INITIAL_USER.name,
+                  phone: parsed.phone || INITIAL_USER.phone,
+                }
+              : {
+                  ...(INITIAL_USER.savedAddresses[1] || INITIAL_USER.savedAddresses[0]),
+                  fullName: cleanCustomerName(parsed.name) || INITIAL_USER.name,
+                  phone: parsed.phone || INITIAL_USER.phone,
+                };
+          }
+          return addr;
+        });
+
+        return {
+          ...parsed,
+          name: cleanCustomerName(parsed.name),
+          savedAddresses: sanitizedAddresses.length > 0 ? sanitizedAddresses : INITIAL_USER.savedAddresses,
+        };
+      } catch {
+        return INITIAL_USER;
+      }
+    }
+    return INITIAL_USER;
   });
 
   const [currentRole, setCurrentRoleState] = useState<Role>(() => {
@@ -585,7 +1349,35 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // User Accounts & Authentication State
   const [accounts, setAccounts] = useState<UserAccount[]>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}accounts`);
-    return saved ? JSON.parse(saved) : INITIAL_ACCOUNTS;
+    if (saved) {
+      try {
+        const parsed: UserAccount[] = JSON.parse(saved);
+        const mapped = parsed.map((acc) => {
+          const matchedInitial = INITIAL_ACCOUNTS.find((ia) => ia.id === acc.id);
+          const baseStatus: AccountStatus =
+            acc.accountStatus ||
+            matchedInitial?.accountStatus ||
+            (acc.isActive === false ? 'suspended' : 'active');
+          return {
+            ...matchedInitial,
+            ...acc,
+            accountStatus: baseStatus,
+            sanction: acc.sanction || matchedInitial?.sanction,
+            sanctionHistory:
+              acc.sanctionHistory ||
+              matchedInitial?.sanctionHistory ||
+              (acc.sanction ? [acc.sanction] : matchedInitial?.sanction ? [matchedInitial.sanction] : []),
+          };
+        });
+
+        const existingIds = new Set(mapped.map((a) => a.id));
+        const missingInitials = INITIAL_ACCOUNTS.filter((ia) => !existingIds.has(ia.id));
+        return [...mapped, ...missingInitials];
+      } catch {
+        return INITIAL_ACCOUNTS;
+      }
+    }
+    return INITIAL_ACCOUNTS;
   });
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -596,7 +1388,68 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Multi-Outlet Management States
   const [outlets, setOutlets] = useState<Outlet[]>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}outlets`);
-    return saved ? JSON.parse(saved) : INITIAL_OUTLETS;
+    if (saved) {
+      try {
+        const parsed: Outlet[] = JSON.parse(saved);
+        const mapped = parsed.map((out, idx) => {
+          const seedOutlet = INITIAL_OUTLETS.find((s) => s.id === out.id) || INITIAL_OUTLETS[idx] || INITIAL_OUTLETS[0];
+          const hasLegacyCoords = isLegacyOrInvalidCoord(out.coordinates);
+          const hasLegacyCity = /lucknow|hazratganj|gomti|alambagh|indira|chowk/i.test(`${out.city || ''} ${out.name || ''}`);
+          const validRadius =
+            typeof out.deliveryRadiusKm === 'number' && out.deliveryRadiusKm > 1.5
+              ? out.deliveryRadiusKm
+              : seedOutlet.deliveryRadiusKm || 15;
+
+          const baseStoreType = out.storeType || seedOutlet?.storeType || 'electronics_superstore';
+          const baseOrderAcceptanceConfig =
+            out.orderAcceptanceConfig || seedOutlet?.orderAcceptanceConfig || getDefaultOrderAcceptanceConfig(baseStoreType);
+          const baseDeliveryPromise =
+            out.deliveryTimePromise || seedOutlet?.deliveryTimePromise || baseOrderAcceptanceConfig.deliveryTimePromise;
+
+          if (hasLegacyCoords || hasLegacyCity) {
+            return {
+              ...seedOutlet,
+              ...out,
+              storeType: baseStoreType,
+              deliveryTimePromise: baseDeliveryPromise,
+              orderAcceptanceConfig: baseOrderAcceptanceConfig,
+              name: hasLegacyCity ? seedOutlet.name : out.name,
+              code: out.code?.includes('LKO') ? seedOutlet.code : out.code,
+              address: hasLegacyCity ? seedOutlet.address : out.address,
+              city: seedOutlet.city,
+              state: seedOutlet.state,
+              pincode: out.pincode?.startsWith('226') ? seedOutlet.pincode : out.pincode,
+              coordinates: seedOutlet.coordinates,
+              serviceablePincodes: Array.from(
+                new Set([
+                  ...seedOutlet.serviceablePincodes,
+                  ...(out.serviceablePincodes || []).filter((p) => !p.startsWith('226')),
+                ])
+              ),
+              deliveryRadiusKm: validRadius,
+            };
+          }
+
+          return {
+            ...seedOutlet,
+            ...out,
+            storeType: baseStoreType,
+            deliveryTimePromise: baseDeliveryPromise,
+            orderAcceptanceConfig: baseOrderAcceptanceConfig,
+            coordinates: out.coordinates || seedOutlet.coordinates,
+            deliveryRadiusKm: validRadius,
+          };
+        });
+
+        // Ensure all 6 distinct store verticals from INITIAL_OUTLETS are present
+        const existingIds = new Set(mapped.map((o) => o.id));
+        const missingSeeds = INITIAL_OUTLETS.filter((s) => !existingIds.has(s.id));
+        return [...mapped, ...missingSeeds];
+      } catch {
+        return INITIAL_OUTLETS;
+      }
+    }
+    return INITIAL_OUTLETS;
   });
 
   const [activeOutletId, setActiveOutletId] = useState<string>(() => {
@@ -609,8 +1462,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   });
 
   const [businessCategories, setBusinessCategories] = useState<BusinessCategory[]>(() => {
-    const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}businessCategories`);
-    return saved ? JSON.parse(saved) : INITIAL_BUSINESS_CATEGORIES;
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}businessCategories`);
+      if (saved) {
+        const parsed: BusinessCategory[] = JSON.parse(saved);
+        const existingIds = new Set(parsed.map((c) => c.id));
+        const missing = INITIAL_BUSINESS_CATEGORIES.filter((c) => !existingIds.has(c.id));
+        return missing.length > 0 ? [...parsed, ...missing] : parsed;
+      }
+      return INITIAL_BUSINESS_CATEGORIES;
+    } catch {
+      return INITIAL_BUSINESS_CATEGORIES;
+    }
   });
 
   const [participants, setParticipants] = useState<Participant[]>(() => {
@@ -801,11 +1664,35 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [paymentGateways, setPaymentGateways] = useState<PaymentGatewayConfig[]>(() => {
     try {
       const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}paymentGateways_v2`);
-      return saved ? JSON.parse(saved) : INITIAL_PAYMENT_GATEWAYS;
+      if (saved) {
+        const parsed: PaymentGatewayConfig[] = JSON.parse(saved);
+        if (!parsed.some((g) => g.provider === 'je_cash' || g.id === 'gw_je_cash')) {
+          const jeCashGw = INITIAL_PAYMENT_GATEWAYS.find((g) => g.provider === 'je_cash');
+          if (jeCashGw) return [jeCashGw, ...parsed];
+        }
+        return parsed;
+      }
+      return INITIAL_PAYMENT_GATEWAYS;
     } catch {
       return INITIAL_PAYMENT_GATEWAYS;
     }
   });
+
+  // JE Cash (Store Wallet) Transactions Ledger & Passbook
+  const [jeCashTransactions, setJeCashTransactions] = useState<JeCashTransaction[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}jeCashTransactions_v1`);
+      return saved ? JSON.parse(saved) : INITIAL_JE_CASH_TRANSACTIONS;
+    } catch {
+      return INITIAL_JE_CASH_TRANSACTIONS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}jeCashTransactions_v1`, JSON.stringify(jeCashTransactions));
+    } catch {}
+  }, [jeCashTransactions]);
 
   const [paymentGatewayAuditLogs, setPaymentGatewayAuditLogs] = useState<PaymentGatewayAuditLog[]>(() => {
     try {
@@ -828,6 +1715,153 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch {}
   }, [paymentGatewayAuditLogs]);
 
+  // Maha Sale Participation & Live Flash Deals
+  const [mahaSaleParticipations, setMahaSaleParticipations] = useState<MahaSaleParticipation[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}maha_sales_v2`);
+      if (saved) {
+        const parsed: MahaSaleParticipation[] = JSON.parse(saved);
+        const existingIds = new Set(parsed.map((p) => p.id));
+        const missing = INITIAL_MAHA_SALE_PARTICIPATIONS.filter((p) => !existingIds.has(p.id));
+        return missing.length > 0 ? [...parsed, ...missing] : parsed;
+      }
+      return INITIAL_MAHA_SALE_PARTICIPATIONS;
+    } catch {
+      return INITIAL_MAHA_SALE_PARTICIPATIONS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}maha_sales_v2`, JSON.stringify(mahaSaleParticipations));
+    } catch {}
+  }, [mahaSaleParticipations]);
+
+  // Maha Sale Slots State (Created by Super Admin, participated by Stores)
+  const [mahaSaleSlots, setMahaSaleSlots] = useState<MahaSaleSlot[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}maha_sale_slots_v1`);
+      if (saved) {
+        const parsed: MahaSaleSlot[] = JSON.parse(saved);
+        const existingIds = new Set(parsed.map((s) => s.id));
+        const missing = INITIAL_MAHA_SALE_SLOTS.filter((s) => !existingIds.has(s.id));
+        return missing.length > 0 ? [...parsed, ...missing] : parsed;
+      }
+      return INITIAL_MAHA_SALE_SLOTS;
+    } catch {
+      return INITIAL_MAHA_SALE_SLOTS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}maha_sale_slots_v1`, JSON.stringify(mahaSaleSlots));
+    } catch {}
+  }, [mahaSaleSlots]);
+
+  // Promotion Types (Admin only create/edit/delete)
+  const [promotionTypes, setPromotionTypes] = useState<PromotionType[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}promo_types_v1`);
+      if (saved) {
+        const parsed: PromotionType[] = JSON.parse(saved);
+        const existingIds = new Set(parsed.map((t) => t.id));
+        const missing = INITIAL_PROMOTION_TYPES.filter((t) => !existingIds.has(t.id));
+        return missing.length > 0 ? [...parsed, ...missing] : parsed;
+      }
+      return INITIAL_PROMOTION_TYPES;
+    } catch {
+      return INITIAL_PROMOTION_TYPES;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}promo_types_v1`, JSON.stringify(promotionTypes));
+    } catch {}
+  }, [promotionTypes]);
+
+  // Promotion Slots (Admin only create/edit/delete)
+  const [promotionSlots, setPromotionSlots] = useState<PromotionSlot[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}promo_slots_v1`);
+      if (saved) {
+        const parsed: PromotionSlot[] = JSON.parse(saved);
+        const existingIds = new Set(parsed.map((s) => s.id));
+        const missing = INITIAL_PROMOTION_SLOTS.filter((s) => !existingIds.has(s.id));
+        return missing.length > 0 ? [...parsed, ...missing] : parsed;
+      }
+      return INITIAL_PROMOTION_SLOTS;
+    } catch {
+      return INITIAL_PROMOTION_SLOTS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}promo_slots_v1`, JSON.stringify(promotionSlots));
+    } catch {}
+  }, [promotionSlots]);
+
+  // Store Slot Product Banners (Store participates with one-by-one product + banner with add/edit/delete)
+  const [storeSlotProductBanners, setStoreSlotProductBanners] = useState<StoreSlotProductBanner[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}store_slot_banners_v1`);
+      if (saved) {
+        const parsed: StoreSlotProductBanner[] = JSON.parse(saved);
+        const existingIds = new Set(parsed.map((b) => b.id));
+        const missing = INITIAL_STORE_SLOT_BANNERS.filter((b) => !existingIds.has(b.id));
+        return missing.length > 0 ? [...parsed, ...missing] : parsed;
+      }
+      return INITIAL_STORE_SLOT_BANNERS;
+    } catch {
+      return INITIAL_STORE_SLOT_BANNERS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}store_slot_banners_v1`, JSON.stringify(storeSlotProductBanners));
+    } catch {}
+  }, [storeSlotProductBanners]);
+
+  // JE Assured 4-Pillar SOP Eligibility Configuration & Store Promotion Requests
+  const [jeAssuredSopConfig, setJeAssuredSopConfig] = useState<JeAssuredSopConfig>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}je_assured_sop_v1`);
+      return saved ? { ...INITIAL_JE_ASSURED_SOP_CONFIG, ...JSON.parse(saved) } : INITIAL_JE_ASSURED_SOP_CONFIG;
+    } catch {
+      return INITIAL_JE_ASSURED_SOP_CONFIG;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}je_assured_sop_v1`, JSON.stringify(jeAssuredSopConfig));
+    } catch {}
+  }, [jeAssuredSopConfig]);
+
+  const [storePromotionRequests, setStorePromotionRequests] = useState<StorePromotionRequest[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}store_promo_requests_v1`);
+      if (saved) {
+        const parsed: StorePromotionRequest[] = JSON.parse(saved);
+        const existingIds = new Set(parsed.map((r) => r.id));
+        const missing = INITIAL_STORE_PROMOTION_REQUESTS.filter((r) => !existingIds.has(r.id));
+        return missing.length > 0 ? [...parsed, ...missing] : parsed;
+      }
+      return INITIAL_STORE_PROMOTION_REQUESTS;
+    } catch {
+      return INITIAL_STORE_PROMOTION_REQUESTS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}store_promo_requests_v1`, JSON.stringify(storePromotionRequests));
+    } catch {}
+  }, [storePromotionRequests]);
+
   const activePaymentGateways = useMemo(() => {
     return paymentGateways
       .filter((gw) => gw.isActive)
@@ -836,7 +1870,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // UI / Filter states
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<ProductCategory | 'all'>('all');
+  const [selectedCategory, setSelectedCategoryRaw] = useState<ProductCategory | 'all'>('all');
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string | 'all'>('all');
+  const [fullScreenCategory, setFullScreenCategory] = useState<ProductCategory | 'all' | null>(null);
+
+  const setSelectedCategory = (cat: ProductCategory | 'all') => {
+    setSelectedCategoryRaw(cat);
+    setSelectedSubCategory('all');
+  };
+
   const [selectedBrand, setSelectedBrand] = useState<string | 'all'>('all');
   const [sortBy, setSortBy] = useState<'featured' | 'price_low' | 'price_high' | 'rating' | 'discount'>('featured');
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
@@ -850,79 +1892,107 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Sync state to local storage on changes
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}products`, JSON.stringify(products));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}products`, JSON.stringify(products));
   }, [products]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}outlets`, JSON.stringify(outlets));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}categories`, JSON.stringify(categories));
+  }, [categories]);
+
+  useEffect(() => {
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}outlets`, JSON.stringify(outlets));
   }, [outlets]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}activeOutletId`, activeOutletId);
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}activeOutletId`, activeOutletId);
   }, [activeOutletId]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}ownershipModels`, JSON.stringify(ownershipModels));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}ownershipModels`, JSON.stringify(ownershipModels));
   }, [ownershipModels]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}businessCategories`, JSON.stringify(businessCategories));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}businessCategories`, JSON.stringify(businessCategories));
   }, [businessCategories]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}participants`, JSON.stringify(participants));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}participants`, JSON.stringify(participants));
   }, [participants]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}payoutItems`, JSON.stringify(payoutItems));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}payoutItems`, JSON.stringify(payoutItems));
   }, [payoutItems]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}financialLedger`, JSON.stringify(financialLedger));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}financialLedger`, JSON.stringify(financialLedger));
   }, [financialLedger]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}barcodeRecords`, JSON.stringify(barcodeRecords));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}barcodeRecords`, JSON.stringify(barcodeRecords));
   }, [barcodeRecords]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}stockTransfers`, JSON.stringify(stockTransfers));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}stockTransfers`, JSON.stringify(stockTransfers));
   }, [stockTransfers]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}franchiseAgreements`, JSON.stringify(franchiseAgreements));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}franchiseAgreements`, JSON.stringify(franchiseAgreements));
   }, [franchiseAgreements]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}cart`, JSON.stringify(cart));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}cart`, serializeCartSafely(cart));
   }, [cart]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}orders`, JSON.stringify(orders));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}orders`, JSON.stringify(orders));
   }, [orders]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}stockMovements`, JSON.stringify(stockMovements));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}stockMovements`, JSON.stringify(stockMovements));
   }, [stockMovements]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}campaigns`, JSON.stringify(campaigns));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}campaigns`, JSON.stringify(campaigns));
   }, [campaigns]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}coupons`, JSON.stringify(coupons));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}coupons`, JSON.stringify(coupons));
   }, [coupons]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}settings`, JSON.stringify(settings));
+    try {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}referral_config`, JSON.stringify(referralProgramConfig));
+    } catch {}
+  }, [referralProgramConfig]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}referral_records`, JSON.stringify(referralRecords));
+    } catch {}
+  }, [referralRecords]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}promotional_pages`, JSON.stringify(promotionalPages));
+    } catch {}
+  }, [promotionalPages]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}chatbot_ai_settings`, JSON.stringify(chatbotAiSettings));
+    } catch {}
+  }, [chatbotAiSettings]);
+
+  useEffect(() => {
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}settings`, JSON.stringify(settings));
   }, [settings]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}user`, JSON.stringify(currentUser));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}user`, JSON.stringify(currentUser));
   }, [currentUser]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}currentRole`, currentRole);
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}currentRole`, currentRole);
   }, [currentRole]);
 
   // Enforce strict store isolation for non-super-admin store accounts
@@ -942,27 +2012,27 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [isAuthenticated, currentUser, currentRole, activeOutletId]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}accounts`, JSON.stringify(accounts));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}accounts`, JSON.stringify(accounts));
   }, [accounts]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}isAuthenticated`, JSON.stringify(isAuthenticated));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}isAuthenticated`, JSON.stringify(isAuthenticated));
   }, [isAuthenticated]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}wishlist`, JSON.stringify(wishlist));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}wishlist`, JSON.stringify(wishlist));
   }, [wishlist]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}deliveryZones`, JSON.stringify(deliveryZones));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}deliveryZones`, JSON.stringify(deliveryZones));
   }, [deliveryZones]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}bulkDiscountRules`, JSON.stringify(bulkDiscountRules));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}bulkDiscountRules`, JSON.stringify(bulkDiscountRules));
   }, [bulkDiscountRules]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}brandingSettings`, JSON.stringify(brandingSettings));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}brandingSettings`, JSON.stringify(brandingSettings));
     if (typeof document !== 'undefined') {
       const root = document.documentElement;
       root.style.setProperty('--brand-primary', brandingSettings.theme.primaryColor);
@@ -973,7 +2043,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [brandingSettings]);
 
   useEffect(() => {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}brandingHistory`, JSON.stringify(brandingHistory));
+    safeLocalStorageSetItem(`${STORAGE_KEY_PREFIX}brandingHistory`, JSON.stringify(brandingHistory));
   }, [brandingHistory]);
 
   // Check URL query parameters for deep linking (e.g. ?trackOrder=JE-2026-000101)
@@ -1149,6 +2219,103 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setAppliedCoupon(null);
   };
 
+  // JE Cash (Store Wallet) Balance Refill & Debit Engine
+  const refillJeCashBalance = (
+    amount: number,
+    paymentMethodName = 'Instant UPI (PhonePe / GPay)',
+    transactionNote = 'JE Cash Balance Refill'
+  ) => {
+    if (amount <= 0) {
+      return {
+        success: false,
+        message: 'Please enter a valid amount (minimum ₹10).',
+        transactionId: '',
+        newBalance: currentUser.rewardBalance || currentUser.jeCashBalance || 0,
+      };
+    }
+
+    // Refill incentive: ₹1,000+ receives 2% instant cashback bonus into JE Cash
+    const bonus = amount >= 1000 ? Math.round(amount * 0.02) : 0;
+    const totalCredit = amount + bonus;
+    const currentBal = currentUser.rewardBalance || currentUser.jeCashBalance || 0;
+    const updatedBal = currentBal + totalCredit;
+    const nowIso = new Date().toISOString();
+    const txnId = `JECASH-REF-${Date.now().toString().slice(-6)}`;
+
+    setCurrentUser((prev) => ({
+      ...prev,
+      rewardBalance: updatedBal,
+      jeCashBalance: updatedBal,
+    }));
+
+    const newTxn: JeCashTransaction = {
+      id: txnId,
+      type: 'credit',
+      amount: totalCredit,
+      balanceAfter: updatedBal,
+      description: bonus > 0
+        ? `${transactionNote} (Includes ₹${bonus} 2% extra bonus)`
+        : transactionNote,
+      category: 'refill',
+      timestamp: nowIso,
+      referenceId: `REF-TXN-${Date.now().toString().slice(-8)}`,
+      paymentMethodUsed: paymentMethodName,
+    };
+
+    setJeCashTransactions((prev) => [newTxn, ...prev]);
+
+    return {
+      success: true,
+      message: bonus > 0
+        ? `₹${amount.toLocaleString('en-IN')} + ₹${bonus} bonus added to JE Cash! Available: ₹${updatedBal.toLocaleString('en-IN')}`
+        : `₹${amount.toLocaleString('en-IN')} successfully added to JE Cash! Available: ₹${updatedBal.toLocaleString('en-IN')}`,
+      transactionId: txnId,
+      newBalance: updatedBal,
+    };
+  };
+
+  const deductJeCashBalance = (amount: number, orderId?: string, reason = 'Order Payment') => {
+    const currentBal = currentUser.rewardBalance || currentUser.jeCashBalance || 0;
+    if (currentBal < amount) {
+      return {
+        success: false,
+        message: `Insufficient JE Cash balance. Available: ₹${currentBal.toLocaleString('en-IN')}, required: ₹${amount.toLocaleString('en-IN')}.`,
+        newBalance: currentBal,
+      };
+    }
+
+    const updatedBal = currentBal - amount;
+    const nowIso = new Date().toISOString();
+    const txnId = `JECASH-PAY-${Date.now().toString().slice(-6)}`;
+
+    setCurrentUser((prev) => ({
+      ...prev,
+      rewardBalance: updatedBal,
+      jeCashBalance: updatedBal,
+    }));
+
+    const newTxn: JeCashTransaction = {
+      id: txnId,
+      type: 'debit',
+      amount,
+      balanceAfter: updatedBal,
+      description: orderId ? `Paid for Order #${orderId}` : reason,
+      category: 'order_payment',
+      timestamp: nowIso,
+      orderId,
+      referenceId: txnId,
+      paymentMethodUsed: 'JE Cash Balance',
+    };
+
+    setJeCashTransactions((prev) => [newTxn, ...prev]);
+
+    return {
+      success: true,
+      message: `₹${amount.toLocaleString('en-IN')} debited from JE Cash. Remaining: ₹${updatedBal.toLocaleString('en-IN')}`,
+      newBalance: updatedBal,
+    };
+  };
+
   // Order creation with atomic stock reservation
   const createOrder = async (payload: {
     customer: Order['customer'];
@@ -1156,6 +2323,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     deliverySlot?: string;
     paymentMethod: PaymentMethod;
     isWhatsAppCheckout?: boolean;
+    informHubForDispatch?: boolean;
+    isPartialPrepaidCod?: boolean;
+    partialPrepaidAmount?: number;
+    codBalanceOnDelivery?: number;
+    partialPrepaidMethod?: string;
+    prepaidDiscount?: number;
+    codExtraCharge?: number;
+    paymentProof?: {
+      screenshotUrl?: string;
+      utrNumber?: string;
+    };
   }): Promise<Order> => {
     // 1. Generate collision-safe unique ID
     const count = orders.length + 104;
@@ -1168,9 +2346,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const newStockMovements: StockMovement[] = [];
 
     const deliveryFeeActual = payload.deliveryType === 'store_pickup' ? 0 : cartDeliveryFee;
-    const finalAmount = payload.deliveryType === 'store_pickup'
+    const baseFinalAmount = payload.deliveryType === 'store_pickup'
       ? Math.max(0, cartSubtotal - cartCouponDiscount - cartBulkDiscount.discountAmount)
       : cartFinalTotal;
+    const appliedPrepaidDiscount = Math.max(0, payload.prepaidDiscount || 0);
+    const appliedCodExtraCharge = Math.max(0, payload.codExtraCharge || 0);
+    const finalAmount = Math.max(0, baseFinalAmount - appliedPrepaidDiscount + appliedCodExtraCharge);
 
     // Calculate comprehensive GST breakdown for the order
     const gstCalc = calculateOrderGstBreakdown({
@@ -1258,16 +2439,45 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
 
     // 3. Determine initial order status
-    const initialStatus: OrderStatus = payload.isWhatsAppCheckout
-      ? 'awaiting_whatsapp_confirmation'
-      : payload.paymentMethod === 'cod' || payload.paymentMethod === 'store_pickup_pay'
-      ? 'confirmed'
-      : 'payment_pending';
+    const isJeCash = payload.paymentMethod === 'je_cash';
+    const isPartialCod = Boolean(
+      payload.isPartialPrepaidCod &&
+        payload.partialPrepaidAmount &&
+        payload.partialPrepaidAmount > 0
+    );
+    const isPartialJeCash = isPartialCod && payload.partialPrepaidMethod === 'je_cash';
 
-    const paymentStatus: PaymentStatus =
-      payload.paymentMethod === 'cod' || payload.paymentMethod === 'store_pickup_pay'
-        ? 'pending'
-        : 'pending';
+    if (isJeCash) {
+      const currentBal = currentUser.rewardBalance || currentUser.jeCashBalance || 0;
+      if (currentBal < finalAmount) {
+        throw new Error(
+          `Insufficient JE Cash balance (Available: ₹${currentBal.toLocaleString('en-IN')}, Required: ₹${finalAmount.toLocaleString('en-IN')}). JE Cash is non-refillable — please choose another payment method.`
+        );
+      }
+    } else if (isPartialJeCash) {
+      const currentBal = currentUser.rewardBalance || currentUser.jeCashBalance || 0;
+      const reqAmt = payload.partialPrepaidAmount || 0;
+      if (currentBal < reqAmt) {
+        throw new Error(
+          `Insufficient JE Cash balance for Partial Prepaid (Available: ₹${currentBal.toLocaleString('en-IN')}, Required: ₹${reqAmt.toLocaleString('en-IN')}). Please choose UPI / Online for Partial Prepaid.`
+        );
+      }
+    }
+
+    const isUpiPayment = payload.paymentMethod === 'upi_qr' || Boolean(payload.paymentProof?.screenshotUrl);
+    const isOnlinePrepaid =
+      isJeCash ||
+      ['razorpay', 'online_razorpay', 'phonepe', 'paytm', 'cashfree', 'stripe'].includes(
+        payload.paymentMethod
+      );
+
+    const initialStatus: OrderStatus = isUpiPayment ? 'payment_verifying' : 'confirmed';
+
+    const paymentStatus: PaymentStatus = isUpiPayment
+      ? 'verifying'
+      : isOnlinePrepaid
+      ? 'verified_paid'
+      : 'pending';
 
     // 4. Generate dynamic QR code for order
     const trackingUrl = buildOrderTrackingUrl(orderId);
@@ -1279,39 +2489,57 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     // Calculate geospatial distance, ETA, and suggested route
-    const outletCoords = activeOutlet?.coordinates || DEFAULT_STORE_COORDINATES;
-    const customerCoords = payload.customer.coordinates || { lat: 26.8482, lng: 80.9412 };
+    const outletCoords = sanitizeStoreCoordinates(activeOutlet?.coordinates, DEFAULT_STORE_COORDINATES);
+    const customerCoords = sanitizeStoreCoordinates(payload.customer.coordinates, {
+      lat: 19.4210,
+      lng: 72.8235,
+    });
     const distanceKm = payload.deliveryType === 'delivery'
       ? calculateHaversineDistanceKm(outletCoords, customerCoords)
       : 0;
     const eta = estimateDeliveryMinutes(distanceKm);
     const suggestedSteps = payload.deliveryType === 'delivery'
-      ? generateSuggestedRouteSteps(activeOutlet?.name || 'Store Hub', payload.customer.area || 'Customer Address', distanceKm)
+      ? generateSuggestedRouteSteps(activeOutlet?.name || 'Shop 09 Sai Dham Apt Flagship', payload.customer.area || 'Nalasopara East', distanceKm)
       : [];
     const navigationUrl = payload.deliveryType === 'delivery'
       ? getGoogleMapsNavigationUrl(outletCoords, customerCoords, payload.customer.name)
       : undefined;
 
+    const generatedDeliveryCode = Math.floor(1000 + Math.random() * 9000).toString();
+    const generatedTxnId = isJeCash
+      ? `JECASH-TXN-${Date.now().toString().slice(-6)}`
+      : isPartialCod
+      ? `PARTIAL-COD-${Date.now().toString().slice(-6)}`
+      : isOnlinePrepaid
+      ? `PAY-TXN-${Date.now().toString().slice(-6)}`
+      : undefined;
+
     const newOrder: Order = {
       id: orderId,
+      userId: currentUser?.id,
       invoiceNumber,
       createdAt: nowIso,
       outletId: activeOutlet?.id,
       outletName: activeOutlet?.name,
+      deliveryCode: generatedDeliveryCode,
       customer: {
         ...payload.customer,
+        id: currentUser?.id || payload.customer.id,
+        name: cleanCustomerName(payload.customer.name),
         isB2B,
         placeOfSupply: gstCalc.placeOfSupply,
         stateCode: gstCalc.customerGstCode,
       },
       items: orderItems,
       subtotal: cartSubtotal,
-      discountTotal: cartCouponDiscount + cartBulkDiscount.discountAmount,
+      discountTotal: cartCouponDiscount + cartBulkDiscount.discountAmount + appliedPrepaidDiscount,
       couponCode: appliedCoupon?.code,
       couponDiscount: cartCouponDiscount,
       bulkDiscountAmount: cartBulkDiscount.discountAmount,
       appliedBulkRuleId: cartBulkDiscount.ruleId,
       appliedBulkRuleName: cartBulkDiscount.ruleName,
+      prepaidDiscount: appliedPrepaidDiscount > 0 ? appliedPrepaidDiscount : undefined,
+      codExtraCharge: appliedCodExtraCharge > 0 ? appliedCodExtraCharge : undefined,
       deliveryFee: deliveryFeeActual,
       taxAmount: gstCalc.totalTax,
       taxableAmount: gstCalc.taxableAmount,
@@ -1329,16 +2557,41 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       deliverySlot: payload.deliverySlot,
       paymentMethod: payload.paymentMethod,
       paymentStatus,
+      isPartialPrepaidCod: isPartialCod,
+      partialPrepaidAmount: isPartialCod ? payload.partialPrepaidAmount : undefined,
+      codBalanceOnDelivery: isPartialCod ? payload.codBalanceOnDelivery : undefined,
+      partialPrepaidMethod: isPartialCod ? payload.partialPrepaidMethod || 'upi_qr' : undefined,
+      hubNotifiedForDispatch: Boolean(payload.informHubForDispatch || payload.isWhatsAppCheckout),
+      paymentDetails: (isUpiPayment || generatedTxnId)
+        ? {
+            transactionId: payload.paymentProof?.utrNumber || generatedTxnId,
+            utrNumber: payload.paymentProof?.utrNumber,
+            screenshotUrl: payload.paymentProof?.screenshotUrl,
+            paidAt: nowIso,
+            submittedAt: nowIso,
+            verifiedBy: isUpiPayment
+              ? undefined
+              : isJeCash
+              ? 'JE Cash Store Credit'
+              : isPartialCod
+              ? `Partial Prepaid (${(payload.partialPrepaidMethod || 'UPI').toUpperCase()}) + COD Balance`
+              : `${payload.paymentMethod.toUpperCase()} Gateway`,
+          }
+        : undefined,
       orderStatus: initialStatus,
       statusHistory: [
         {
           status: initialStatus,
           timestamp: nowIso,
-          note: payload.isWhatsAppCheckout
-            ? 'Order initiated via WhatsApp Checkout; awaiting verification'
+          note: isUpiPayment
+            ? `Dynamic UPI QR payment proof submitted by customer (UTR/Ref: ${payload.paymentProof?.utrNumber || 'Attached'}). Awaiting Admin verification.`
+            : isPartialCod
+            ? `Partial Prepaid (₹${(payload.partialPrepaidAmount || 0).toLocaleString('en-IN')}) processed; upper/balance ₹${(payload.codBalanceOnDelivery || 0).toLocaleString('en-IN')} payable on delivery (COD).${payload.informHubForDispatch ? ' Hub notified for faster dispatch.' : ''}`
+            : isJeCash
+            ? `Order confirmed & paid using JE Cash (₹${finalAmount.toLocaleString('en-IN')}).${payload.informHubForDispatch ? ' Hub notified for faster dispatch.' : ''}`
             : payload.paymentMethod === 'cod'
-            ? 'Order placed with Cash on Delivery'
-            : 'Order placed; waiting for payment confirmation',
+            ? `Order confirmed with Cash on Delivery.${payload.informHubForDispatch ? ' Hub notified for faster dispatch.' : ''}`
+            : `Payment processed & order confirmed.${payload.informHubForDispatch ? ' Hub notified for faster dispatch.' : ''}`,
           updatedBy: payload.customer.name,
         },
       ],
@@ -1353,7 +2606,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         navigationUrl,
       },
       qrCodeDataUrl,
-      whatsappMessageSent: !!payload.isWhatsAppCheckout,
+      whatsappMessageSent: !!(payload.informHubForDispatch || payload.isWhatsAppCheckout),
     };
 
     // Save pinned location into customer's saved addresses for next orders
@@ -1387,6 +2640,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           return { ...prev, savedAddresses: [newAddress, ...prev.savedAddresses] };
         }
       });
+    }
+
+    // Deduct JE Cash balance if paid via JE Cash or Partial Prepaid via JE Cash
+    if (isJeCash) {
+      deductJeCashBalance(finalAmount, orderId, `Paid for Order #${orderId}`);
+    } else if (isPartialJeCash && payload.partialPrepaidAmount) {
+      deductJeCashBalance(
+        payload.partialPrepaidAmount,
+        orderId,
+        `Partial Prepaid for COD Order #${orderId}`
+      );
     }
 
     // Update state
@@ -1573,6 +2837,181 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     );
   };
 
+  const approveUpiPayment = (orderId: string, notes?: string, adminName?: string) => {
+    const nowIso = new Date().toISOString();
+    let found = false;
+
+    setOrders((prev) =>
+      prev.map((order) => {
+        if (order.id !== orderId) return order;
+        found = true;
+        const updatedDetails = {
+          ...order.paymentDetails,
+          transactionId: order.paymentDetails?.transactionId || `UPI-APPROVED-${Date.now().toString().slice(-6)}`,
+          paidAt: order.paymentDetails?.paidAt || nowIso,
+          verifiedAt: nowIso,
+          verifiedBy: adminName || currentUser.name || 'Store Admin',
+          verificationNote: notes || 'UPI payment proof verified and approved by Store Admin',
+        };
+
+        return {
+          ...order,
+          paymentStatus: 'verified_paid',
+          orderStatus: 'in_progress',
+          paymentDetails: updatedDetails,
+          statusHistory: [
+            ...order.statusHistory,
+            {
+              status: 'in_progress',
+              timestamp: nowIso,
+              note: notes
+                ? `Payment approved: ${notes}. Order moved to In Progress.`
+                : `Payment approved by ${adminName || currentUser.name || 'Admin'}. Order moved to In Progress.`,
+              updatedBy: adminName || currentUser.name || 'Admin',
+            },
+          ],
+        };
+      })
+    );
+
+    if (found) {
+      return { success: true, message: `Payment for Order ${orderId} approved. Order status changed to In Progress.` };
+    }
+    return { success: false, message: `Order ${orderId} not found.` };
+  };
+
+  const rejectUpiPayment = (orderId: string, reason: string, adminName?: string) => {
+    const nowIso = new Date().toISOString();
+    let found = false;
+
+    setOrders((prev) =>
+      prev.map((order) => {
+        if (order.id !== orderId) return order;
+        found = true;
+        return {
+          ...order,
+          paymentStatus: 'failed',
+          paymentDetails: {
+            ...order.paymentDetails,
+            rejectionReason: reason,
+          },
+          statusHistory: [
+            ...order.statusHistory,
+            {
+              status: 'payment_pending',
+              timestamp: nowIso,
+              note: `Payment proof rejected: ${reason}`,
+              updatedBy: adminName || currentUser.name || 'Admin',
+            },
+          ],
+        };
+      })
+    );
+
+    if (found) {
+      return { success: true, message: `Payment for Order ${orderId} rejected.` };
+    }
+    return { success: false, message: `Order ${orderId} not found.` };
+  };
+
+  const updateUpiSettings = (upiId: string, upiName?: string) => {
+    if (currentRole !== 'super_admin') {
+      return { success: false, message: 'Access denied: Only Super Admin can update UPI settings.' };
+    }
+    const cleanUpi = upiId.trim();
+    if (!cleanUpi) {
+      return { success: false, message: 'Please provide a valid UPI ID / VPA.' };
+    }
+    const cleanName = (upiName || settings.upiName || 'Javed Electronics').trim();
+
+    setSettings((prev) => ({
+      ...prev,
+      upiId: cleanUpi,
+      upiName: cleanName,
+    }));
+
+    // Sync with upi_qr payment gateway
+    setPaymentGateways((prev) =>
+      prev.map((gw) => {
+        if (gw.provider === 'upi_qr') {
+          return {
+            ...gw,
+            upiVpa: cleanUpi,
+            title: `Dynamic UPI QR (${cleanUpi})`,
+          };
+        }
+        return gw;
+      })
+    );
+
+    return { success: true, message: `UPI ID updated to ${cleanUpi} successfully.` };
+  };
+
+  const updatePaymentChargeSettings = (config: {
+    codExtraChargeEnabled: boolean;
+    codExtraChargeType: 'fixed' | 'percentage';
+    codExtraChargeValue: number;
+    prepaidDiscountEnabled: boolean;
+    prepaidDiscountType: 'percentage' | 'fixed';
+    prepaidDiscountValue: number;
+    prepaidMaxDiscountAmount?: number;
+  }) => {
+    if (currentRole !== 'super_admin') {
+      return { success: false, message: 'Access denied: Only Super Admin can update COD & Prepaid rules.' };
+    }
+    setSettings((prev) => ({
+      ...prev,
+      codExtraChargeEnabled: config.codExtraChargeEnabled,
+      codExtraChargeType: config.codExtraChargeType,
+      codExtraChargeValue: Math.max(0, Number(config.codExtraChargeValue) || 0),
+      prepaidDiscountEnabled: config.prepaidDiscountEnabled,
+      prepaidDiscountType: config.prepaidDiscountType,
+      prepaidDiscountValue: Math.max(0, Number(config.prepaidDiscountValue) || 0),
+      prepaidMaxDiscountAmount:
+        config.prepaidMaxDiscountAmount !== undefined
+          ? Math.max(0, Number(config.prepaidMaxDiscountAmount) || 0)
+          : prev.prepaidMaxDiscountAmount,
+    }));
+
+    // Sync payment gateways with the new COD surcharge & Prepaid discount rules
+    setPaymentGateways((prev) =>
+      prev.map((gw) => {
+        if (gw.provider === 'cod') {
+          return {
+            ...gw,
+            feeOrDiscountType: config.codExtraChargeEnabled
+              ? config.codExtraChargeType === 'percentage'
+                ? 'percentage_surcharge'
+                : 'surcharge'
+              : 'none',
+            feeOrDiscountValue: config.codExtraChargeEnabled ? config.codExtraChargeValue : 0,
+          };
+        }
+        if (
+          ['upi_qr', 'razorpay', 'phonepe', 'paytm', 'cashfree', 'stripe', 'je_cash'].includes(
+            gw.provider
+          )
+        ) {
+          return {
+            ...gw,
+            feeOrDiscountType: config.prepaidDiscountEnabled
+              ? config.prepaidDiscountType === 'fixed'
+                ? 'fixed_discount'
+                : 'percentage_discount'
+              : 'none',
+            feeOrDiscountValue: config.prepaidDiscountEnabled ? config.prepaidDiscountValue : 0,
+          };
+        }
+        return gw;
+      })
+    );
+
+    return {
+      success: true,
+      message: 'COD Extra Charge & Prepaid Order Discount settings updated.',
+    };
+  };
+
   const assignDeliveryStaff = (orderId: string, staffId: string, staffName: string) => {
     const nowIso = new Date().toISOString();
     setOrders((prev) =>
@@ -1599,13 +3038,27 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const completeDelivery = (
     orderId: string,
-    proof: { collectedAmount?: number; note?: string; receiverName?: string }
+    proof: {
+      collectedAmount?: number;
+      paymentMethodCollected?: 'cash' | 'doorstep_upi_qr';
+      note?: string;
+      receiverName?: string;
+      podImageUrl?: string;
+      deliveryPinEntered?: string;
+      verifiedOtp?: boolean;
+      customerFeedback?: {
+        rating: number;
+        tags: string[];
+        comment?: string;
+        submittedAt: string;
+      };
+    }
   ) => {
     const nowIso = new Date().toISOString();
     const orderToUpdate = orders.find((o) => o.id === orderId);
 
-    // Increment rider's COD cash in hand if COD cash was collected
-    if (proof.collectedAmount && proof.collectedAmount > 0) {
+    // Increment rider's COD cash in hand if COD cash was collected (not if doorstep UPI)
+    if (proof.collectedAmount && proof.collectedAmount > 0 && proof.paymentMethodCollected !== 'doorstep_upi_qr') {
       const targetRiderId =
         orderToUpdate?.dispatchDetails?.riderId ||
         orderToUpdate?.assignedDeliveryStaffId ||
@@ -1627,6 +3080,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           orderStatus: 'delivered',
           paymentStatus: 'verified_paid',
           deliveryProof: {
+            ...order.deliveryProof,
             ...proof,
             timestamp: nowIso,
           },
@@ -1635,7 +3089,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 ...order.dispatchDetails,
                 codCollectedStatus: 'collected',
                 codCollectedAt: nowIso,
-                codCollectedMethod: 'cash',
+                codCollectedMethod: proof.paymentMethodCollected || 'cash',
               }
             : undefined,
           statusHistory: [
@@ -1654,7 +3108,58 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Also deduct stock permanently
     if (orderToUpdate) {
       updateOrderStatus(orderId, 'delivered', 'Delivery completed and confirmed by rider', orderToUpdate.deliveryStaffName || 'Rider');
+
+      // Auto-credit referral bonus if enabled
+      if (referralProgramConfig.autoCreditWalletOnDelivery) {
+        setReferralRecords((prev) =>
+          prev.map((rec) => {
+            if (rec.status === 'pending_order') {
+              const custPhone10 = orderToUpdate.customer.phone.replace(/\D/g, '').slice(-10);
+              const recPhone10 = (rec.refereePhone || '').replace(/\D/g, '').slice(-10);
+              const matchesPhone = custPhone10 && recPhone10 && custPhone10 === recPhone10;
+              const matchesCoupon = orderToUpdate.couponCode && rec.bonusCouponCode && rec.bonusCouponCode.toUpperCase() === orderToUpdate.couponCode.toUpperCase();
+              if (matchesPhone || matchesCoupon) {
+                return {
+                  ...rec,
+                  status: 'awarded' as const,
+                  qualifyingOrderId: orderId,
+                  awardedAt: nowIso,
+                  notes: `Auto-credited upon successful delivery of Order #${orderId}`,
+                };
+              }
+            }
+            return rec;
+          })
+        );
+      }
     }
+  };
+
+  const submitDeliveryCustomerFeedback = (
+    orderId: string,
+    feedback: {
+      rating: number;
+      tags: string[];
+      comment?: string;
+      submittedAt?: string;
+    }
+  ) => {
+    const nowIso = feedback.submittedAt || new Date().toISOString();
+    setOrders((prev) =>
+      prev.map((order) => {
+        if (order.id !== orderId) return order;
+        return {
+          ...order,
+          deliveryProof: {
+            ...order.deliveryProof,
+            customerFeedback: {
+              ...feedback,
+              submittedAt: nowIso,
+            },
+          },
+        };
+      })
+    );
   };
 
   const reportDeliveryFailure = (orderId: string, reason: string) => {
@@ -2018,27 +3523,458 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   };
 
-  const requestOrderReturn = (orderId: string, reason: string) => {
+  const requestOrderReturn = (
+    orderId: string,
+    reason: string,
+    details?: {
+      issueType?: string;
+      productId?: string;
+      productName?: string;
+      sku?: string;
+      serialNumber?: string;
+      unboxingVideoUrl?: string;
+      unboxingVideoName?: string;
+      proofImages?: string[];
+      requestType?: 'refund' | 'replacement' | 'exchange';
+    }
+  ) => {
     const nowIso = new Date().toISOString();
+    const targetOrder = orders.find((o) => o.id === orderId);
+
+    const summaryParts: string[] = [reason];
+    if (details?.sku || details?.serialNumber) {
+      summaryParts.push(
+        `SKU/SN: ${[details.sku, details.serialNumber].filter(Boolean).join(' / ')}`
+      );
+    }
+    if (details?.unboxingVideoName || details?.unboxingVideoUrl) {
+      summaryParts.push(`Unboxing Video: ${details.unboxingVideoName || 'Attached'}`);
+    }
+    if (details?.proofImages && details.proofImages.length > 0) {
+      summaryParts.push(`Proof Photos: ${details.proofImages.length} attached`);
+    }
+    const noteText = `Return / Replacement requested — ${summaryParts.join(' • ')}`;
+
     setOrders((prev) =>
       prev.map((order) => {
         if (order.id !== orderId) return order;
-        return {
+        const updated: Order = {
           ...order,
           orderStatus: 'return_requested',
           returnReason: reason,
+          returnDetails: {
+            reason,
+            issueType: details?.issueType,
+            productId: details?.productId,
+            productName: details?.productName,
+            sku: details?.sku,
+            serialNumber: details?.serialNumber,
+            unboxingVideoUrl: details?.unboxingVideoUrl,
+            unboxingVideoName: details?.unboxingVideoName,
+            proofImages: details?.proofImages,
+            requestedAt: nowIso,
+          },
           statusHistory: [
             ...order.statusHistory,
             {
               status: 'return_requested',
               timestamp: nowIso,
-              note: `Return requested: ${reason}`,
+              note: noteText,
               updatedBy: 'Customer',
+            },
+          ],
+        };
+        if (selectedOrderForModal?.id === orderId) {
+          setSelectedOrderForModal(updated);
+        }
+        return updated;
+      })
+    );
+
+    if (targetOrder && targetOrder.items.length > 0) {
+      const targetItem =
+        targetOrder.items.find((i) => i.productId === details?.productId) || targetOrder.items[0];
+      const matchedProd = products.find((p) => p.id === targetItem.productId);
+      const catId = matchedProd?.categoryId || 'smartphones';
+      const pol = getCategoryReturnPolicy(catId);
+      const itemQty = targetItem.activeQuantity ?? targetItem.quantity;
+      const itemTotal = targetItem.unitPrice * itemQty;
+      const newReqId = `RET-${Date.now().toString().slice(-6)}`;
+      const newReq: ReturnExchangeRequest = {
+        id: newReqId,
+        orderId: targetOrder.id,
+        invoiceNumber: targetOrder.invoiceNumber,
+        outletId: targetOrder.outletId,
+        outletName: targetOrder.outletName,
+        customerId: targetOrder.customer.id || currentUser.id || 'cust_guest',
+        customerName: targetOrder.customer.name,
+        customerPhone: targetOrder.customer.phone,
+        customerEmail: targetOrder.customer.email,
+        productId: targetItem.productId,
+        productName: targetItem.productName,
+        productSku: details?.sku || targetItem.sku,
+        productImage: targetItem.image,
+        categoryId: catId,
+        categoryName: pol.categoryName,
+        quantity: itemQty,
+        itemUnitPrice: targetItem.unitPrice,
+        itemTotal,
+        requestType: details?.requestType || 'replacement',
+        reason: (details?.issueType as ReturnReasonCode) || 'damaged_in_transit',
+        reasonDescription: reason,
+        conditionChecklistConfirmed: true,
+        serialNumber: details?.serialNumber,
+        unboxingVideoUrl: details?.unboxingVideoUrl,
+        unboxingVideoName: details?.unboxingVideoName,
+        evidenceImages: details?.proofImages,
+        refundMethod: 'original_payment',
+        refundAmount: itemTotal,
+        deliveredAt: targetOrder.deliveryProof?.timestamp || targetOrder.createdAt,
+        requestedAt: nowIso,
+        windowClosingAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+        isWithinWindow: true,
+        daysRemaining: 7,
+        status: 'requested',
+        statusHistory: [
+          {
+            status: 'requested',
+            timestamp: nowIso,
+            note: noteText,
+            updatedBy: `${targetOrder.customer.name} (Customer)`,
+          },
+        ],
+        pickupAddress: `${targetOrder.customer.address}, ${targetOrder.customer.area}, ${targetOrder.customer.city} - ${targetOrder.customer.pincode}`,
+        pickupSlot: 'Tomorrow 10:00 AM - 01:00 PM',
+      };
+      setReturnExchangeRequests((prev) => [newReq, ...prev]);
+    }
+  };
+
+  // ============================================================================
+  // RETURN, REFUND, REPLACEMENT & EXCHANGE STRUCTURE AS PER CATEGORY
+  // ============================================================================
+  const updateCategoryReturnPolicy = (
+    categoryId: ProductCategory,
+    updates: Partial<CategoryReturnPolicy>
+  ): { success: boolean; message: string } => {
+    setCategoryReturnPolicies((prev) =>
+      prev.map((pol) => (pol.categoryId === categoryId ? { ...pol, ...updates } : pol))
+    );
+    return { success: true, message: `Return policy for category ${String(categoryId)} updated successfully.` };
+  };
+
+  const resetCategoryReturnPolicies = (): { success: boolean; message: string } => {
+    setCategoryReturnPolicies(INITIAL_CATEGORY_RETURN_POLICIES);
+    return { success: true, message: 'All category return & replacement policies reset to default specifications.' };
+  };
+
+  const getCategoryReturnPolicy = (categoryId: ProductCategory): CategoryReturnPolicy => {
+    const found = categoryReturnPolicies.find((p) => p.categoryId === categoryId);
+    if (found) return found;
+    const defaultOther = categoryReturnPolicies.find((p) => p.categoryId === 'other');
+    if (defaultOther) return defaultOther;
+    return {
+      categoryId,
+      categoryName: String(categoryId),
+      policyType: 'refund_and_replacement',
+      windowDays: 7,
+      allowRefund: true,
+      allowReplacement: true,
+      allowExchange: true,
+      requiresOriginalPackaging: true,
+      requiresTagsIntact: false,
+      requiresUnusedUnworn: true,
+      requiresTechnicianInspection: false,
+      requiresPhotoProof: false,
+      pickupFee: 0,
+      walletBonusPercentage: 5,
+      termsAndConditions: [
+        '7-Day Doorstep Replacement or Return for valid quality/defect issues.',
+        'Must retain original packaging and accessories.',
+      ],
+      isActive: true,
+    };
+  };
+
+  const submitReturnExchangeRequest = (reqData: {
+    orderId: string;
+    invoiceNumber: string;
+    outletId?: string;
+    outletName?: string;
+    customerId?: string;
+    customerName: string;
+    customerPhone: string;
+    customerEmail?: string;
+    productId: string;
+    productName: string;
+    productSku: string;
+    productImage: string;
+    categoryId: ProductCategory;
+    categoryName: string;
+    quantity: number;
+    itemUnitPrice: number;
+    itemTotal: number;
+    requestType: 'refund' | 'replacement' | 'exchange';
+    reason: ReturnReasonCode;
+    reasonDescription: string;
+    conditionChecklistConfirmed: boolean;
+    customerConditionNotes?: string;
+    serialNumber?: string;
+    unboxingVideoUrl?: string;
+    unboxingVideoName?: string;
+    evidenceImages?: string[];
+    exchangeOptions?: {
+      requestedSize?: string;
+      requestedColor?: string;
+      notes?: string;
+    };
+    refundMethod: 'original_payment' | 'wallet_credits' | 'bank_transfer_upi';
+    refundAmount: number;
+    walletBonusAmount?: number;
+    bankUpiDetails?: {
+      upiId?: string;
+      accountNumber?: string;
+      ifscCode?: string;
+      accountHolderName?: string;
+    };
+    deliveredAt: string;
+    pickupAddress: string;
+    pickupSlot?: string;
+  }): { success: boolean; message: string; request?: ReturnExchangeRequest } => {
+    const policy = getCategoryReturnPolicy(reqData.categoryId);
+    const delivTime = new Date(reqData.deliveredAt).getTime();
+    const now = Date.now();
+    const windowMs = policy.windowDays > 0 ? policy.windowDays * 86400000 : (policy.windowHours || 48) * 3600000;
+    const windowClosingAt = new Date(delivTime + windowMs).toISOString();
+    const isWithinWindow = now <= (delivTime + windowMs);
+    const diffMs = (delivTime + windowMs) - now;
+    const daysRemaining = Math.max(0, Math.ceil(diffMs / 86400000));
+
+    if (!isWithinWindow && policy.windowDays > 0) {
+      return {
+        success: false,
+        message: `The return/replacement window of ${policy.windowDays} days for this ${policy.categoryName} product closed on ${new Date(windowClosingAt).toLocaleDateString('en-IN')}.`,
+      };
+    }
+
+    const newId = `RET-${Date.now().toString().slice(-6)}`;
+    const newRequest: ReturnExchangeRequest = {
+      ...reqData,
+      id: newId,
+      customerId: reqData.customerId || currentUser.id || 'cust_guest',
+      requestedAt: new Date().toISOString(),
+      windowClosingAt,
+      isWithinWindow: true,
+      daysRemaining,
+      status: 'requested',
+      statusHistory: [
+        {
+          status: 'requested',
+          timestamp: new Date().toISOString(),
+          note: `Customer submitted ${reqData.requestType.toUpperCase()} request. Reason: ${reqData.reason.replace(/_/g, ' ')}`,
+          updatedBy: `${reqData.customerName} (Customer)`,
+        },
+      ],
+    };
+
+    setReturnExchangeRequests((prev) => [newRequest, ...prev]);
+
+    // Also update order status
+    setOrders((prev) =>
+      prev.map((ord) => {
+        if (ord.id === reqData.orderId) {
+          return {
+            ...ord,
+            orderStatus: 'return_requested',
+            returnReason: `${reqData.requestType.toUpperCase()}: ${reqData.reasonDescription}`,
+            statusHistory: [
+              ...ord.statusHistory,
+              {
+                status: 'return_requested',
+                timestamp: new Date().toISOString(),
+                note: `Return/Exchange request #${newId} logged for ${reqData.productName}`,
+                updatedBy: `${reqData.customerName} (Customer)`,
+              },
+            ],
+          };
+        }
+        return ord;
+      })
+    );
+
+    return {
+      success: true,
+      message: `Your ${reqData.requestType} request #${newId} has been submitted successfully! Reverse pickup is being scheduled.`,
+      request: newRequest,
+    };
+  };
+
+  const updateReturnRequestStatus = (
+    requestId: string,
+    status: ReturnRequestStatus,
+    note?: string,
+    staffName?: string,
+    assignedRider?: { id: string; name: string }
+  ): { success: boolean; message: string } => {
+    const updater = staffName || currentUser.name || 'Store Staff';
+    const nowIso = new Date().toISOString();
+
+    setReturnExchangeRequests((prev) =>
+      prev.map((req) => {
+        if (req.id !== requestId) return req;
+        const updatedStatusHistory = [
+          ...req.statusHistory,
+          {
+            status,
+            timestamp: nowIso,
+            note: note || `Status updated to ${status.replace(/_/g, ' ')}`,
+            updatedBy: updater,
+          },
+        ];
+
+        return {
+          ...req,
+          status,
+          statusHistory: updatedStatusHistory,
+          assignedPickupRiderId: assignedRider ? assignedRider.id : req.assignedPickupRiderId,
+          assignedPickupRiderName: assignedRider ? assignedRider.name : req.assignedPickupRiderName,
+          processedAt: nowIso,
+          processedBy: updater,
+        };
+      })
+    );
+
+    return { success: true, message: `Request #${requestId} status updated to ${status.replace(/_/g, ' ')}.` };
+  };
+
+  const processReturnRefund = (
+    requestId: string,
+    refundMethod: 'original_payment' | 'wallet_credits' | 'bank_transfer_upi',
+    transactionId?: string,
+    approverName?: string
+  ): { success: boolean; message: string } => {
+    const target = returnExchangeRequests.find((r) => r.id === requestId);
+    if (!target) return { success: false, message: 'Return request not found.' };
+
+    const approver = approverName || currentUser.name || 'Finance Manager';
+    const nowIso = new Date().toISOString();
+    const finalRefundTotal = target.refundAmount + (target.walletBonusAmount || 0);
+    const txnId = transactionId || `RFD-TXN-${Date.now().toString().slice(-6)}`;
+
+    // If JE Cash credits, add directly to user balance & ledger
+    if (refundMethod === 'wallet_credits') {
+      const updatedBal = (currentUser.rewardBalance || currentUser.jeCashBalance || 0) + finalRefundTotal;
+      setCurrentUser((prev) => ({
+        ...prev,
+        rewardBalance: updatedBal,
+        jeCashBalance: updatedBal,
+      }));
+      setJeCashTransactions((prev) => [
+        {
+          id: `JECASH-RFD-${Date.now().toString().slice(-6)}`,
+          type: 'credit',
+          amount: finalRefundTotal,
+          balanceAfter: updatedBal,
+          description: `JE Cash Refund Credit (+5% shopping bonus) for Return #${target.id}`,
+          category: 'order_refund',
+          timestamp: nowIso,
+          orderId: target.orderId,
+          referenceId: txnId,
+          paymentMethodUsed: 'JE Cash Refund System',
+        },
+        ...prev,
+      ]);
+    }
+
+    // Update return request
+    setReturnExchangeRequests((prev) =>
+      prev.map((req) => {
+        if (req.id !== requestId) return req;
+        return {
+          ...req,
+          status: 'refund_processed',
+          refundTransactionId: txnId,
+          processedAt: nowIso,
+          processedBy: approver,
+          statusHistory: [
+            ...req.statusHistory,
+            {
+              status: 'refund_processed',
+              timestamp: nowIso,
+              note: `Refund of ₹${finalRefundTotal.toLocaleString('en-IN')} successfully settled via ${refundMethod.replace(/_/g, ' ')} (Txn: ${txnId})`,
+              updatedBy: approver,
             },
           ],
         };
       })
     );
+
+    // Update order status
+    setOrders((prev) =>
+      prev.map((ord) => {
+        if (ord.id !== target.orderId) return ord;
+        return {
+          ...ord,
+          orderStatus: 'refunded',
+          refundStatus: 'processed',
+          refundedAmount: (ord.refundedAmount || 0) + target.refundAmount,
+          statusHistory: [
+            ...ord.statusHistory,
+            {
+              status: 'refunded',
+              timestamp: nowIso,
+              note: `Refund of ₹${finalRefundTotal.toLocaleString('en-IN')} approved for item ${target.productName} by ${approver}`,
+              updatedBy: approver,
+            },
+          ],
+        };
+      })
+    );
+
+    return {
+      success: true,
+      message: `Refund of ₹${finalRefundTotal.toLocaleString('en-IN')} successfully processed via ${refundMethod.replace(/_/g, ' ')}.`,
+    };
+  };
+
+  const dispatchReturnReplacement = (
+    requestId: string,
+    replacementOrderId?: string,
+    approverName?: string
+  ): { success: boolean; message: string } => {
+    const target = returnExchangeRequests.find((r) => r.id === requestId);
+    if (!target) return { success: false, message: 'Return request not found.' };
+
+    const approver = approverName || currentUser.name || 'Store Manager';
+    const repId = replacementOrderId || `REP-${Date.now().toString().slice(-6)}`;
+    const nowIso = new Date().toISOString();
+
+    setReturnExchangeRequests((prev) =>
+      prev.map((req) => {
+        if (req.id !== requestId) return req;
+        return {
+          ...req,
+          status: 'replacement_dispatched',
+          replacementOrderId: repId,
+          processedAt: nowIso,
+          processedBy: approver,
+          statusHistory: [
+            ...req.statusHistory,
+            {
+              status: 'replacement_dispatched',
+              timestamp: nowIso,
+              note: `Replacement/Exchange unit dispatched under Order #${repId}`,
+              updatedBy: approver,
+            },
+          ],
+        };
+      })
+    );
+
+    return {
+      success: true,
+      message: `Replacement order #${repId} has been created and dispatched to the customer.`,
+    };
   };
 
   // Product & Inventory actions
@@ -2303,6 +4239,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       ...coup,
       id: `coup-${Date.now()}`,
       timesUsed: 0,
+      createdAt: coup.createdAt || new Date().toISOString(),
     };
     setCoupons((prev) => [newCoupon, ...prev]);
   };
@@ -2311,6 +4248,276 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setCoupons((prev) =>
       prev.map((c) => (c.id === id ? { ...c, isActive: !c.isActive } : c))
     );
+  };
+
+  const updateCoupon = (couponId: string, updates: Partial<Coupon>) => {
+    let found = false;
+    setCoupons((prev) =>
+      prev.map((c) => {
+        if (c.id === couponId) {
+          found = true;
+          return { ...c, ...updates };
+        }
+        return c;
+      })
+    );
+    if (found) {
+      return { success: true, message: 'Coupon details updated successfully.' };
+    }
+    return { success: false, message: 'Coupon not found.' };
+  };
+
+  const deleteCoupon = (couponId: string) => {
+    setCoupons((prev) => prev.filter((c) => c.id !== couponId));
+    if (appliedCoupon?.id === couponId) {
+      setAppliedCoupon(null);
+    }
+    return { success: true, message: 'Coupon removed successfully.' };
+  };
+
+  // Referral Program Structure & Operations
+  const updateReferralProgramConfig = (updates: Partial<ReferralProgramConfig>, updatedBy: string = 'Super Admin') => {
+    setReferralProgramConfig((prev) => ({
+      ...prev,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+      updatedBy,
+    }));
+    return { success: true, message: 'Referral program configuration updated successfully.' };
+  };
+
+  const awardReferralBonus = (recordId: string, notes?: string) => {
+    let targetRecord: ReferralRecord | undefined;
+    setReferralRecords((prev) =>
+      prev.map((r) => {
+        if (r.id === recordId) {
+          targetRecord = {
+            ...r,
+            status: 'awarded',
+            awardedAt: new Date().toISOString(),
+            notes: notes || r.notes || 'Manually approved & awarded by admin',
+          };
+          return targetRecord;
+        }
+        return r;
+      })
+    );
+    if (!targetRecord) {
+      return { success: false, message: 'Referral record not found.' };
+    }
+    // If the referrer matches the currentUser, credit their reward wallet
+    if (
+      (targetRecord as ReferralRecord).referrerPhone === currentUser.phone ||
+      (targetRecord as ReferralRecord).referrerCode === currentUser.referralCode
+    ) {
+      setCurrentUser((prev) => ({
+        ...prev,
+        rewardBalance: (prev.rewardBalance || 0) + ((targetRecord as ReferralRecord).rewardAmount || 100),
+      }));
+    }
+    return {
+      success: true,
+      message: `Referral bonus of ₹${(targetRecord as ReferralRecord).rewardAmount} awarded to ${(targetRecord as ReferralRecord).referrerName}!`,
+    };
+  };
+
+  const cancelReferralRecord = (recordId: string, reason?: string) => {
+    let targetFound = false;
+    setReferralRecords((prev) =>
+      prev.map((r) => {
+        if (r.id === recordId) {
+          targetFound = true;
+          return {
+            ...r,
+            status: 'cancelled',
+            notes: reason ? `${r.notes ? r.notes + ' | ' : ''}Cancelled: ${reason}` : r.notes,
+          };
+        }
+        return r;
+      })
+    );
+    if (targetFound) {
+      return { success: true, message: 'Referral record marked as cancelled.' };
+    }
+    return { success: false, message: 'Referral record not found.' };
+  };
+
+  const adjustCustomerWalletBalance = (targetPhoneOrId: string, amountDiff: number, reason: string) => {
+    const isCurrent =
+      targetPhoneOrId === currentUser.id ||
+      targetPhoneOrId === currentUser.phone ||
+      currentUser.phone.includes(targetPhoneOrId);
+
+    if (isCurrent) {
+      setCurrentUser((prev) => ({
+        ...prev,
+        rewardBalance: Math.max(0, (prev.rewardBalance || 0) + amountDiff),
+      }));
+    }
+
+    setAccounts((prev) =>
+      prev.map((acc) => {
+        if (acc.id === targetPhoneOrId || acc.phone === targetPhoneOrId) {
+          return {
+            ...acc,
+            rewardBalance: Math.max(0, (acc.rewardBalance || 0) + amountDiff),
+          };
+        }
+        return acc;
+      })
+    );
+
+    return {
+      success: true,
+      message: `Wallet balance adjusted by ${amountDiff >= 0 ? '+' : ''}₹${amountDiff} (${reason}).`,
+    };
+  };
+
+  // Promotional Landing Pages & Marketing Spaces Engine
+  const addPromotionalPage = (pageData: Omit<PromotionalPage, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const slug = pageData.slug?.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || `promo-${Date.now()}`;
+    const newPage: PromotionalPage = {
+      ...pageData,
+      id: `promo-${Date.now()}`,
+      slug,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUser.name || 'Super Admin',
+    };
+    setPromotionalPages((prev) => [newPage, ...prev]);
+    return { success: true, message: `Promotional page "${newPage.title}" created successfully!`, page: newPage };
+  };
+
+  const updatePromotionalPage = (pageId: string, updates: Partial<PromotionalPage>) => {
+    let found = false;
+    setPromotionalPages((prev) =>
+      prev.map((p) => {
+        if (p.id === pageId) {
+          found = true;
+          return {
+            ...p,
+            ...updates,
+            updatedAt: new Date().toISOString(),
+            updatedBy: currentUser.name || 'Super Admin',
+          };
+        }
+        return p;
+      })
+    );
+    if (activePromotionalPage?.id === pageId) {
+      setActivePromotionalPage((prev) => (prev ? { ...prev, ...updates } : null));
+    }
+    if (found) {
+      return { success: true, message: 'Promotional landing page updated successfully.' };
+    }
+    return { success: false, message: 'Promotional page not found.' };
+  };
+
+  const deletePromotionalPage = (pageId: string) => {
+    setPromotionalPages((prev) => prev.filter((p) => p.id !== pageId));
+    if (activePromotionalPage?.id === pageId) {
+      setActivePromotionalPage(null);
+      if (activeModal === 'promotional_page') {
+        setActiveModal(null);
+      }
+    }
+    return { success: true, message: 'Promotional landing page deleted.' };
+  };
+
+  const togglePromotionalPageStatus = (pageId: string) => {
+    let newStatus = false;
+    setPromotionalPages((prev) =>
+      prev.map((p) => {
+        if (p.id === pageId) {
+          newStatus = !p.isActive;
+          return { ...p, isActive: newStatus, updatedAt: new Date().toISOString() };
+        }
+        return p;
+      })
+    );
+    return {
+      success: true,
+      message: `Promotional page status updated to ${newStatus ? 'ACTIVE' : 'INACTIVE'}.`,
+    };
+  };
+
+  const openPromotionalPageBySlug = (slug: string): boolean => {
+    const cleanSlug = slug.trim().toLowerCase();
+    const page = promotionalPages.find(
+      (p) => p.slug.toLowerCase() === cleanSlug || p.id === cleanSlug
+    );
+    if (page) {
+      setActivePromotionalPage(page);
+      setActiveModal('promotional_page');
+      return true;
+    }
+    return false;
+  };
+
+  // Chatbot AI & Knowledge Base Training Methods
+  const updateChatbotAiSettings = (updates: Partial<ChatbotAiSettings>) => {
+    setChatbotAiSettings((prev) => ({
+      ...prev,
+      ...updates,
+    }));
+    return { success: true, message: 'Chatbot AI configuration updated successfully!' };
+  };
+
+  const addKnowledgeItem = (item: Omit<ChatbotKnowledgeItem, 'id' | 'lastUpdated'>) => {
+    const newItem: ChatbotKnowledgeItem = {
+      ...item,
+      id: `kb-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      timesAnswered: 0,
+      lastUpdated: new Date().toISOString(),
+    };
+    setChatbotAiSettings((prev) => ({
+      ...prev,
+      knowledgeBase: [newItem, ...prev.knowledgeBase],
+    }));
+    return { success: true, message: 'Q&A training pair added successfully to AI Knowledge Base!', item: newItem };
+  };
+
+  const updateKnowledgeItem = (itemId: string, updates: Partial<ChatbotKnowledgeItem>) => {
+    setChatbotAiSettings((prev) => ({
+      ...prev,
+      knowledgeBase: prev.knowledgeBase.map((k) =>
+        k.id === itemId
+          ? { ...k, ...updates, lastUpdated: new Date().toISOString() }
+          : k
+      ),
+    }));
+    return { success: true, message: 'Q&A training pair updated successfully!' };
+  };
+
+  const deleteKnowledgeItem = (itemId: string) => {
+    setChatbotAiSettings((prev) => ({
+      ...prev,
+      knowledgeBase: prev.knowledgeBase.filter((k) => k.id !== itemId),
+    }));
+    return { success: true, message: 'Q&A training item removed from AI Knowledge Base.' };
+  };
+
+  const toggleKnowledgeItemStatus = (itemId: string) => {
+    let newStatus = false;
+    setChatbotAiSettings((prev) => ({
+      ...prev,
+      knowledgeBase: prev.knowledgeBase.map((k) => {
+        if (k.id === itemId) {
+          newStatus = !k.isActive;
+          return { ...k, isActive: newStatus, lastUpdated: new Date().toISOString() };
+        }
+        return k;
+      }),
+    }));
+    return { success: true, message: `Training item status set to ${newStatus ? 'ACTIVE' : 'INACTIVE'}.` };
+  };
+
+  const resetKnowledgeBaseToDefaults = () => {
+    setChatbotAiSettings((prev) => ({
+      ...prev,
+      knowledgeBase: INITIAL_CHATBOT_KNOWLEDGE_BASE,
+    }));
+    return { success: true, message: 'Knowledge base reset to recommended retail training defaults.' };
   };
 
   const updateSettings = (newSettings: Partial<StoreSettings>) => {
@@ -2329,10 +4536,106 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       ...addr,
       id: `addr-${Date.now()}`,
     };
+    setCurrentUser((prev) => {
+      const updatedList = addr.isDefault
+        ? prev.savedAddresses.map((a) => ({ ...a, isDefault: false }))
+        : prev.savedAddresses;
+      return {
+        ...prev,
+        savedAddresses: [...updatedList, newAddr],
+      };
+    });
+  };
+
+  const updateUserProfile = (updates: Partial<Pick<UserProfile, 'name' | 'phone' | 'email'>>) => {
     setCurrentUser((prev) => ({
       ...prev,
-      savedAddresses: [...prev.savedAddresses, newAddr],
+      ...updates,
     }));
+    return {
+      success: true,
+      message: 'Your profile details have been updated!',
+    };
+  };
+
+  const deleteSavedAddress = (addressId: string) => {
+    setCurrentUser((prev) => ({
+      ...prev,
+      savedAddresses: prev.savedAddresses.filter((a) => a.id !== addressId),
+    }));
+  };
+
+  const setDefaultAddress = (addressId: string) => {
+    setCurrentUser((prev) => ({
+      ...prev,
+      savedAddresses: prev.savedAddresses.map((a) => ({
+        ...a,
+        isDefault: a.id === addressId,
+      })),
+    }));
+  };
+
+  const redeemReferralCode = (code: string) => {
+    const clean = code.trim().toUpperCase();
+    if (!clean || clean.length < 4) {
+      return { success: false, message: 'Please enter a valid referral code.' };
+    }
+    if (clean === currentUser.referralCode.toUpperCase()) {
+      return { success: false, message: 'You cannot redeem your own referral code.' };
+    }
+    if (!referralProgramConfig.isEnabled) {
+      return { success: false, message: 'The Refer & Earn program is currently paused.' };
+    }
+
+    const bonus = referralProgramConfig.refereeRewardAmount || 100;
+    setCurrentUser((prev) => ({
+      ...prev,
+      rewardBalance: (prev.rewardBalance || 0) + bonus,
+    }));
+
+    // Create a usable referral discount coupon if not already present
+    const refCouponCode = `${referralProgramConfig.referralCouponCodePrefix || 'REF'}${bonus}`;
+    const exists = coupons.some((c) => c.code.toUpperCase() === refCouponCode.toUpperCase());
+    if (!exists) {
+      const newRefCoupon: Coupon = {
+        id: `coup-ref-${Date.now()}`,
+        code: refCouponCode,
+        discountType: 'fixed',
+        value: bonus,
+        minOrderValue: referralProgramConfig.minOrderValueToQualify || 499,
+        validUntil: new Date(Date.now() + 86400000 * (referralProgramConfig.referralCouponValidityDays || 30)).toISOString(),
+        usageLimit: 100,
+        timesUsed: 0,
+        description: `₹${bonus} Referral Bonus Discount (Claimed via code ${clean})`,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      };
+      setCoupons((prev) => [newRefCoupon, ...prev]);
+    }
+
+    // Add entry into referral audit trail records for admin visibility
+    const newRecord: ReferralRecord = {
+      id: `ref-rec-${Date.now()}`,
+      referrerCode: clean,
+      referrerName: `Member (${clean})`,
+      referrerPhone: clean,
+      refereeName: currentUser.name || 'App Customer',
+      refereePhone: currentUser.phone,
+      refereeEmail: currentUser.email,
+      refereeCodeUsed: clean,
+      rewardAmount: bonus,
+      status: 'pending_order',
+      bonusCouponCode: refCouponCode,
+      redeemedAt: new Date().toISOString(),
+      notes: `Claimed via customer account with referral code ${clean}`,
+    };
+    setReferralRecords((prev) => [newRecord, ...prev]);
+
+    return {
+      success: true,
+      bonusAdded: bonus,
+      message: `Referral code ${clean} applied! ₹${bonus} credited to your Reward Wallet + promo code ${refCouponCode} unlocked!`,
+    };
   };
 
   // Authentication & Staff Credential Management Methods with 2FA Authenticator OTP
@@ -2366,7 +4669,66 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       };
     }
 
-    if (!account.isActive) {
+    const nowMs = Date.now();
+    let effectiveStatus: AccountStatus = account.accountStatus || (account.isActive === false ? 'suspended' : 'active');
+    const activeSanction = account.sanction;
+
+    // Auto-lift expired temporary sanctions (except terminated)
+    if (activeSanction?.expiresAt && new Date(activeSanction.expiresAt).getTime() <= nowMs && effectiveStatus !== 'terminated') {
+      effectiveStatus = 'active';
+      setAccounts((prev) =>
+        prev.map((a) =>
+          a.id === account.id
+            ? {
+                ...a,
+                accountStatus: 'active',
+                isActive: true,
+                sanction: undefined,
+                sanctionHistory: a.sanction
+                  ? [
+                      ...(a.sanctionHistory || []),
+                      {
+                        ...a.sanction,
+                        resolvedAt: new Date().toISOString(),
+                        resolvedBy: 'System Auto-Expiry',
+                        resolutionNote: 'Sanction duration expired automatically.',
+                      },
+                    ]
+                  : a.sanctionHistory,
+              }
+            : a
+        )
+      );
+    }
+
+    if (effectiveStatus === 'terminated') {
+      return {
+        success: false,
+        message: `Account Terminated: ${account.sanction?.reason || 'Access has been permanently revoked by administrator for policy violations.'}`,
+      };
+    }
+
+    if (effectiveStatus === 'suspended') {
+      const expiryText = account.sanction?.expiresAt
+        ? ` until ${new Date(account.sanction.expiresAt).toLocaleString('en-IN')}`
+        : '';
+      return {
+        success: false,
+        message: `Account Suspended${expiryText}. Reason: ${account.sanction?.reason || 'Administrative hold'}. Please contact support if you believe this is in error.`,
+      };
+    }
+
+    if (effectiveStatus === 'on_hold') {
+      const expiryText = account.sanction?.expiresAt
+        ? ` until ${new Date(account.sanction.expiresAt).toLocaleString('en-IN')}`
+        : '';
+      return {
+        success: false,
+        message: `Account On Hold${expiryText}. Reason: ${account.sanction?.reason || 'Security/audit investigation in progress'}.`,
+      };
+    }
+
+    if (!account.isActive && effectiveStatus !== 're_verification') {
       return {
         success: false,
         message: 'This account has been deactivated. Please contact the platform administrator.',
@@ -2493,6 +4855,175 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   };
 
+  // Pending Customer Signup OTP store (in-memory for secure verification session)
+  const [pendingCustomerSignups, setPendingCustomerSignups] = useState<
+    Record<
+      string,
+      {
+        name: string;
+        email: string;
+        phone: string;
+        password: string;
+        city?: string;
+        pincode?: string;
+        addressLine?: string;
+        otpCode: string;
+        expiresAt: number;
+        resendAvailableAt: number;
+      }
+    >
+  >({});
+
+  const initiateCustomerSignupOtp = (data: {
+    name: string;
+    email: string;
+    phone: string;
+    password: string;
+    city?: string;
+    pincode?: string;
+    addressLine?: string;
+  }): { success: boolean; message: string; otpCode?: string; resendSeconds?: number } => {
+    const cleanEmail = data.email.trim().toLowerCase();
+    const cleanPhone = data.phone.trim();
+
+    if (!data.name.trim() || !cleanEmail || !cleanPhone || !data.password.trim()) {
+      return { success: false, message: 'All required registration fields must be filled.' };
+    }
+
+    if (data.password.trim().length < 6) {
+      return { success: false, message: 'Password must be at least 6 characters long.' };
+    }
+
+    // Check if account already exists
+    if (accounts.some((a) => a.email.toLowerCase() === cleanEmail)) {
+      return {
+        success: false,
+        message: 'An account with this email address already exists. Please sign in instead.',
+      };
+    }
+
+    // Generate random 6-digit numeric OTP code
+    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const now = Date.now();
+
+    setPendingCustomerSignups((prev) => ({
+      ...prev,
+      [cleanEmail]: {
+        name: data.name.trim(),
+        email: cleanEmail,
+        phone: cleanPhone,
+        password: data.password.trim(),
+        city: data.city,
+        pincode: data.pincode,
+        addressLine: data.addressLine,
+        otpCode: generatedOtp,
+        expiresAt: now + 10 * 60 * 1000, // 10 minutes
+        resendAvailableAt: now + 60 * 1000, // 60s cooldown
+      },
+    }));
+
+    return {
+      success: true,
+      message: `Verification code sent to ${cleanEmail}.`,
+      otpCode: generatedOtp,
+      resendSeconds: 60,
+    };
+  };
+
+  const resendCustomerSignupOtp = (
+    email: string
+  ): { success: boolean; message: string; otpCode?: string; resendSeconds?: number } => {
+    const cleanEmail = email.trim().toLowerCase();
+    const pending = pendingCustomerSignups[cleanEmail];
+
+    if (!pending) {
+      return {
+        success: false,
+        message: 'No pending signup session found for this email. Please re-enter your details.',
+      };
+    }
+
+    const now = Date.now();
+    if (now < pending.resendAvailableAt) {
+      const remainingSecs = Math.ceil((pending.resendAvailableAt - now) / 1000);
+      return {
+        success: false,
+        message: `Please wait ${remainingSecs} seconds before requesting a new code.`,
+      };
+    }
+
+    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    setPendingCustomerSignups((prev) => ({
+      ...prev,
+      [cleanEmail]: {
+        ...pending,
+        otpCode: generatedOtp,
+        expiresAt: now + 10 * 60 * 1000,
+        resendAvailableAt: now + 60 * 1000,
+      },
+    }));
+
+    return {
+      success: true,
+      message: `A new 6-digit code has been sent to ${cleanEmail}.`,
+      otpCode: generatedOtp,
+      resendSeconds: 60,
+    };
+  };
+
+  const verifyCustomerSignupOtp = (
+    email: string,
+    enteredOtp: string
+  ): { success: boolean; message: string; user?: UserProfile } => {
+    const cleanEmail = email.trim().toLowerCase();
+    const pending = pendingCustomerSignups[cleanEmail];
+
+    if (!pending) {
+      return {
+        success: false,
+        message: 'Signup session expired or not found. Please start registration again.',
+      };
+    }
+
+    if (Date.now() > pending.expiresAt) {
+      return {
+        success: false,
+        message: 'Verification code has expired. Please request a new code.',
+      };
+    }
+
+    const cleanOtp = enteredOtp.trim().replace(/\D/g, '');
+    if (cleanOtp !== pending.otpCode) {
+      return {
+        success: false,
+        message: 'Invalid verification code. Please check and try again.',
+      };
+    }
+
+    // Complete registration
+    const res = registerCustomer({
+      name: pending.name,
+      email: pending.email,
+      phone: pending.phone,
+      password: pending.password,
+      city: pending.city,
+      pincode: pending.pincode,
+      addressLine: pending.addressLine,
+    });
+
+    if (res.success) {
+      // Clear pending signup session
+      setPendingCustomerSignups((prev) => {
+        const next = { ...prev };
+        delete next[cleanEmail];
+        return next;
+      });
+    }
+
+    return res;
+  };
+
   const registerCustomer = (data: {
     name: string;
     email: string;
@@ -2537,10 +5068,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           fullName: data.name.trim(),
           phone: cleanPhone,
           addressLine: data.addressLine.trim(),
-          area: data.city || 'Central Area',
-          city: data.city || 'Lucknow',
-          state: 'Uttar Pradesh',
-          pincode: data.pincode || '226001',
+          area: data.city || 'Nalasopara East',
+          city: data.city || 'Nalasopara',
+          state: 'Maharashtra',
+          pincode: data.pincode || '401209',
           isDefault: true,
         }
       : undefined;
@@ -2596,7 +5127,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       outletName: targetOutlet?.name || 'All Outlets',
       createdAt: new Date().toISOString(),
       isActive: true,
-      createdBy: currentUser.name || 'Platform Administrator',
+      createdBy: currentUser.name || 'Store Admin',
     };
 
     setAccounts((prev) => [newStaffAcc, ...prev]);
@@ -2616,6 +5147,117 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const deleteStoreStaffAccount = (id: string) => {
     setAccounts((prev) => prev.filter((acc) => acc.id !== id));
     return { success: true, message: 'Account removed.' };
+  };
+
+  const applyAccountSanction = (
+    accountId: string,
+    payload: {
+      status: AccountStatus;
+      reason: string;
+      duration: AccountSanctionDuration;
+      expiresAt?: string;
+      reVerificationRequirements?: string[];
+      notes?: string;
+      appliedBy?: string;
+    }
+  ) => {
+    const target = accounts.find((a) => a.id === accountId);
+    if (!target) {
+      return { success: false, message: 'Account not found.' };
+    }
+
+    if (target.role === 'super_admin' && currentUser.id !== target.id && payload.status === 'terminated') {
+      return { success: false, message: 'Super Admin account cannot be terminated.' };
+    }
+
+    const nowIso = new Date().toISOString();
+    const newSanction: AccountSanction = {
+      id: `sanc-${Date.now()}`,
+      status: payload.status,
+      reason: payload.reason,
+      appliedAt: nowIso,
+      appliedBy: payload.appliedBy || `${currentUser.name} (${currentRole.replace('_', ' ')})`,
+      duration: payload.duration,
+      expiresAt: payload.expiresAt,
+      reVerificationRequirements: payload.reVerificationRequirements,
+      notes: payload.notes,
+    };
+
+    const isDeactivated = payload.status === 'suspended' || payload.status === 'terminated' || payload.status === 'on_hold';
+
+    let updatedAccount: UserAccount | undefined;
+    setAccounts((prev) =>
+      prev.map((acc) => {
+        if (acc.id !== accountId) return acc;
+        updatedAccount = {
+          ...acc,
+          accountStatus: payload.status,
+          isActive: !isDeactivated,
+          sanction: newSanction,
+          sanctionHistory: [newSanction, ...(acc.sanctionHistory || [])],
+        };
+        return updatedAccount;
+      })
+    );
+
+    const actionWord =
+      payload.status === 'suspended'
+        ? 'Suspended'
+        : payload.status === 'terminated'
+        ? 'Terminated'
+        : payload.status === 'on_hold'
+        ? 'Placed On Hold'
+        : payload.status === 're_verification'
+        ? 'Marked for Re-Verification'
+        : 'Updated';
+
+    return {
+      success: true,
+      message: `Account "${target.name}" (${target.email}) has been ${actionWord}. Reason: "${payload.reason}"`,
+      account: updatedAccount,
+    };
+  };
+
+  const liftAccountSanction = (accountId: string, resolutionNote?: string) => {
+    const target = accounts.find((a) => a.id === accountId);
+    if (!target) {
+      return { success: false, message: 'Account not found.' };
+    }
+
+    const nowIso = new Date().toISOString();
+    let updatedAccount: UserAccount | undefined;
+    setAccounts((prev) =>
+      prev.map((acc) => {
+        if (acc.id !== accountId) return acc;
+        const previousSanction = acc.sanction;
+        const resolvedHistory = previousSanction
+          ? [
+              {
+                ...previousSanction,
+                resolvedAt: nowIso,
+                resolvedBy: `${currentUser.name} (${currentRole.replace('_', ' ')})`,
+                resolutionNote: resolutionNote || 'Sanction lifted by administrator. Account restored to active standing.',
+              },
+              ...(acc.sanctionHistory || []).filter((s) => s.id !== previousSanction.id),
+            ]
+          : acc.sanctionHistory || [];
+
+        updatedAccount = {
+          ...acc,
+          accountStatus: 'active',
+          isActive: true,
+          sanction: undefined,
+          sanctionHistory: resolvedHistory,
+        };
+        return updatedAccount;
+      })
+    );
+
+    return {
+      success: true,
+      message: `Sanctions lifted for ${target.name}. Account is now Active and in good standing.`,
+      account: updatedAccount,
+    };
   };
 
   const logoutUser = () => {
@@ -2643,8 +5285,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       id: `zone-${Date.now()}`,
       pincode: cleanPin,
       areaName: data.areaName.trim(),
-      city: data.city?.trim() || 'Lucknow',
-      state: data.state?.trim() || 'Uttar Pradesh',
+      city: data.city?.trim() || 'Nalasopara',
+      state: data.state?.trim() || 'Maharashtra',
       outletName: resolvedOutletName,
       createdAt: nowIso,
       updatedAt: nowIso,
@@ -2751,7 +5393,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!clean) return false;
     const zone = getDeliveryZoneForPincode(clean, outletId);
     if (zone && zone.isActive) return true;
-    return settings.serviceablePincodes.includes(clean);
+    if (settings.serviceablePincodes.includes(clean)) return true;
+    if (outlets.some((o) => o.serviceablePincodes?.includes(clean))) return true;
+    // Allow Palghar / Vasai-Virar / Nalasopara / Mumbai MMR 401xxx & 400xxx pincodes when pinned on map
+    if (/^40[01]\d{3}$/.test(clean)) return true;
+    return false;
   };
 
   // Bulk Order Volume Discount Rules Management
@@ -2835,8 +5481,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [outlets, activeOutletId]);
 
   const createOutlet = (outletData: Omit<Outlet, 'id' | 'createdAt'>) => {
+    const sType = outletData.storeType || 'grocery';
+    const acceptance = outletData.orderAcceptanceConfig || getDefaultOrderAcceptanceConfig(sType);
     const newOutlet: Outlet = {
       ...outletData,
+      storeType: sType,
+      orderAcceptanceConfig: acceptance,
+      deliveryTimePromise: outletData.deliveryTimePromise || acceptance.deliveryTimePromise,
       id: `out_${Date.now()}`,
       createdAt: new Date().toISOString(),
     };
@@ -2851,6 +5502,35 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setOutlets((prev) => prev.filter((o) => o.id !== id));
   };
 
+  const toggleOutletStatus = (id: string, newStatus?: OutletStatus) => {
+    setOutlets((prev) =>
+      prev.map((o) => {
+        if (o.id !== id) return o;
+        const targetStatus: OutletStatus =
+          newStatus || (o.status === 'active' ? 'inactive' : 'active');
+        return {
+          ...o,
+          status: targetStatus,
+          updatedAt: new Date().toISOString(),
+        };
+      })
+    );
+  };
+
+  const updateOutletOrderAcceptanceConfig = (id: string, config: StoreOrderAcceptanceConfig) => {
+    setOutlets((prev) =>
+      prev.map((o) => {
+        if (o.id !== id) return o;
+        return {
+          ...o,
+          deliveryTimePromise: config.deliveryTimePromise || o.deliveryTimePromise,
+          orderAcceptanceConfig: config,
+          updatedAt: new Date().toISOString(),
+        };
+      })
+    );
+  };
+
   const updateOwnershipModel = (updated: OutletOwnershipRules) => {
     setOwnershipModels((prev) => prev.map((m) => (m.modelType === updated.modelType ? updated : m)));
   };
@@ -2862,6 +5542,289 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       itemCount: 0,
     };
     setBusinessCategories((prev) => [newCat, ...prev]);
+
+    const slugId = (cat.slug || cat.name)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    if (slugId) {
+      setCategories((prev) => {
+        if (prev.some((c) => c.id === slugId || c.name.toLowerCase() === cat.name.trim().toLowerCase())) {
+          return prev;
+        }
+        return [
+          ...prev,
+          {
+            id: slugId,
+            name: cat.name.trim(),
+            iconName: cat.iconName || 'Package',
+            description: cat.description || `${cat.name.trim()} products and accessories`,
+            itemCount: 0,
+          },
+        ];
+      });
+    }
+  };
+
+  const addCategory = (data: {
+    name: string;
+    description?: string;
+    iconName?: string;
+    imageUrl?: string;
+    defaultGstRate?: number;
+    commissionStructure?: CategoryCommissionStructure;
+    subCategories?: SubCategoryItem[];
+  }): { success: boolean; message: string; category?: CategoryItem } => {
+    const cleanName = data.name.trim();
+    if (!cleanName) {
+      return { success: false, message: 'Please enter a valid category name.' };
+    }
+
+    const slugId = cleanName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || `cat_${Date.now()}`;
+
+    const existing = categories.find(
+      (c) => c.id === slugId || c.name.toLowerCase() === cleanName.toLowerCase()
+    );
+    if (existing) {
+      return {
+        success: true,
+        message: `Category "${existing.name}" already exists.`,
+        category: existing,
+      };
+    }
+
+    const lowerName = cleanName.toLowerCase();
+    let determinedIcon = data.iconName;
+    if (!determinedIcon) {
+      if (/cloth|shirt|pant|apparel|wear|jean|trouser|kurti|kurta|suit|dress|fashion/i.test(lowerName)) {
+        determinedIcon = 'Shirt';
+      } else if (/cosmetic|beauty|makeup|serum|skincare|lipstick|lotion|cream|perfume/i.test(lowerName)) {
+        determinedIcon = 'Sparkles';
+      } else if (/men|man|gent/i.test(lowerName)) {
+        determinedIcon = 'UserCheck';
+      } else if (/women|woman|lady|ladies|saree/i.test(lowerName)) {
+        determinedIcon = 'Heart';
+      } else if (/kid|child|baby|infant|boy|girl|toy/i.test(lowerName)) {
+        determinedIcon = 'Smile';
+      } else if (/shoe|footwear|sandal|sneaker/i.test(lowerName)) {
+        determinedIcon = 'ShoppingBag';
+      } else if (/phone|mobile|cell/i.test(lowerName)) {
+        determinedIcon = 'Smartphone';
+      } else if (/audio|headphone|earbud|speaker/i.test(lowerName)) {
+        determinedIcon = 'Headphones';
+      } else if (/watch/i.test(lowerName)) {
+        determinedIcon = 'Watch';
+      } else if (/food|kitchen|grocery|cafe|snack/i.test(lowerName)) {
+        determinedIcon = 'ShoppingBag';
+      } else {
+        determinedIcon = 'Layers';
+      }
+    }
+
+    const defaultGst =
+      data.commissionStructure?.gstRate ??
+      data.defaultGstRate ??
+      (/cloth|apparel|wear|shirt|kurta|saree|garment/i.test(lowerName) ? 5 : 18);
+
+    const commStruct: CategoryCommissionStructure = data.commissionStructure || {
+      type: 'percentage',
+      commissionPercent: 8.0,
+      fixedFee: 15,
+      gstRate: defaultGst,
+    };
+
+    const newCategoryItem: CategoryItem = {
+      id: slugId,
+      name: cleanName,
+      iconName: determinedIcon,
+      imageUrl: data.imageUrl?.trim() || undefined,
+      description: data.description?.trim() || `${cleanName} catalog and products`,
+      itemCount: 0,
+      commissionStructure: commStruct,
+      subCategories: (data.subCategories || []).map((sc) => ({
+        ...sc,
+        parentCategoryId: slugId,
+      })),
+    };
+
+    setCategories((prev) => [...prev, newCategoryItem]);
+
+    // Also keep businessCategories in sync
+    const code = `CAT-${cleanName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'NEW'}-${Math.floor(10 + Math.random() * 90)}`;
+    const newBusCat: BusinessCategory = {
+      id: `cat_${Date.now()}`,
+      name: cleanName,
+      code,
+      slug: slugId.replace(/_/g, '-'),
+      iconName: determinedIcon || 'Package',
+      description: newCategoryItem.description,
+      customAttributes: [
+        { id: 'attr_1', name: 'Brand Warranty Period', type: 'select', required: true, options: ['6 Months', '1 Year', '2 Years'] },
+      ],
+      requiresBatchNumber: false,
+      requiresExpiryDate: false,
+      requiresPrescription: false,
+      requiresEanBarcode: true,
+      defaultGstRate: commStruct.gstRate,
+      returnWindowDays: 7,
+      defaultCommissionPercent: commStruct.commissionPercent,
+      approvalStatus: 'published',
+      proposedBy: currentUser.name || 'Admin',
+      approvedBy: 'Super Admin',
+      isActive: true,
+      itemCount: 0,
+    };
+    setBusinessCategories((prev) => [newBusCat, ...prev]);
+
+    return {
+      success: true,
+      message: `Category "${cleanName}" created successfully!`,
+      category: newCategoryItem,
+    };
+  };
+
+  const updateCategory = (
+    categoryId: ProductCategory,
+    updates: Partial<CategoryItem>
+  ): { success: boolean; message: string } => {
+    setCategories((prev) =>
+      prev.map((c) => {
+        if (c.id !== categoryId) return c;
+        return {
+          ...c,
+          ...updates,
+          id: c.id,
+        };
+      })
+    );
+    if (updates.name || updates.commissionStructure || updates.description || updates.iconName) {
+      setBusinessCategories((prev) =>
+        prev.map((bc) => {
+          const bcSlug = bc.slug.replace(/-/g, '_');
+          if (bcSlug === categoryId || bc.name.toLowerCase() === updates.name?.toLowerCase()) {
+            return {
+              ...bc,
+              name: updates.name || bc.name,
+              description: updates.description || bc.description,
+              iconName: updates.iconName || bc.iconName,
+              defaultCommissionPercent:
+                updates.commissionStructure?.commissionPercent ?? bc.defaultCommissionPercent,
+              defaultGstRate: updates.commissionStructure?.gstRate ?? bc.defaultGstRate,
+            };
+          }
+          return bc;
+        })
+      );
+    }
+    return { success: true, message: 'Category updated successfully.' };
+  };
+
+  const deleteCategory = (categoryId: ProductCategory): { success: boolean; message: string } => {
+    const target = categories.find((c) => c.id === categoryId);
+    setCategories((prev) => prev.filter((c) => c.id !== categoryId));
+    if (selectedCategory === categoryId) {
+      setSelectedCategory('all');
+    }
+    if (fullScreenCategory === categoryId) {
+      setFullScreenCategory(null);
+    }
+    return {
+      success: true,
+      message: target ? `Category "${target.name}" deleted.` : 'Category deleted.',
+    };
+  };
+
+  const addSubCategory = (
+    parentCategoryId: ProductCategory,
+    subCat: {
+      name: string;
+      description?: string;
+      imageUrl?: string;
+      iconName?: string;
+      commissionPercent?: number;
+    }
+  ): { success: boolean; message: string; subCategory?: SubCategoryItem } => {
+    const cleanName = subCat.name.trim();
+    if (!cleanName) {
+      return { success: false, message: 'Please enter a subcategory name.' };
+    }
+    const subId = `${parentCategoryId}_${cleanName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')}`;
+
+    const newSub: SubCategoryItem = {
+      id: subId,
+      name: cleanName,
+      parentCategoryId,
+      description: subCat.description?.trim(),
+      imageUrl: subCat.imageUrl?.trim() || undefined,
+      iconName: subCat.iconName || 'Tag',
+      commissionPercent: subCat.commissionPercent,
+      itemCount: 0,
+    };
+
+    setCategories((prev) =>
+      prev.map((c) => {
+        if (c.id !== parentCategoryId) return c;
+        const existingSubs = c.subCategories || [];
+        if (existingSubs.some((s) => s.id === subId || s.name.toLowerCase() === cleanName.toLowerCase())) {
+          return c;
+        }
+        return {
+          ...c,
+          subCategories: [...existingSubs, newSub],
+        };
+      })
+    );
+
+    return {
+      success: true,
+      message: `Subcategory "${cleanName}" linked successfully!`,
+      subCategory: newSub,
+    };
+  };
+
+  const updateSubCategory = (
+    parentCategoryId: ProductCategory,
+    subCatId: string,
+    updates: Partial<SubCategoryItem>
+  ): { success: boolean; message: string } => {
+    setCategories((prev) =>
+      prev.map((c) => {
+        if (c.id !== parentCategoryId) return c;
+        return {
+          ...c,
+          subCategories: (c.subCategories || []).map((s) =>
+            s.id === subCatId ? { ...s, ...updates, id: s.id, parentCategoryId } : s
+          ),
+        };
+      })
+    );
+    return { success: true, message: 'Subcategory updated.' };
+  };
+
+  const deleteSubCategory = (
+    parentCategoryId: ProductCategory,
+    subCatId: string
+  ): { success: boolean; message: string } => {
+    setCategories((prev) =>
+      prev.map((c) => {
+        if (c.id !== parentCategoryId) return c;
+        return {
+          ...c,
+          subCategories: (c.subCategories || []).filter((s) => s.id !== subCatId),
+        };
+      })
+    );
+    if (selectedSubCategory === subCatId) {
+      setSelectedSubCategory('all');
+    }
+    return { success: true, message: 'Subcategory removed.' };
   };
 
   const updateCategoryApprovalStatus = (id: string, status: CategoryApprovalStatus, note?: string) => {
@@ -2901,7 +5864,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const nowIso = new Date().toISOString();
     setPayoutItems((prev) =>
       prev.map((p) => {
-        if (p.id !== payoutId) return p;
+        if (p.id !== payoutId && p.payoutId !== payoutId) return p;
         const updated: PayoutItem = {
           ...p,
           status,
@@ -3113,33 +6076,53 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const submitProductReview = (
     review: Omit<ProductReview, 'id' | 'createdAt' | 'moderationStatus' | 'helpfulVotes'>
   ): { success: boolean; message: string } => {
-    // 1. Check for duplicate review by same customer on same product
-    const existing = productReviews.find(
-      (r) => r.productId === review.productId && r.customerId === review.customerId
-    );
-    if (existing) {
-      return { success: false, message: 'You have already submitted a review for this purchase.' };
-    }
-
-    // 2. Validate delivered purchase eligibility
+    // 1. Strict validation: Must have a confirmed delivered order containing this product
     const eligibleDeliveredOrder = orders.find(
       (o) =>
-        (o.id === review.orderId || o.customer.id === review.customerId) &&
         o.orderStatus === 'delivered' &&
-        o.items.some((i) => i.productId === review.productId)
+        o.items.some((i) => i.productId === review.productId) &&
+        (o.id === review.orderId ||
+          (currentUser.phone && o.customer.phone === currentUser.phone) ||
+          (currentUser.email && o.customer.email === currentUser.email) ||
+          (currentUser.name && o.customer.name.trim().toLowerCase() === currentUser.name.trim().toLowerCase()) ||
+          o.customer.id === review.customerId ||
+          o.customer.id === currentUser.id)
     );
+
+    if (!eligibleDeliveredOrder) {
+      return {
+        success: false,
+        message: 'Review blocked: Only customers with a confirmed delivered order can submit feedback for this product.',
+      };
+    }
+
+    // 2. Check for duplicate review by same customer on same delivered order
+    const existing = productReviews.find(
+      (r) =>
+        r.productId === review.productId &&
+        (r.orderId === eligibleDeliveredOrder.id ||
+          (r.customerId === review.customerId && r.orderId === eligibleDeliveredOrder.id))
+    );
+    if (existing) {
+      return { success: false, message: 'You have already submitted a review for this delivered order.' };
+    }
 
     const newReview: ProductReview = {
       ...review,
       id: `rev_${Date.now()}`,
-      isVerifiedPurchase: !!eligibleDeliveredOrder || review.isVerifiedPurchase,
+      orderId: eligibleDeliveredOrder.id,
+      customerName: cleanCustomerName(review.customerName || currentUser.name),
+      isVerifiedPurchase: true,
       moderationStatus: 'approved', // auto-approve verified customer reviews by default
       helpfulVotes: 0,
       createdAt: new Date().toISOString(),
     };
 
     setProductReviews((prev) => [newReview, ...prev]);
-    return { success: true, message: 'Thank you! Your verified product review has been published.' };
+    return {
+      success: true,
+      message: `Thank you! Your verified review for Delivered Order #${eligibleDeliveredOrder.id} has been published.`,
+    };
   };
 
   const moderateProductReview = (reviewId: string, status: ReviewModerationStatus, notes?: string) => {
@@ -3858,6 +6841,49 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch (e) {}
   }, [carrierSettlements]);
 
+  // Rider Earning Structure, Shift Slots & Rider Payouts State
+  const [riderEarningStructure, setRiderEarningStructure] = useState<RiderEarningStructure>(() => {
+    try {
+      const saved = localStorage.getItem('electro_rider_earning_structure_v1');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return INITIAL_RIDER_EARNING_STRUCTURE;
+  });
+
+  const [riderSlots, setRiderSlots] = useState<RiderDeliverySlot[]>(() => {
+    try {
+      const saved = localStorage.getItem('electro_rider_slots_v1');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return INITIAL_RIDER_SLOTS;
+  });
+
+  const [riderPayouts, setRiderPayouts] = useState<RiderPayoutRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem('electro_rider_payouts_v1');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return INITIAL_RIDER_PAYOUTS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('electro_rider_earning_structure_v1', JSON.stringify(riderEarningStructure));
+    } catch (e) {}
+  }, [riderEarningStructure]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('electro_rider_slots_v1', JSON.stringify(riderSlots));
+    } catch (e) {}
+  }, [riderSlots]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('electro_rider_payouts_v1', JSON.stringify(riderPayouts));
+    } catch (e) {}
+  }, [riderPayouts]);
+
   const assignOrderDelivery = (orderId: string, dispatchDetails: ExpressShipmentDetails) => {
     let orderFound = false;
 
@@ -4090,12 +7116,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         ? cleanCustomCode
         : Math.floor(10000000 + Math.random() * 90000000).toString(); // 8-digit cash deposit code
 
+    const depositedAmount = Number(payload.amount);
     const newSubmission: RiderRemittanceSubmission = {
       id: remittanceId,
       riderId: rider.id,
       riderName: rider.name,
       riderPhone: rider.phone,
-      amount: Number(payload.amount),
+      amount: depositedAmount,
       submissionMethod: payload.submissionMethod,
       status: 'pending_approval',
       remittanceCode,
@@ -4109,10 +7136,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       receiptNumber: `RCPT-${remittanceCode.slice(-6)}`,
     };
 
+    // Immediately deduct deposited amount from rider's cash-in-hand so remaining outstanding balance is updated in real-time
+    const currentCash = rider.codCashInHand || 0;
+    const remainingCash = Math.max(0, currentCash - depositedAmount);
+    setRidersList((prev) =>
+      prev.map((r) =>
+        r.id === rider.id
+          ? { ...r, codCashInHand: remainingCash }
+          : r
+      )
+    );
+
     setRiderRemittances((prev) => [newSubmission, ...prev]);
     return {
       success: true,
-      message: `8-Digit Cash Deposit Code (${remittanceCode}) generated for ${formatINR(payload.amount)} by ${rider.name}. Share this code with Store or Admin to approve cash collection!`,
+      message: `8-Digit Cash Deposit Code (${remittanceCode}) generated for ${formatINR(depositedAmount)}. Remaining Outstanding Cash in Hand: ${formatINR(remainingCash)}. Share code with Store or Admin to verify!`,
       remittance: newSubmission,
     };
   };
@@ -4158,16 +7196,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       prev.map((r) => (r.id === targetSubmission.id ? updatedRemittance : r))
     );
 
-    // Deduct cashInHand from rider
+    // Remittance approved and verified by store counter / cashier
     const remittedAmount = targetSubmission.amount;
     const targetRiderId = targetSubmission.riderId;
-    setRidersList((prev) =>
-      prev.map((r) =>
-        r.id === targetRiderId
-          ? { ...r, codCashInHand: Math.max(0, (r.codCashInHand || 0) - remittedAmount) }
-          : r
-      )
-    );
 
     // Update covered orders to 'remitted'
     const coveredOrderIds = targetSubmission.orderIds || [];
@@ -4298,6 +7329,2036 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return { success: true, message: `Rider ${rider.name} added to local fleet.` };
   };
 
+  const onboardNewRider = (riderData: {
+    name: string;
+    phone: string;
+    email?: string;
+    password?: string;
+    vehicleNo: string;
+    outletId: string;
+    outletName: string;
+    aadharNumber: string;
+    panNumber: string;
+    bankAccountNo: string;
+    ifscCode: string;
+    selfieUrl?: string;
+  }) => {
+    const newId = `rider-${Date.now().toString().slice(-4)}`;
+    const newRider: InHouseRider = {
+      id: newId,
+      name: riderData.name,
+      phone: riderData.phone,
+      email: riderData.email || `${riderData.name.toLowerCase().replace(/\s+/g, '.')}@javed-electronics.in`,
+      password: riderData.password || 'rider123',
+      vehicleNo: riderData.vehicleNo,
+      outletId: riderData.outletId,
+      outletName: riderData.outletName,
+      status: 'available',
+      isOnline: true,
+      activeDeliveriesCount: 0,
+      codCashInHand: 0,
+      aadharNumber: riderData.aadharNumber,
+      panNumber: riderData.panNumber,
+      bankAccountNo: riderData.bankAccountNo,
+      ifscCode: riderData.ifscCode,
+      selfieUrl: riderData.selfieUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+      earnings: {
+        orderEarnings: 0,
+        distanceEarnings: 0,
+        slotEarnings: 0,
+        incentiveEarnings: 0,
+        surgeEarnings: 0,
+        milestoneEarnings: 0,
+        totalEarnings: 0,
+      },
+    };
+
+    setRidersList((prev) => [newRider, ...prev]);
+
+    if (riderData.email && riderData.password) {
+      setAccounts((prev) => {
+        const exists = prev.some((a) => a.email.toLowerCase() === riderData.email!.toLowerCase());
+        if (exists) return prev;
+        return [
+          ...prev,
+          {
+            id: `acc_${Date.now()}`,
+            name: riderData.name,
+            email: riderData.email!,
+            phone: riderData.phone,
+            password: riderData.password!,
+            role: 'delivery_staff' as Role,
+            outletId: riderData.outletId,
+            outletName: riderData.outletName,
+            createdAt: new Date().toISOString(),
+            isActive: true,
+            twoFactorSecret: 'JVEDRIDERAUTHKEY2026',
+            twoFactorEnabled: false,
+          },
+        ];
+      });
+    }
+
+    return {
+      success: true,
+      message: `Rider ${riderData.name} onboarded successfully with Aadhar, PAN, bank account & live selfie!`,
+      rider: newRider,
+    };
+  };
+
+  const transferRiderStore = (riderId: string, targetOutletId: string, targetOutletName: string) => {
+    setRidersList((prev) =>
+      prev.map((r) => {
+        if (r.id !== riderId) return r;
+        return {
+          ...r,
+          outletId: targetOutletId,
+          outletName: targetOutletName,
+          pendingStoreTransfer: undefined,
+        };
+      })
+    );
+    return {
+      success: true,
+      message: `Rider transferred to ${targetOutletName}.`,
+    };
+  };
+
+  const requestRiderStoreTransfer = (riderId: string, targetOutletId: string, targetOutletName: string, reason: string) => {
+    setRidersList((prev) =>
+      prev.map((r) => {
+        if (r.id !== riderId) return r;
+        return {
+          ...r,
+          pendingStoreTransfer: {
+            targetOutletId,
+            targetOutletName,
+            reason,
+            requestedAt: new Date().toISOString(),
+            status: 'pending',
+          },
+        };
+      })
+    );
+    return {
+      success: true,
+      message: `Transfer request to ${targetOutletName} submitted for store admin approval.`,
+    };
+  };
+
+  const approveRiderStoreTransfer = (riderId: string) => {
+    let targetName = '';
+    setRidersList((prev) =>
+      prev.map((r) => {
+        if (r.id !== riderId || !r.pendingStoreTransfer) return r;
+        targetName = r.pendingStoreTransfer.targetOutletName;
+        return {
+          ...r,
+          outletId: r.pendingStoreTransfer.targetOutletId,
+          outletName: r.pendingStoreTransfer.targetOutletName,
+          pendingStoreTransfer: {
+            ...r.pendingStoreTransfer,
+            status: 'approved',
+            reviewNotes: 'Store transfer approved by Store Admin.',
+          },
+        };
+      })
+    );
+    return {
+      success: true,
+      message: `Store transfer approved! Rider is now assigned to ${targetName}.`,
+    };
+  };
+
+  const rejectRiderStoreTransfer = (riderId: string, reviewNotes?: string) => {
+    setRidersList((prev) =>
+      prev.map((r) => {
+        if (r.id !== riderId || !r.pendingStoreTransfer) return r;
+        return {
+          ...r,
+          pendingStoreTransfer: {
+            ...r.pendingStoreTransfer,
+            status: 'rejected',
+            reviewNotes: reviewNotes || 'Transfer request declined due to store coverage needs.',
+          },
+        };
+      })
+    );
+    return {
+      success: true,
+      message: `Store transfer request declined.`,
+    };
+  };
+
+  const toggleRiderOnlineStatus = (riderId: string, isOnline: boolean) => {
+    setRidersList((prev) =>
+      prev.map((r) => {
+        if (r.id !== riderId) return r;
+        return {
+          ...r,
+          isOnline,
+          status: isOnline ? (r.activeDeliveriesCount > 0 ? 'on_delivery' : 'available') : 'off_duty',
+        };
+      })
+    );
+  };
+
+  const autoAssignOrdersToRiders = () => {
+    const unassignedOrders = orders.filter(
+      (o) =>
+        (o.orderStatus === 'confirmed' || o.orderStatus === 'processing') &&
+        (!o.dispatchDetails?.riderId || o.dispatchDetails.serviceType === 'same_day_hyperlocal')
+    );
+
+    const onlineRiders = ridersList.filter((r) => r.isOnline && r.status !== 'off_duty');
+
+    if (onlineRiders.length === 0) {
+      return {
+        success: false,
+        message: 'No riders are currently ONLINE. Riders must switch their ID to Online to receive auto-assigned orders.',
+        count: 0,
+      };
+    }
+
+    if (unassignedOrders.length === 0) {
+      return {
+        success: true,
+        message: 'All confirmed orders are currently assigned or already out for delivery.',
+        count: 0,
+      };
+    }
+
+    let assignedCount = 0;
+    const nowIso = new Date().toISOString();
+
+    setOrders((prevOrders) => {
+      let riderIdx = 0;
+      return prevOrders.map((ord) => {
+        if (
+          (ord.orderStatus === 'confirmed' || ord.orderStatus === 'processing') &&
+          (!ord.dispatchDetails?.riderId || ord.dispatchDetails.serviceType === 'same_day_hyperlocal')
+        ) {
+          const selectedRider = onlineRiders[riderIdx % onlineRiders.length];
+          riderIdx++;
+          assignedCount++;
+
+          const updatedDispatch: ExpressShipmentDetails = {
+            fulfillmentType: 'rider',
+            carrier: 'Other',
+            awbNumber: `JE-LOCAL-${Date.now().toString().slice(-6)}-${assignedCount}`,
+            trackingUrl: `/delivery`,
+            assignedAt: nowIso,
+            dispatchedAt: nowIso,
+            serviceType: 'same_day_hyperlocal',
+            riderId: selectedRider.id,
+            riderName: selectedRider.name,
+            riderPhone: selectedRider.phone,
+            riderVehicleNo: selectedRider.vehicleNo,
+            riderOtp: Math.floor(1000 + Math.random() * 9000).toString(),
+            isCod: ord.paymentMethod === 'cod',
+            codAmountToCollect: ord.paymentMethod === 'cod' ? ord.finalTotal : 0,
+            codCollectedStatus: 'pending',
+          };
+
+          return {
+            ...ord,
+            orderStatus: 'out_for_delivery' as OrderStatus,
+            dispatchDetails: updatedDispatch,
+            statusHistory: [
+              ...(ord.statusHistory || []),
+              {
+                status: 'out_for_delivery' as OrderStatus,
+                timestamp: nowIso,
+                note: `Order auto-assigned to rider ${selectedRider.name} (${selectedRider.vehicleNo}).`,
+                updatedBy: 'Auto-Assignment Dispatch Engine',
+              },
+            ],
+          };
+        }
+        return ord;
+      });
+    });
+
+    setRidersList((prev) =>
+      prev.map((r) => {
+        if (!r.isOnline) return r;
+        return {
+          ...r,
+          activeDeliveriesCount: r.activeDeliveriesCount + 1,
+          status: 'on_delivery',
+        };
+      })
+    );
+
+    return {
+      success: true,
+      message: `Auto-assigned ${assignedCount} order(s) one-by-one to online riders!`,
+      count: assignedCount,
+    };
+  };
+
+  const requestOrderRto = (orderId: string, rtoPayload: OrderRtoDetails) => {
+    const targetIdClean = orderId.trim().toLowerCase();
+    const order = orders.find((o) => o.id === orderId || o.id.trim().toLowerCase() === targetIdClean);
+    if (!order) return { success: false, message: `Order #${orderId} not found.` };
+
+    const nowIso = new Date().toISOString();
+    const reasonText =
+      rtoPayload.reasonText ||
+      (rtoPayload.reason === 'customer_not_answering'
+        ? 'Customer Not Answering Call (Multiple Attempts Made)'
+        : rtoPayload.reason === 'address_not_found'
+        ? 'Customer Address Not Found / Unreachable Location'
+        : rtoPayload.reason === 'wrong_address'
+        ? 'Wrong Delivery Address Provided by Customer'
+        : rtoPayload.reason === 'wrong_order_placed'
+        ? 'Wrong Order Placed / Customer Ordered by Mistake'
+        : rtoPayload.reason === 'customer_not_accepting' || rtoPayload.reason === 'customer_refused'
+        ? 'Customer Refused at Doorstep / Not Accepting'
+        : rtoPayload.reason === 'customer_rescheduled_cancel'
+        ? 'Customer Requested Rescheduling / Cancellation'
+        : String(rtoPayload.reason).replace(/_/g, ' '));
+
+    const riderName =
+      rtoPayload.requestedByRiderName ||
+      rtoPayload.riderName ||
+      order.deliveryStaffName ||
+      'Rider';
+
+    const cleanRtoPayload: OrderRtoDetails = {
+      ...rtoPayload,
+      reasonText,
+      requestedAt: nowIso,
+      status: 'pending_store_approval',
+      riderName,
+      requestedByRiderName: riderName,
+      riderNotes: rtoPayload.riderNotes || rtoPayload.notes || '',
+    };
+
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (o.id !== orderId && o.id.trim().toLowerCase() !== targetIdClean) return o;
+        return {
+          ...o,
+          orderStatus: 'return_requested' as OrderStatus,
+          rtoRequest: cleanRtoPayload,
+          statusHistory: [
+            ...(o.statusHistory || []),
+            {
+              status: 'return_requested' as OrderStatus,
+              timestamp: nowIso,
+              note: `Rider ${riderName} requested RTO: ${reasonText}. Notes: ${cleanRtoPayload.riderNotes || 'Customer unreachable'}. Awaiting Store Manager / Admin approval.`,
+              updatedBy: riderName,
+            },
+          ],
+        };
+      })
+    );
+
+    return {
+      success: true,
+      message: `RTO Request submitted for #${orderId} to Store Admin. Please wait for store approval.`,
+    };
+  };
+
+  const reviewOrderRto = (orderId: string, decision: 'approved' | 'rejected', reviewNotes?: string) => {
+    const targetIdClean = orderId.trim().toLowerCase();
+    const order = orders.find((o) => o.id === orderId || o.id.trim().toLowerCase() === targetIdClean);
+    if (!order || !order.rtoRequest) return { success: false, message: 'Order or RTO request not found.' };
+
+    const nowIso = new Date().toISOString();
+    const isApproved = decision === 'approved';
+
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (o.id !== orderId && o.id.trim().toLowerCase() !== targetIdClean) return o;
+        return {
+          ...o,
+          orderStatus: isApproved ? ('returned' as OrderStatus) : ('out_for_delivery' as OrderStatus),
+          rtoRequest: {
+            ...o.rtoRequest!,
+            status: decision,
+            reviewedBy: 'Store Admin',
+            reviewNotes:
+              reviewNotes ||
+              (isApproved
+                ? 'RTO Approved by Store. Item returned to store shelf inventory.'
+                : 'RTO Declined by Store. Customer contacted by support, re-attempt delivery!'),
+            adminNotes:
+              reviewNotes ||
+              (isApproved
+                ? 'Package verified & accepted back into store inventory.'
+                : 'Customer contacted and available at address. Re-attempt delivery immediately.'),
+            reviewedAt: nowIso,
+          },
+          statusHistory: [
+            ...(o.statusHistory || []),
+            {
+              status: isApproved ? ('returned' as OrderStatus) : ('out_for_delivery' as OrderStatus),
+              timestamp: nowIso,
+              note: isApproved
+                ? `RTO Approved by Store Admin. Reason: ${o.rtoRequest?.reasonText || o.rtoRequest?.reason}. Notes: ${reviewNotes || 'Package restocked to store'}.`
+                : `RTO Request REJECTED by Store Admin. Re-attempt delivery: ${reviewNotes || 'Customer available at home.'}`,
+              updatedBy: 'Store Admin',
+            },
+          ],
+        };
+      })
+    );
+
+    if (isApproved) {
+      // Restock items into store onHand inventory
+      setProducts((prev) =>
+        prev.map((p) => {
+          const item = order.items.find((i) => i.productId === p.id);
+          if (!item) return p;
+          const qty = item.activeQuantity !== undefined ? item.activeQuantity : item.quantity;
+          return {
+            ...p,
+            stock: {
+              ...p.stock,
+              onHand: p.stock.onHand + qty,
+              reserved: Math.max(0, p.stock.reserved - qty),
+            },
+          };
+        })
+      );
+
+      setStockMovements((prev) => [
+        ...order.items.map((item) => {
+          const qty = item.activeQuantity !== undefined ? item.activeQuantity : item.quantity;
+          return {
+            id: `sm-rto-${Date.now()}-${item.productId}`,
+            productId: item.productId,
+            productName: item.productName,
+            type: 'returned' as const,
+            quantity: qty,
+            previousStock: 0,
+            newStock: qty,
+            referenceId: order.id,
+            note: `RTO Restock: Returned package received back at store shelf (${reviewNotes || 'RTO Approved'})`,
+            timestamp: nowIso,
+            staffName: 'Store Admin',
+            outletId: order.outletId,
+          };
+        }),
+        ...prev,
+      ]);
+    }
+
+    return {
+      success: true,
+      message: isApproved
+        ? `RTO approved! Order marked as Returned and items restocked to store inventory.`
+        : `RTO rejected. Rider notified via delivery popup to re-attempt doorstep handover.`,
+    };
+  };
+
+  // ============================================================================
+  // RIDER EARNING STRUCTURE, SLOT MANAGEMENT (CREATE/EDIT/DELETE) & PAYOUT MODULE
+  // ============================================================================
+
+  const updateRiderEarningStructure = (updates: Partial<RiderEarningStructure>, updatedBy?: string) => {
+    setRiderEarningStructure((prev) => ({
+      ...prev,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+      updatedBy: updatedBy || `${currentUser.name} (${currentRole.replace('_', ' ')})`,
+    }));
+    return {
+      success: true,
+      message: 'Rider Earning Structure & Rate Card updated successfully!',
+    };
+  };
+
+  const recalculateAllRidersEarningsFromStructure = () => {
+    const struct = riderEarningStructure;
+    setRidersList((prev) =>
+      prev.map((r) => {
+        const ordersDone = r.completedOrdersCount || Math.max(10, Math.round((r.earnings?.orderEarnings || 600) / 50));
+        const extraKm = r.totalDistanceKm || Math.max(12, Math.round((r.earnings?.distanceEarnings || 160) / 8));
+        const bookedIds = r.bookedSlotIds || [];
+        const enrolledSlots = riderSlots.filter(
+          (s) => s.enrolledRiderIds.includes(r.id) || bookedIds.includes(s.id)
+        );
+
+        const orderPay = Math.round(ordersDone * struct.baseOrderFee);
+        const distPay = Math.round(extraKm * struct.perKmRate);
+
+        const slotPay =
+          enrolledSlots.length > 0
+            ? enrolledSlots.reduce((sum, s) => sum + s.slotBasePay, 0)
+            : (r.completedSlotsCount || 1) * struct.defaultSlotBaseGuarantee;
+
+        // Evaluate highest daily incentive tier achieved
+        const sortedTiers = [...struct.dailyIncentiveTiers].sort((a, b) => b.minOrders - a.minOrders);
+        const matchedTier = sortedTiers.find((t) => ordersDone >= t.minOrders);
+        const incentivePay = matchedTier ? matchedTier.bonusAmount : 0;
+
+        // Evaluate surge pay
+        let surgeRate = 0;
+        if (struct.surgeConfig.isSurgeActive) {
+          if (struct.surgeConfig.activeSurgeType === 'rain_monsoon') {
+            surgeRate = struct.surgeConfig.rainSurgePerOrder;
+          } else if (struct.surgeConfig.activeSurgeType === 'festival_mega') {
+            surgeRate = struct.surgeConfig.festivalSurgePerOrder;
+          } else {
+            surgeRate = struct.surgeConfig.peakHourSurgePerOrder;
+          }
+        }
+        const surgeOrdersCount = Math.max(3, Math.round(ordersDone * 0.4));
+        const surgePay = Math.round(surgeOrdersCount * surgeRate);
+
+        // Evaluate milestone pay
+        const sortedMilestones = [...struct.milestoneTiers].sort((a, b) => b.targetOrders - a.targetOrders);
+        // Scale weekly orders estimate
+        const weeklyOrdersEst = ordersDone * 2;
+        const matchedMilestone = sortedMilestones.find((m) => weeklyOrdersEst >= m.targetOrders);
+        const milestonePay = matchedMilestone ? matchedMilestone.rewardAmount : 0;
+
+        const totalPay = orderPay + distPay + slotPay + incentivePay + surgePay + milestonePay;
+
+        return {
+          ...r,
+          completedOrdersCount: ordersDone,
+          totalDistanceKm: extraKm,
+          earnings: {
+            orderEarnings: orderPay,
+            distanceEarnings: distPay,
+            slotEarnings: slotPay,
+            incentiveEarnings: incentivePay,
+            surgeEarnings: surgePay,
+            milestoneEarnings: milestonePay,
+            totalEarnings: totalPay,
+            orderBased: orderPay,
+            distanceBased: distPay,
+            slotBased: slotPay,
+            incentiveBased: incentivePay,
+            surgeBased: surgePay,
+            milestoneBased: milestonePay,
+            total: totalPay,
+          },
+        };
+      })
+    );
+
+    return {
+      success: true,
+      message: `Recalculated all ${ridersList.length} riders' earnings using the active Earning Structure Rate Card!`,
+    };
+  };
+
+  const updateIndividualRiderEarnings = (
+    riderId: string,
+    earningsUpdate: {
+      slotEarnings: number;
+      orderEarnings: number;
+      distanceEarnings: number;
+      incentiveEarnings: number;
+      surgeEarnings: number;
+      milestoneEarnings: number;
+    }
+  ) => {
+    const total =
+      Number(earningsUpdate.slotEarnings || 0) +
+      Number(earningsUpdate.orderEarnings || 0) +
+      Number(earningsUpdate.distanceEarnings || 0) +
+      Number(earningsUpdate.incentiveEarnings || 0) +
+      Number(earningsUpdate.surgeEarnings || 0) +
+      Number(earningsUpdate.milestoneEarnings || 0);
+
+    let riderName = 'Rider';
+    setRidersList((prev) =>
+      prev.map((r) => {
+        if (r.id !== riderId) return r;
+        riderName = r.name;
+        return {
+          ...r,
+          earnings: {
+            slotEarnings: Number(earningsUpdate.slotEarnings || 0),
+            orderEarnings: Number(earningsUpdate.orderEarnings || 0),
+            distanceEarnings: Number(earningsUpdate.distanceEarnings || 0),
+            incentiveEarnings: Number(earningsUpdate.incentiveEarnings || 0),
+            surgeEarnings: Number(earningsUpdate.surgeEarnings || 0),
+            milestoneEarnings: Number(earningsUpdate.milestoneEarnings || 0),
+            totalEarnings: total,
+            slotBased: Number(earningsUpdate.slotEarnings || 0),
+            orderBased: Number(earningsUpdate.orderEarnings || 0),
+            distanceBased: Number(earningsUpdate.distanceEarnings || 0),
+            incentiveBased: Number(earningsUpdate.incentiveEarnings || 0),
+            surgeBased: Number(earningsUpdate.surgeEarnings || 0),
+            milestoneBased: Number(earningsUpdate.milestoneEarnings || 0),
+            total,
+          },
+        };
+      })
+    );
+
+    return {
+      success: true,
+      message: `Updated earning breakdown for ${riderName} (New Total: ${formatINR(total)}).`,
+    };
+  };
+
+  const createRiderSlot = (
+    slotData: Omit<RiderDeliverySlot, 'id' | 'createdAt' | 'enrolledRiderIds'> & { enrolledRiderIds?: string[] }
+  ) => {
+    const newSlot: RiderDeliverySlot = {
+      ...slotData,
+      id: `slot-${Date.now().toString().slice(-5)}`,
+      enrolledRiderIds: slotData.enrolledRiderIds || [],
+      createdAt: new Date().toISOString(),
+    };
+
+    setRiderSlots((prev) => [newSlot, ...prev]);
+    return {
+      success: true,
+      message: `Delivery Slot "${newSlot.title}" (${newSlot.startTime} - ${newSlot.endTime}) created!`,
+      slot: newSlot,
+    };
+  };
+
+  const updateRiderSlot = (slotId: string, updates: Partial<RiderDeliverySlot>) => {
+    let slotTitle = '';
+    setRiderSlots((prev) =>
+      prev.map((s) => {
+        if (s.id !== slotId) return s;
+        slotTitle = updates.title || s.title;
+        return { ...s, ...updates };
+      })
+    );
+    return {
+      success: true,
+      message: `Slot "${slotTitle || slotId}" updated successfully.`,
+    };
+  };
+
+  const deleteRiderSlot = (slotId: string) => {
+    const target = riderSlots.find((s) => s.id === slotId);
+    setRiderSlots((prev) => prev.filter((s) => s.id !== slotId));
+    // Also remove from riders' bookedSlotIds
+    setRidersList((prev) =>
+      prev.map((r) => ({
+        ...r,
+        bookedSlotIds: (r.bookedSlotIds || []).filter((id) => id !== slotId),
+      }))
+    );
+    return {
+      success: true,
+      message: `Slot "${target?.title || slotId}" deleted from schedule.`,
+    };
+  };
+
+  const toggleRiderSlotEnrollment = (slotId: string, riderId: string) => {
+    const targetSlot = riderSlots.find((s) => s.id === slotId);
+    const targetRider = ridersList.find((r) => r.id === riderId);
+    if (!targetSlot || !targetRider) {
+      return { success: false, message: 'Slot or Rider not found.', enrolled: false };
+    }
+
+    const isCurrentlyEnrolled = targetSlot.enrolledRiderIds.includes(riderId);
+    if (!isCurrentlyEnrolled && targetSlot.enrolledRiderIds.length >= targetSlot.maxRiders) {
+      return {
+        success: false,
+        message: `Slot "${targetSlot.title}" is already at full capacity (${targetSlot.maxRiders} riders).`,
+        enrolled: false,
+      };
+    }
+
+    const updatedRiderIds = isCurrentlyEnrolled
+      ? targetSlot.enrolledRiderIds.filter((id) => id !== riderId)
+      : [...targetSlot.enrolledRiderIds, riderId];
+
+    setRiderSlots((prev) =>
+      prev.map((s) => (s.id === slotId ? { ...s, enrolledRiderIds: updatedRiderIds } : s))
+    );
+
+    // Update rider's bookedSlotIds and adjust slotEarnings live!
+    setRidersList((prev) =>
+      prev.map((r) => {
+        if (r.id !== riderId) return r;
+        const currentBooked = r.bookedSlotIds || [];
+        const nextBooked = isCurrentlyEnrolled
+          ? currentBooked.filter((id) => id !== slotId)
+          : Array.from(new Set([...currentBooked, slotId]));
+
+        const deltaSlotPay = isCurrentlyEnrolled ? -targetSlot.slotBasePay : targetSlot.slotBasePay;
+        const newSlotEarnings = Math.max(0, (r.earnings?.slotEarnings || r.earnings?.slotBased || 0) + deltaSlotPay);
+        const orderEarnings = r.earnings?.orderEarnings || r.earnings?.orderBased || 0;
+        const distanceEarnings = r.earnings?.distanceEarnings || r.earnings?.distanceBased || 0;
+        const incentiveEarnings = r.earnings?.incentiveEarnings || r.earnings?.incentiveBased || 0;
+        const surgeEarnings = r.earnings?.surgeEarnings || r.earnings?.surgeBased || 0;
+        const milestoneEarnings = r.earnings?.milestoneEarnings || r.earnings?.milestoneBased || 0;
+        const newTotal =
+          newSlotEarnings +
+          orderEarnings +
+          distanceEarnings +
+          incentiveEarnings +
+          surgeEarnings +
+          milestoneEarnings;
+
+        return {
+          ...r,
+          bookedSlotIds: nextBooked,
+          earnings: {
+            ...r.earnings,
+            slotEarnings: newSlotEarnings,
+            slotBased: newSlotEarnings,
+            totalEarnings: newTotal,
+            total: newTotal,
+          },
+        };
+      })
+    );
+
+    return {
+      success: true,
+      message: isCurrentlyEnrolled
+        ? `${targetRider.name} removed from "${targetSlot.title}".`
+        : `${targetRider.name} enrolled in "${targetSlot.title}" (+${formatINR(targetSlot.slotBasePay)} slot guarantee)!`,
+      enrolled: !isCurrentlyEnrolled,
+    };
+  };
+
+  const createRiderPayout = (payload: {
+    riderId: string;
+    periodLabel: string;
+    paymentMethod: 'IMPS' | 'NEFT' | 'UPI_INSTANT';
+    codDeductionsOrPenalties?: number;
+    notes?: string;
+    utrReference?: string;
+    markPaidImmediately?: boolean;
+  }) => {
+    const rider = ridersList.find((r) => r.id === payload.riderId);
+    if (!rider) {
+      return { success: false, message: 'Rider not found.' };
+    }
+
+    const slotEarnings = rider.earnings?.slotEarnings ?? rider.earnings?.slotBased ?? 0;
+    const orderEarnings = rider.earnings?.orderEarnings ?? rider.earnings?.orderBased ?? 0;
+    const distanceEarnings = rider.earnings?.distanceEarnings ?? rider.earnings?.distanceBased ?? 0;
+    const incentiveEarnings = rider.earnings?.incentiveEarnings ?? rider.earnings?.incentiveBased ?? 0;
+    const surgeEarnings = rider.earnings?.surgeEarnings ?? rider.earnings?.surgeBased ?? 0;
+    const milestoneEarnings = rider.earnings?.milestoneEarnings ?? rider.earnings?.milestoneBased ?? 0;
+
+    const grossEarnings =
+      slotEarnings + orderEarnings + distanceEarnings + incentiveEarnings + surgeEarnings + milestoneEarnings;
+
+    if (grossEarnings <= 0) {
+      return {
+        success: false,
+        message: `${rider.name} currently has ₹0 gross earnings to disburse.`,
+      };
+    }
+
+    const codDeductions = Number(payload.codDeductionsOrPenalties || 0);
+    const tdsDeduction = Math.round((grossEarnings * (riderEarningStructure.tdsRatePct || 1)) / 100);
+    const netPayableAmount = Math.max(0, grossEarnings - codDeductions - tdsDeduction);
+
+    const nowIso = new Date().toISOString();
+    const isPaidNow = Boolean(payload.markPaidImmediately);
+    const utr =
+      payload.utrReference?.trim() ||
+      (isPaidNow ? `${payload.paymentMethod.slice(0, 4)}${Date.now().toString().slice(-8)}` : '');
+
+    const newPayout: RiderPayoutRecord = {
+      id: `RPAY-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+      riderId: rider.id,
+      riderName: rider.name,
+      riderPhone: rider.phone,
+      outletId: rider.outletId,
+      outletName: rider.outletName,
+      bankAccountNo: rider.bankAccountNo || '50100452391024',
+      ifscCode: rider.ifscCode || 'HDFC0000241',
+      panNumber: rider.panNumber || 'ABCDE1234F',
+      periodLabel: payload.periodLabel || 'Current Settlement Cycle',
+      breakdown: {
+        slotEarnings,
+        orderEarnings,
+        distanceEarnings,
+        incentiveEarnings,
+        surgeEarnings,
+        milestoneEarnings,
+        grossEarnings,
+        codDeductionsOrPenalties: codDeductions,
+        tdsDeduction,
+        netPayableAmount,
+      },
+      paymentMethod: payload.paymentMethod,
+      status: isPaidNow ? 'paid' : 'pending_approval',
+      utrReference: utr,
+      createdAt: nowIso,
+      paidAt: isPaidNow ? nowIso : undefined,
+      approvedBy: isPaidNow ? `${currentUser.name} (${currentRole.replace('_', ' ')})` : undefined,
+      notes:
+        payload.notes ||
+        (isPaidNow
+          ? `Disbursed via ${payload.paymentMethod} to A/C ${rider.bankAccountNo || '50100452391024'} (UTR: ${utr})`
+          : `Generated payout statement for ${rider.name}`),
+    };
+
+    setRiderPayouts((prev) => [newPayout, ...prev]);
+
+    if (isPaidNow) {
+      addLedgerEntry({
+        outletId: rider.outletId || 'out_nalasopara_01',
+        outletName: rider.outletName,
+        participantId: rider.id,
+        participantName: rider.name,
+        accountDebit: 'Delivery Rider Payout Expense',
+        accountCredit: 'HDFC Corporate Bank A/c',
+        amount: netPayableAmount,
+        referenceId: newPayout.id,
+        category: 'rider_payout',
+        description: `Rider Payout Disbursed to ${rider.name} (${payload.paymentMethod} UTR: ${utr})`,
+      });
+    }
+
+    return {
+      success: true,
+      message: isPaidNow
+        ? `Payout of ${formatINR(netPayableAmount)} disbursed to ${rider.name} (UTR: ${utr})!`
+        : `Payout voucher ${newPayout.id} (${formatINR(netPayableAmount)}) generated for ${rider.name}.`,
+      payout: newPayout,
+    };
+  };
+
+  const createBatchRiderPayouts = (
+    periodLabel: string,
+    paymentMethod: 'IMPS' | 'NEFT' | 'UPI_INSTANT'
+  ) => {
+    let createdCount = 0;
+    const nowIso = new Date().toISOString();
+    const newRecords: RiderPayoutRecord[] = [];
+
+    ridersList.forEach((rider) => {
+      const slotEarnings = rider.earnings?.slotEarnings ?? rider.earnings?.slotBased ?? 0;
+      const orderEarnings = rider.earnings?.orderEarnings ?? rider.earnings?.orderBased ?? 0;
+      const distanceEarnings = rider.earnings?.distanceEarnings ?? rider.earnings?.distanceBased ?? 0;
+      const incentiveEarnings = rider.earnings?.incentiveEarnings ?? rider.earnings?.incentiveBased ?? 0;
+      const surgeEarnings = rider.earnings?.surgeEarnings ?? rider.earnings?.surgeBased ?? 0;
+      const milestoneEarnings = rider.earnings?.milestoneEarnings ?? rider.earnings?.milestoneBased ?? 0;
+      const grossEarnings =
+        slotEarnings + orderEarnings + distanceEarnings + incentiveEarnings + surgeEarnings + milestoneEarnings;
+
+      if (grossEarnings > 0) {
+        createdCount++;
+        const tdsDeduction = Math.round((grossEarnings * (riderEarningStructure.tdsRatePct || 1)) / 100);
+        const netPayableAmount = Math.max(0, grossEarnings - tdsDeduction);
+
+        newRecords.push({
+          id: `RPAY-2026-${Math.floor(1000 + Math.random() * 9000)}-${createdCount}`,
+          riderId: rider.id,
+          riderName: rider.name,
+          riderPhone: rider.phone,
+          outletId: rider.outletId,
+          outletName: rider.outletName,
+          bankAccountNo: rider.bankAccountNo || '50100452391024',
+          ifscCode: rider.ifscCode || 'HDFC0000241',
+          panNumber: rider.panNumber || 'ABCDE1234F',
+          periodLabel: periodLabel || 'Weekly Fleet Settlement Batch',
+          breakdown: {
+            slotEarnings,
+            orderEarnings,
+            distanceEarnings,
+            incentiveEarnings,
+            surgeEarnings,
+            milestoneEarnings,
+            grossEarnings,
+            codDeductionsOrPenalties: 0,
+            tdsDeduction,
+            netPayableAmount,
+          },
+          paymentMethod,
+          status: 'pending_approval',
+          utrReference: '',
+          createdAt: nowIso,
+          notes: `Batch payout generated for ${periodLabel}`,
+        });
+      }
+    });
+
+    if (newRecords.length > 0) {
+      setRiderPayouts((prev) => [...newRecords, ...prev]);
+    }
+
+    return {
+      success: newRecords.length > 0,
+      message:
+        newRecords.length > 0
+          ? `Generated ${newRecords.length} rider payout vouchers for ${periodLabel}!`
+          : 'No riders had positive earnings for batch generation.',
+      count: newRecords.length,
+    };
+  };
+
+  const processRiderPayoutStatus = (
+    payoutId: string,
+    status: 'pending_approval' | 'processing' | 'paid' | 'on_hold',
+    utrReference?: string,
+    approvedBy?: string,
+    notes?: string
+  ) => {
+    const target = riderPayouts.find((p) => p.id === payoutId);
+    if (!target) {
+      return { success: false, message: 'Payout record not found.' };
+    }
+
+    const nowIso = new Date().toISOString();
+    const approverName = approvedBy || `${currentUser.name} (${currentRole.replace('_', ' ')})`;
+    const finalUtr =
+      utrReference?.trim() ||
+      target.utrReference ||
+      (status === 'paid' ? `UTR${Date.now().toString().slice(-9)}` : '');
+
+    setRiderPayouts((prev) =>
+      prev.map((p) => {
+        if (p.id !== payoutId) return p;
+        return {
+          ...p,
+          status,
+          utrReference: finalUtr,
+          paidAt: status === 'paid' ? nowIso : p.paidAt,
+          approvedBy: status === 'paid' ? approverName : p.approvedBy,
+          notes: notes || p.notes,
+        };
+      })
+    );
+
+    if (status === 'paid' && target.status !== 'paid') {
+      addLedgerEntry({
+        outletId: target.outletId || 'out_nalasopara_01',
+        outletName: target.outletName,
+        participantId: target.riderId,
+        participantName: target.riderName,
+        accountDebit: 'Delivery Rider Payout Expense',
+        accountCredit: 'HDFC Corporate Bank A/c',
+        amount: target.breakdown.netPayableAmount,
+        referenceId: target.id,
+        category: 'rider_payout',
+        description: `Rider Payout Disbursed to ${target.riderName} (A/C ${target.bankAccountNo}, UTR: ${finalUtr})`,
+      });
+    }
+
+    return {
+      success: true,
+      message:
+        status === 'paid'
+          ? `Payout ${payoutId} (${formatINR(target.breakdown.netPayableAmount)}) marked as PAID! Bank UTR: ${finalUtr}`
+          : `Payout ${payoutId} status updated to ${status.replace('_', ' ').toUpperCase()}.`,
+    };
+  };
+
+  // ============================================================================
+  // MAHA SALE SLOTS, STORE PARTICIPATION & AUTO-APPROVAL ENGINE
+  // ============================================================================
+
+  const createMahaSaleSlot = (
+    slotData: Omit<MahaSaleSlot, 'id' | 'createdAt' | 'createdBy' | 'participatingStoreCount' | 'participatingProductCount'>
+  ) => {
+    const newSlot: MahaSaleSlot = {
+      ...slotData,
+      id: `SLOT-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
+      createdAt: new Date().toISOString(),
+      createdBy: currentUser.name || 'Store Admin',
+      participatingStoreCount: 0,
+      participatingProductCount: 0,
+    };
+    setMahaSaleSlots((prev) => [newSlot, ...prev]);
+    return {
+      success: true,
+      message: `Maha Sale Slot "${newSlot.title}" created successfully! Stores can now participate.`,
+      slot: newSlot,
+    };
+  };
+
+  const updateMahaSaleSlot = (slotId: string, updates: Partial<MahaSaleSlot>) => {
+    setMahaSaleSlots((prev) =>
+      prev.map((s) => (s.id === slotId ? { ...s, ...updates } : s))
+    );
+    return { success: true, message: 'Maha Sale Slot updated successfully.' };
+  };
+
+  const deleteMahaSaleSlot = (slotId: string) => {
+    setMahaSaleSlots((prev) => prev.filter((s) => s.id !== slotId));
+    return { success: true, message: 'Maha Sale Slot deleted.' };
+  };
+
+  const participateInMahaSaleSlot = (data: {
+    slotId: string;
+    storeId?: string;
+    storeName?: string;
+    items: Array<{
+      productId: string;
+      discountType: 'percentage' | 'fixed_value';
+      discountValue: number;
+    }>;
+    storeNotes?: string;
+  }) => {
+    const slot = mahaSaleSlots.find((s) => s.id === data.slotId) || mahaSaleSlots[0];
+    if (!slot) {
+      return { success: false, message: 'Maha Sale slot not found.', count: 0 };
+    }
+
+    const currentOutlet = outlets.find((o) => o.id === (data.storeId || activeOutletId)) || outlets[0];
+    const liveEndTime = slot.endTime || new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+
+    const createdParticipations: MahaSaleParticipation[] = [];
+    const productPriceUpdates: Record<string, { dealPrice: number; discountPct: number; participationId: string; discountType: 'percentage' | 'fixed_value'; discountValue: number }> = {};
+
+    data.items.forEach((item) => {
+      const prod = products.find((p) => p.id === item.productId);
+      if (!prod) return;
+
+      let dealPrice = prod.regularPrice;
+      let discountPct = 0;
+
+      if (item.discountType === 'percentage') {
+        const pct = Math.min(90, Math.max(1, Number(item.discountValue) || 10));
+        discountPct = pct;
+        dealPrice = Math.max(1, Math.round(prod.regularPrice * (1 - pct / 100)));
+      } else {
+        const val = Math.max(1, Number(item.discountValue) || 100);
+        dealPrice = Math.max(1, prod.regularPrice - val);
+        discountPct = Math.min(90, Math.max(1, Math.round(((prod.regularPrice - dealPrice) / prod.regularPrice) * 100)));
+      }
+
+      const pId = `MSALE-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
+      const participation: MahaSaleParticipation = {
+        id: pId,
+        slotId: slot.id,
+        slotTitle: slot.title,
+        storeId: currentOutlet.id,
+        storeName: currentOutlet.name,
+        productId: prod.id,
+        productName: prod.name,
+        productImage: prod.images[0] || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80',
+        category: prod.categoryId,
+        regularPrice: prod.regularPrice,
+        mrp: prod.mrp,
+        discountType: item.discountType,
+        discountValue: item.discountValue,
+        requestedDiscountPct: discountPct,
+        proposedDealPrice: dealPrice,
+        requestedDurationHours: slot.durationHours || 24,
+        storeNotes: data.storeNotes || `Participated in ${slot.title}`,
+        requestedAt: new Date().toISOString(),
+        isAutoApproved: true,
+        status: 'store_accepted_live', // AUTO APPROVED AS REQUESTED!
+        liveStartTime: new Date().toISOString(),
+        liveEndTime,
+        durationHours: slot.durationHours || 24,
+        finalDealPrice: dealPrice,
+        finalDiscountPct: discountPct,
+        isJeAssuredEligible: Boolean(prod.isJeAssured),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      createdParticipations.push(participation);
+      productPriceUpdates[prod.id] = {
+        dealPrice,
+        discountPct,
+        participationId: pId,
+        discountType: item.discountType,
+        discountValue: item.discountValue,
+      };
+    });
+
+    if (createdParticipations.length === 0) {
+      return { success: false, message: 'No valid products selected.', count: 0 };
+    }
+
+    // Add participations to state
+    setMahaSaleParticipations((prev) => [...createdParticipations, ...prev]);
+
+    // Auto-approve and make products LIVE immediately!
+    setProducts((prev) =>
+      prev.map((prod) => {
+        const update = productPriceUpdates[prod.id];
+        if (!update) return prod;
+        return {
+          ...prod,
+          dealPrice: update.dealPrice,
+          isMahaSaleActive: true,
+          mahaSaleEndTime: liveEndTime,
+          mahaSaleDiscountPct: update.discountPct,
+          mahaSaleParticipationId: update.participationId,
+          mahaSaleSlotId: slot.id,
+          mahaSaleDiscountType: update.discountType,
+          mahaSaleDiscountValue: update.discountValue,
+        };
+      })
+    );
+
+    // Update slot counts
+    setMahaSaleSlots((prev) =>
+      prev.map((s) => {
+        if (s.id !== slot.id) return s;
+        return {
+          ...s,
+          participatingStoreCount: (s.participatingStoreCount || 0) + 1,
+          participatingProductCount: (s.participatingProductCount || 0) + createdParticipations.length,
+        };
+      })
+    );
+
+    return {
+      success: true,
+      message: `🎉 ${createdParticipations.length} product(s) auto-approved and now LIVE in "${slot.title}"!`,
+      count: createdParticipations.length,
+    };
+  };
+
+  // ============================================================================
+  // PROMOTION TYPES & SLOTS ARCHITECTURE (ADMIN & STORE WORKFLOW)
+  // ============================================================================
+
+  // Admin: Promotion Types CRUD
+  const createPromotionType = (data: Omit<PromotionType, 'id' | 'createdAt'>) => {
+    const newType: PromotionType = {
+      ...data,
+      id: `PTYPE-${Math.floor(100 + Math.random() * 900)}`,
+      createdAt: new Date().toISOString(),
+    };
+    setPromotionTypes((prev) => [newType, ...prev]);
+    return { success: true, message: `Promotion Type "${newType.name}" created!`, type: newType };
+  };
+
+  const updatePromotionType = (id: string, updates: Partial<PromotionType>) => {
+    setPromotionTypes((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
+    );
+    return { success: true, message: 'Promotion Type updated.' };
+  };
+
+  const deletePromotionType = (id: string) => {
+    setPromotionTypes((prev) => prev.filter((t) => t.id !== id));
+    return { success: true, message: 'Promotion Type deleted.' };
+  };
+
+  // Admin: Promotion Slots CRUD (Admin creates/edits/deletes slots)
+  const createPromotionSlot = (
+    data: Omit<PromotionSlot, 'id' | 'createdAt' | 'createdBy' | 'participatingProductsCount'>
+  ) => {
+    const newSlot: PromotionSlot = {
+      ...data,
+      id: `PSLOT-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
+      createdAt: new Date().toISOString(),
+      createdBy: currentUser.name || 'Super Admin',
+      participatingProductsCount: 0,
+    };
+    setPromotionSlots((prev) => [newSlot, ...prev]);
+    return { success: true, message: `Promotion Slot "${newSlot.slotName}" created!`, slot: newSlot };
+  };
+
+  const updatePromotionSlot = (id: string, updates: Partial<PromotionSlot>) => {
+    setPromotionSlots((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
+    );
+    return { success: true, message: 'Promotion Slot updated.' };
+  };
+
+  const deletePromotionSlot = (id: string) => {
+    setPromotionSlots((prev) => prev.filter((s) => s.id !== id));
+    setStoreSlotProductBanners((prev) => prev.filter((b) => b.slotId !== id));
+    return { success: true, message: 'Promotion Slot deleted.' };
+  };
+
+  // Store: Participation with One-by-One Product Selection & Banner Upload (Add, Edit, Delete access)
+  const addStoreSlotBanner = (
+    data: Omit<StoreSlotProductBanner, 'id' | 'createdAt' | 'updatedAt' | 'isActive'>
+  ) => {
+    const newBanner: StoreSlotProductBanner = {
+      ...data,
+      id: `PITEM-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setStoreSlotProductBanners((prev) => [newBanner, ...prev]);
+
+    setPromotionSlots((prev) =>
+      prev.map((s) =>
+        s.id === data.slotId
+          ? { ...s, participatingProductsCount: (s.participatingProductsCount || 0) + 1 }
+          : s
+      )
+    );
+
+    if (data.salePrice && data.salePrice > 0) {
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === data.productId ? { ...p, dealPrice: data.salePrice } : p
+        )
+      );
+    }
+
+    return {
+      success: true,
+      message: `🎉 Banner for "${data.productName}" added to "${data.slotName}"!`,
+      banner: newBanner,
+    };
+  };
+
+  const updateStoreSlotBanner = (id: string, updates: Partial<StoreSlotProductBanner>) => {
+    setStoreSlotProductBanners((prev) =>
+      prev.map((b) => (b.id === id ? { ...b, ...updates, updatedAt: new Date().toISOString() } : b))
+    );
+    return { success: true, message: 'Product banner updated successfully.' };
+  };
+
+  const deleteStoreSlotBanner = (id: string) => {
+    const target = storeSlotProductBanners.find((b) => b.id === id);
+    if (target) {
+      setPromotionSlots((prev) =>
+        prev.map((s) =>
+          s.id === target.slotId
+            ? { ...s, participatingProductsCount: Math.max(0, (s.participatingProductsCount || 1) - 1) }
+            : s
+        )
+      );
+    }
+    setStoreSlotProductBanners((prev) => prev.filter((b) => b.id !== id));
+    return { success: true, message: 'Product banner removed from slot.' };
+  };
+
+  const requestMahaSaleParticipation = (data: {
+    productId: string;
+    requestedDiscountPct: number;
+    requestedDurationHours: number;
+    storeNotes?: string;
+    storeId?: string;
+  }) => {
+    const targetProduct = products.find((p) => p.id === data.productId);
+    if (!targetProduct) {
+      return { success: false, message: 'Target product not found in catalogue.' };
+    }
+
+    const currentOutlet = outlets.find((o) => o.id === (data.storeId || activeOutletId)) || outlets[0];
+    const discountPct = Math.min(60, Math.max(5, Number(data.requestedDiscountPct) || 15));
+    const durationHours = Math.max(1, Number(data.requestedDurationHours) || 6);
+    const proposedDealPrice = Math.round(targetProduct.regularPrice * (1 - discountPct / 100));
+
+    const newParticipation: MahaSaleParticipation = {
+      id: `MSALE-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
+      storeId: currentOutlet.id,
+      storeName: currentOutlet.name,
+      productId: targetProduct.id,
+      productName: targetProduct.name,
+      productImage: targetProduct.images[0] || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80',
+      category: targetProduct.categoryId,
+      regularPrice: targetProduct.regularPrice,
+      mrp: targetProduct.mrp,
+      requestedDiscountPct: discountPct,
+      proposedDealPrice,
+      requestedDurationHours: durationHours,
+      storeNotes: data.storeNotes?.trim() || 'Store requests Maha Sale spot to boost volume.',
+      requestedAt: new Date().toISOString(),
+      status: 'pending_admin_review',
+      durationHours,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setMahaSaleParticipations((prev) => [newParticipation, ...prev]);
+
+    return {
+      success: true,
+      message: `Maha Sale nomination for "${targetProduct.name}" submitted! Super Admin will review & suggest deal terms.`,
+      participation: newParticipation,
+    };
+  };
+
+  const adminSuggestMahaSaleDiscount = (
+    participationId: string,
+    suggestion: {
+      adminSuggestedDiscountPct: number;
+      adminSuggestedDurationHours: number;
+      adminNotes?: string;
+      reviewedBy?: string;
+    }
+  ) => {
+    const target = mahaSaleParticipations.find((p) => p.id === participationId);
+    if (!target) return { success: false, message: 'Maha sale request not found.' };
+
+    const discountPct = Math.min(75, Math.max(5, Number(suggestion.adminSuggestedDiscountPct)));
+    const durationHours = Math.max(1, Number(suggestion.adminSuggestedDurationHours));
+    const adminSuggestedPrice = Math.round(target.regularPrice * (1 - discountPct / 100));
+    const nowIso = new Date().toISOString();
+
+    setMahaSaleParticipations((prev) =>
+      prev.map((item) => {
+        if (item.id !== participationId) return item;
+        return {
+          ...item,
+          status: 'admin_suggested',
+          adminSuggestedDiscountPct: discountPct,
+          adminSuggestedPrice,
+          adminSuggestedDurationHours: durationHours,
+          adminNotes: suggestion.adminNotes || `Admin recommended ${discountPct}% OFF for high customer conversion.`,
+          reviewedAt: nowIso,
+          reviewedBy: suggestion.reviewedBy || `${currentUser.name} (Super Admin)`,
+          updatedAt: nowIso,
+        };
+      })
+    );
+
+    return {
+      success: true,
+      message: `Discount suggestion of ${discountPct}% OFF (₹${adminSuggestedPrice}) sent to ${target.storeName}! Waiting for Store to Accept & Go Live.`,
+    };
+  };
+
+  const adminApproveMahaSaleDirectly = (participationId: string, adminNotes?: string) => {
+    const target = mahaSaleParticipations.find((p) => p.id === participationId);
+    if (!target) return { success: false, message: 'Maha sale request not found.' };
+
+    const nowIso = new Date().toISOString();
+    setMahaSaleParticipations((prev) =>
+      prev.map((item) => {
+        if (item.id !== participationId) return item;
+        return {
+          ...item,
+          status: 'admin_suggested',
+          adminSuggestedDiscountPct: item.requestedDiscountPct,
+          adminSuggestedPrice: item.proposedDealPrice,
+          adminSuggestedDurationHours: item.requestedDurationHours,
+          adminNotes: adminNotes || 'Approved store requested terms. Store can now Accept & Go Live.',
+          reviewedAt: nowIso,
+          reviewedBy: `${currentUser.name} (Super Admin)`,
+          updatedAt: nowIso,
+        };
+      })
+    );
+
+    return {
+      success: true,
+      message: `Approved terms sent to ${target.storeName}! Store can now click "Accept & Go LIVE".`,
+    };
+  };
+
+  const adminRejectMahaSale = (participationId: string, reason: string) => {
+    const target = mahaSaleParticipations.find((p) => p.id === participationId);
+    if (!target) return { success: false, message: 'Maha sale request not found.' };
+
+    const nowIso = new Date().toISOString();
+    setMahaSaleParticipations((prev) =>
+      prev.map((item) => {
+        if (item.id !== participationId) return item;
+        return {
+          ...item,
+          status: 'rejected',
+          adminNotes: reason || 'Not eligible for current Maha Sale flash rush.',
+          reviewedAt: nowIso,
+          reviewedBy: `${currentUser.name} (Super Admin)`,
+          updatedAt: nowIso,
+        };
+      })
+    );
+
+    return {
+      success: true,
+      message: `Maha Sale request ${participationId} marked as Rejected.`,
+    };
+  };
+
+  const storeAcceptMahaSaleAndGoLive = (participationId: string) => {
+    const target = mahaSaleParticipations.find((p) => p.id === participationId);
+    if (!target) return { success: false, message: 'Maha sale request not found.' };
+
+    const finalDiscountPct = target.adminSuggestedDiscountPct ?? target.requestedDiscountPct;
+    const finalDurationHours = target.adminSuggestedDurationHours ?? target.requestedDurationHours;
+    const finalDealPrice = target.adminSuggestedPrice ?? target.proposedDealPrice;
+
+    const now = Date.now();
+    const liveStartTime = new Date(now).toISOString();
+    const liveEndTime = new Date(now + finalDurationHours * 3600 * 1000).toISOString();
+
+    // 1. Update participation state machine
+    setMahaSaleParticipations((prev) =>
+      prev.map((item) => {
+        if (item.id !== participationId) return item;
+        return {
+          ...item,
+          status: 'store_accepted_live',
+          liveStartTime,
+          liveEndTime,
+          durationHours: finalDurationHours,
+          finalDealPrice,
+          finalDiscountPct,
+          updatedAt: liveStartTime,
+        };
+      })
+    );
+
+    // 2. Update product in catalogue to go LIVE with deal price and countdown
+    setProducts((prev) =>
+      prev.map((prod) => {
+        if (prod.id !== target.productId) return prod;
+        return {
+          ...prod,
+          dealPrice: finalDealPrice,
+          isMahaSaleActive: true,
+          mahaSaleEndTime: liveEndTime,
+          mahaSaleDiscountPct: finalDiscountPct,
+          mahaSaleParticipationId: target.id,
+        };
+      })
+    );
+
+    return {
+      success: true,
+      message: `🚀 "${target.productName}" is NOW LIVE in Maha Sale at ₹${finalDealPrice} (${finalDiscountPct}% OFF) for ${finalDurationHours} hours! Countdown started.`,
+    };
+  };
+
+  const storeDeclineAdminSuggestion = (participationId: string, reason?: string) => {
+    setMahaSaleParticipations((prev) =>
+      prev.map((item) => {
+        if (item.id !== participationId) return item;
+        return {
+          ...item,
+          status: 'rejected',
+          storeNotes: `${item.storeNotes || ''} [Store Declined Suggestion: ${reason || 'Margin too narrow'}]`,
+          updatedAt: new Date().toISOString(),
+        };
+      })
+    );
+
+    return {
+      success: true,
+      message: 'Admin discount suggestion declined. Campaign closed.',
+    };
+  };
+
+  const endMahaSaleEarly = (participationId: string) => {
+    const target = mahaSaleParticipations.find((p) => p.id === participationId);
+    if (!target) return { success: false, message: 'Campaign not found.' };
+
+    const nowIso = new Date().toISOString();
+    setMahaSaleParticipations((prev) =>
+      prev.map((item) => {
+        if (item.id !== participationId) return item;
+        return {
+          ...item,
+          status: 'expired_completed',
+          liveEndTime: nowIso,
+          revertedToNormal: true,
+          updatedAt: nowIso,
+        };
+      })
+    );
+
+    // Revert product back to normal regular price
+    setProducts((prev) =>
+      prev.map((prod) => {
+        if (prod.id !== target.productId) return prod;
+        return {
+          ...prod,
+          dealPrice: undefined,
+          isMahaSaleActive: false,
+          mahaSaleEndTime: undefined,
+          mahaSaleDiscountPct: undefined,
+          mahaSaleParticipationId: undefined,
+        };
+      })
+    );
+
+    return {
+      success: true,
+      message: `Maha Sale ended for "${target.productName}". Product reverted to normal regular price ₹${target.regularPrice}.`,
+    };
+  };
+
+  const checkAndExpireMahaSales = () => {
+    const now = Date.now();
+
+    setMahaSaleParticipations((prev) => {
+      let hasExpired = false;
+      const next = prev.map((item) => {
+        if (item.status === 'store_accepted_live' && item.liveEndTime) {
+          const endMs = new Date(item.liveEndTime).getTime();
+          if (endMs <= now) {
+            hasExpired = true;
+            return {
+              ...item,
+              status: 'expired_completed' as const,
+              revertedToNormal: true,
+              updatedAt: new Date(now).toISOString(),
+            };
+          }
+        }
+        return item;
+      });
+      return hasExpired ? next : prev;
+    });
+
+    setProducts((prev) => {
+      let changed = false;
+      const next = prev.map((prod) => {
+        if (prod.isMahaSaleActive && prod.mahaSaleEndTime) {
+          const endMs = new Date(prod.mahaSaleEndTime).getTime();
+          if (endMs <= now) {
+            changed = true;
+            return {
+              ...prod,
+              dealPrice: undefined,
+              isMahaSaleActive: false,
+              mahaSaleEndTime: undefined,
+              mahaSaleDiscountPct: undefined,
+              mahaSaleParticipationId: undefined,
+            };
+          }
+        }
+        return prod;
+      });
+      return changed ? next : prev;
+    });
+
+    return { expiredCount: 0 };
+  };
+
+  // Heartbeat interval to auto-expire completed Maha Sales every 5 seconds
+  useEffect(() => {
+    const timer = setInterval(() => {
+      checkAndExpireMahaSales();
+    }, 5000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Synchronize initial active live sales on startup with products catalogue
+  useEffect(() => {
+    const liveItems = mahaSaleParticipations.filter(
+      (p) => p.status === 'store_accepted_live' && p.liveEndTime && new Date(p.liveEndTime).getTime() > Date.now()
+    );
+
+    if (liveItems.length > 0) {
+      setProducts((prev) => {
+        let changed = false;
+        const next = prev.map((prod) => {
+          const match = liveItems.find((li) => li.productId === prod.id);
+          const expectedPrice = match
+            ? match.finalDealPrice || match.adminSuggestedPrice || match.proposedDealPrice
+            : undefined;
+          if (match && (!prod.isMahaSaleActive || prod.dealPrice !== expectedPrice)) {
+            changed = true;
+            return {
+              ...prod,
+              dealPrice: expectedPrice,
+              isMahaSaleActive: true,
+              mahaSaleEndTime: match.liveEndTime,
+              mahaSaleDiscountPct: match.finalDiscountPct || match.adminSuggestedDiscountPct || match.requestedDiscountPct,
+              mahaSaleParticipationId: match.id,
+            };
+          }
+          return prod;
+        });
+        return changed ? next : prev;
+      });
+    }
+  }, []);
+
+  // ============================================================================
+  // JE ASSURED 4-PILLAR SOP HEALTH & STORE PROMOTION LANDING PAGE REQUESTS
+  // ============================================================================
+  const getProductJeAssuredHealth = (product: Product): JeAssuredHealthMetrics => {
+    return computeProductJeAssuredHealth(product, jeAssuredSopConfig);
+  };
+
+  const updateJeAssuredSopConfig = (updates: Partial<JeAssuredSopConfig>) => {
+    setJeAssuredSopConfig((prev) => ({
+      ...prev,
+      ...updates,
+      pillarWeights: updates.pillarWeights
+        ? { ...prev.pillarWeights, ...updates.pillarWeights }
+        : prev.pillarWeights,
+      sopGuidelines: updates.sopGuidelines
+        ? { ...prev.sopGuidelines, ...updates.sopGuidelines }
+        : prev.sopGuidelines,
+    }));
+    return {
+      success: true,
+      message: 'JE Assured SOP Eligibility rules & health score thresholds updated!',
+    };
+  };
+
+  const requestJeAssuredReviewForProduct = (productId: string, storeNotes?: string) => {
+    const targetProduct = products.find((p) => p.id === productId);
+    if (!targetProduct) {
+      return { success: false, message: 'Product not found in catalogue.' };
+    }
+
+    const currentOutlet = outlets.find((o) => o.id === activeOutletId) || outlets[0];
+    const currentHealth = computeProductJeAssuredHealth(targetProduct, jeAssuredSopConfig);
+    const nowIso = new Date().toISOString();
+
+    setProducts((prev) =>
+      prev.map((prod) => {
+        if (prod.id !== productId) return prod;
+        const updatedHealth: JeAssuredHealthMetrics = {
+          ...currentHealth,
+          reviewStatus: 'pending_review',
+          requestedByStoreId: currentOutlet.id,
+          requestedByStoreName: currentOutlet.name,
+          requestedAt: nowIso,
+          adminNotes:
+            storeNotes?.trim() ||
+            `Store requested JE Assured Badge review (Current SOP Score: ${currentHealth.roundedScore}/5).`,
+        };
+        return {
+          ...prod,
+          jeAssuredHealth: updatedHealth,
+        };
+      })
+    );
+
+    const statusHint =
+      currentHealth.roundedScore >= 4
+        ? `🎉 Congratulations! Score is ${currentHealth.roundedScore}/5 — Eligible to go live with JE Assured Badge!`
+        : currentHealth.roundedScore === 3
+        ? `Score is 3/5 (On Track to 4). Sent to Super Admin for JE Assured SOP review.`
+        : `Score is ${currentHealth.roundedScore}/5 (Below 4 threshold). Sent to Super Admin for review & improvement guidance.`;
+
+    return {
+      success: true,
+      message: `JE Assured review requested for "${targetProduct.name}". ${statusHint}`,
+    };
+  };
+
+  const adminReviewJeAssuredProduct = (
+    productId: string,
+    payload: {
+      catalogueHealth: number;
+      inventoryHealth: number;
+      orderHealth: number;
+      feedbackReviewHealth: number;
+      goLiveWithBadge?: boolean;
+      adminNotes?: string;
+    }
+  ) => {
+    const targetProduct = products.find((p) => p.id === productId);
+    if (!targetProduct) {
+      return { success: false, message: 'Product not found.' };
+    }
+
+    const cH = Math.min(5, Math.max(1, Math.round(payload.catalogueHealth)));
+    const iH = Math.min(5, Math.max(1, Math.round(payload.inventoryHealth)));
+    const oH = Math.min(5, Math.max(1, Math.round(payload.orderHealth)));
+    const rH = Math.min(5, Math.max(1, Math.round(payload.feedbackReviewHealth)));
+
+    const avg = (cH + iH + oH + rH) / 4;
+    const roundedScore = Math.min(5, Math.max(1, Math.round(avg))) as 1 | 2 | 3 | 4 | 5;
+    const tier = getEligibilityTierFromScore(roundedScore, jeAssuredSopConfig);
+    const isEligible = tier === 'eligible_congratulations'; // 4 or 5
+    const makeLive = isEligible && (payload.goLiveWithBadge ?? true);
+    const nowIso = new Date().toISOString();
+
+    setProducts((prev) =>
+      prev.map((prod) => {
+        if (prod.id !== productId) return prod;
+        const nextHealth: JeAssuredHealthMetrics = {
+          catalogueHealth: cH,
+          inventoryHealth: iH,
+          orderHealth: oH,
+          feedbackReviewHealth: rH,
+          overallScore: Number(avg.toFixed(1)),
+          roundedScore,
+          eligibilityTier: tier,
+          reviewStatus: isEligible ? 'approved_live' : roundedScore === 3 ? 'pending_review' : 'rejected',
+          isLiveWithBadge: makeLive,
+          eligibleForNormalCatalogue: isEligible && jeAssuredSopConfig.allowJeAssuredInNormalCatalogue,
+          eligibleForMahaSale: isEligible && jeAssuredSopConfig.allowJeAssuredInMahaSale,
+          requestedByStoreId: prod.jeAssuredHealth?.requestedByStoreId || activeOutletId,
+          requestedByStoreName: prod.jeAssuredHealth?.requestedByStoreName || 'Store Catalogue',
+          requestedAt: prod.jeAssuredHealth?.requestedAt || nowIso,
+          reviewedAt: nowIso,
+          reviewedBy: `${currentUser.name} (Super Admin)`,
+          adminNotes:
+            payload.adminNotes?.trim() ||
+            (isEligible
+              ? `Congratulations! Catalogue scored ${roundedScore}/5 and is LIVE with JE Assured Badge (Normal & Maha Sale).`
+              : roundedScore === 3
+              ? 'Score 3/5: On Track to 4! Improve health metrics to reach 4+ and unlock JE Assured Badge.'
+              : `Score ${roundedScore}/5: Not Eligible for JE Assured Badge under SOP rules.`),
+        };
+        return {
+          ...prod,
+          isJeAssured: makeLive,
+          jeAssuredHealth: nextHealth,
+        };
+      })
+    );
+
+    if (isEligible) {
+      return {
+        success: true,
+        message: `🎉 Congratulations! "${targetProduct.name}" achieved Score ${roundedScore}/5 (${avg.toFixed(1)}) and is now LIVE with the JE Assured Badge in Normal Catalogue & Maha Sale!`,
+      };
+    } else if (roundedScore === 3) {
+      return {
+        success: true,
+        message: `"${targetProduct.name}" updated to Score 3/5 (On Track to 4). Store notified of progress toward JE Assured eligibility.`,
+      };
+    } else {
+      return {
+        success: true,
+        message: `"${targetProduct.name}" scored ${roundedScore}/5 — Marked as Not Eligible for JE Assured Badge.`,
+      };
+    }
+  };
+
+  const toggleProductJeAssuredLive = (productId: string, makeLive: boolean) => {
+    const targetProduct = products.find((p) => p.id === productId);
+    if (!targetProduct) {
+      return { success: false, message: 'Product not found.' };
+    }
+
+    const health = computeProductJeAssuredHealth(targetProduct, jeAssuredSopConfig);
+    if (makeLive && health.roundedScore < jeAssuredSopConfig.minEligibleScore) {
+      return {
+        success: false,
+        message: `Cannot go live with JE Assured Badge: Catalogue SOP Score is ${health.roundedScore}/5 (Requires Score 4 or 5).`,
+      };
+    }
+
+    setProducts((prev) =>
+      prev.map((prod) => {
+        if (prod.id !== productId) return prod;
+        return {
+          ...prod,
+          isJeAssured: makeLive,
+          jeAssuredHealth: {
+            ...health,
+            isLiveWithBadge: makeLive,
+            reviewStatus: makeLive ? 'approved_live' : health.reviewStatus,
+          },
+        };
+      })
+    );
+
+    return {
+      success: true,
+      message: makeLive
+        ? `🎉 "${targetProduct.name}" is now LIVE with the JE Assured Badge across Normal Catalogue & Maha Sale!`
+        : `JE Assured Badge paused for "${targetProduct.name}".`,
+    };
+  };
+
+  const submitStorePromotionRequest = (payload: {
+    productId: string;
+    salePrice: number;
+    startTime: string;
+    endTime: string;
+    bannerImages?: string[];
+    campaignHeadline?: string;
+    targetPlacement?: 'top' | 'middle' | 'bottom';
+    requestJeAssuredBadge?: boolean;
+    storeNotes?: string;
+  }) => {
+    const targetProduct = products.find((p) => p.id === payload.productId);
+    if (!targetProduct) {
+      return { success: false, message: 'Selected product not found in catalogue.' };
+    }
+
+    const salePrice = Math.max(1, Number(payload.salePrice) || targetProduct.regularPrice);
+    if (salePrice >= targetProduct.regularPrice) {
+      return {
+        success: false,
+        message: `Sale price (₹${salePrice}) must be lower than regular price (₹${targetProduct.regularPrice}).`,
+      };
+    }
+
+    const currentOutlet = outlets.find((o) => o.id === activeOutletId) || outlets[0];
+    const discountPct = Math.max(
+      1,
+      Math.round(((targetProduct.regularPrice - salePrice) / targetProduct.regularPrice) * 100)
+    );
+    const health = computeProductJeAssuredHealth(targetProduct, jeAssuredSopConfig);
+
+    // Enforce Store Banner Policy: if allowStoreBannerUpload is false, store cannot submit custom banner images 1-3 (Admin curates them)
+    const sanitizedBanners = jeAssuredSopConfig.allowStoreBannerUpload
+      ? (payload.bannerImages || []).map((u) => u.trim()).filter(Boolean).slice(0, 3)
+      : [];
+
+    const nowIso = new Date().toISOString();
+    const newReq: StorePromotionRequest = {
+      id: `SPROMO-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
+      storeId: currentOutlet.id,
+      storeName: currentOutlet.name,
+      productId: targetProduct.id,
+      productName: targetProduct.name,
+      productSku: targetProduct.sku,
+      productImage: targetProduct.images[0] || '',
+      category: targetProduct.categoryId,
+      regularPrice: targetProduct.regularPrice,
+      mrp: targetProduct.mrp,
+      salePrice,
+      discountPct,
+      startTime: payload.startTime || nowIso,
+      endTime: payload.endTime || new Date(Date.now() + 48 * 3600 * 1000).toISOString(),
+      bannerImages: sanitizedBanners,
+      campaignHeadline:
+        payload.campaignHeadline?.trim() ||
+        `${currentOutlet.name} Special: ${discountPct}% OFF on ${targetProduct.name}`,
+      targetPlacement: payload.targetPlacement || 'middle',
+      requestJeAssuredBadge: Boolean(payload.requestJeAssuredBadge),
+      jeAssuredScoreAtRequest: health.roundedScore,
+      storeNotes: payload.storeNotes?.trim(),
+      status: 'pending_admin_review',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    setStorePromotionRequests((prev) => [newReq, ...prev]);
+
+    if (payload.requestJeAssuredBadge) {
+      requestJeAssuredReviewForProduct(
+        targetProduct.id,
+        `Requested alongside Promotion & Landing Page request (${newReq.id}).`
+      );
+    }
+
+    return {
+      success: true,
+      message: `Promotion & Landing Page request (${newReq.id}) submitted for "${targetProduct.name}" at ₹${salePrice} (${discountPct}% OFF)!`,
+      request: newReq,
+    };
+  };
+
+  const reviewStorePromotionRequest = (
+    requestId: string,
+    payload: {
+      decision: 'approved_live' | 'rejected';
+      bannerImages?: string[];
+      salePrice?: number;
+      startTime?: string;
+      endTime?: string;
+      approveJeAssuredBadge?: boolean;
+      adminNotes?: string;
+    }
+  ) => {
+    const req = storePromotionRequests.find((r) => r.id === requestId);
+    if (!req) {
+      return { success: false, message: 'Promotion request not found.' };
+    }
+
+    const nowIso = new Date().toISOString();
+    const finalSalePrice = payload.salePrice || req.salePrice;
+    const finalDiscountPct = Math.max(
+      1,
+      Math.round(((req.regularPrice - finalSalePrice) / req.regularPrice) * 100)
+    );
+    const finalBanners = (payload.bannerImages ?? req.bannerImages)
+      .map((u) => u.trim())
+      .filter(Boolean)
+      .slice(0, 3);
+    const finalStart = payload.startTime || req.startTime;
+    const finalEnd = payload.endTime || req.endTime;
+
+    let publishedPageId: string | undefined;
+
+    if (payload.decision === 'approved_live') {
+      // Create or update a live Promotional Landing Page for this store request
+      const slug = `store-promo-${req.productId}-${req.id.toLowerCase()}`;
+      const primaryBanner =
+        finalBanners[0] ||
+        req.productImage ||
+        'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1200&q=80';
+
+      const newPromoRes = addPromotionalPage({
+        title: req.campaignHeadline,
+        slug,
+        basisType: 'sale',
+        basisValue: req.storeId,
+        description: `Exclusive store promotional deal from ${req.storeName}. Sale Price: ₹${finalSalePrice} (${finalDiscountPct}% OFF). Valid from ${new Date(finalStart).toLocaleString('en-IN')} to ${new Date(finalEnd).toLocaleString('en-IN')}.`,
+        isActive: true,
+        scheduleType: 'date_range',
+        startDate: finalStart,
+        endDate: finalEnd,
+        bannerImageUrl: primaryBanner,
+        bannerHeadline: req.campaignHeadline,
+        bannerSubtext: `Special Deal Price ₹${finalSalePrice} (Regular ₹${req.regularPrice}) • ${req.storeName}`,
+        bannerTheme: 'linear-gradient(135deg, #be123c 0%, #e11d48 50%, #f59e0b 100%)',
+        badgeText: `${finalDiscountPct}% OFF PROMO`,
+        promotionalTickerText: `🔥 ${req.campaignHeadline} — Live at ₹${finalSalePrice}!`,
+        homepagePlacements: [req.targetPlacement],
+        placementDisplayType: 'image_banner',
+        placementIcon: 'Flame',
+        placementText: `${req.campaignHeadline} — Claim at ₹${finalSalePrice}`,
+        priority: 1,
+        productSelectionMode: 'manual',
+        selectedProductIds: [req.productId],
+      });
+
+      publishedPageId = newPromoRes.page?.id;
+
+      // Update product dealPrice & JE Assured status if approved
+      setProducts((prev) =>
+        prev.map((prod) => {
+          if (prod.id !== req.productId) return prod;
+          const health = computeProductJeAssuredHealth(prod, jeAssuredSopConfig);
+          const canGoAssured =
+            Boolean(payload.approveJeAssuredBadge) &&
+            health.roundedScore >= jeAssuredSopConfig.minEligibleScore;
+          return {
+            ...prod,
+            dealPrice: finalSalePrice,
+            dealEndsAt: finalEnd,
+            isJeAssured: canGoAssured ? true : prod.isJeAssured,
+            jeAssuredHealth: canGoAssured
+              ? {
+                  ...health,
+                  isLiveWithBadge: true,
+                  reviewStatus: 'approved_live',
+                  reviewedAt: nowIso,
+                  reviewedBy: `${currentUser.name} (Super Admin)`,
+                }
+              : prod.jeAssuredHealth,
+          };
+        })
+      );
+    }
+
+    setStorePromotionRequests((prev) =>
+      prev.map((item) => {
+        if (item.id !== requestId) return item;
+        return {
+          ...item,
+          salePrice: finalSalePrice,
+          discountPct: finalDiscountPct,
+          startTime: finalStart,
+          endTime: finalEnd,
+          bannerImages: finalBanners,
+          status: payload.decision,
+          publishedPromoPageId: publishedPageId || item.publishedPromoPageId,
+          adminNotes:
+            payload.adminNotes?.trim() ||
+            (payload.decision === 'approved_live'
+              ? 'Approved and published to Promotional Landing Pages.'
+              : 'Rejected by Super Admin.'),
+          reviewedAt: nowIso,
+          reviewedBy: `${currentUser.name} (Super Admin)`,
+          updatedAt: nowIso,
+        };
+      })
+    );
+
+    return {
+      success: true,
+      message:
+        payload.decision === 'approved_live'
+          ? `🚀 Store Promotion Request (${requestId}) APPROVED & published to Promotional Landing Pages at ₹${finalSalePrice}!`
+          : `Store Promotion Request (${requestId}) marked as Rejected.`,
+    };
+  };
+
+  // ============================================================================
+  // CATEGORY-BASED PRODUCT LISTING FORMATS (ADMIN CREATE / EDIT / DELETE)
+  // ============================================================================
+  const getFormatForCategory = (categoryId: ProductCategory, subCategoryId?: string): CategoryListingFormat => {
+    const catObj = categories.find((c) => c.id === categoryId);
+    const catName = catObj?.name || String(categoryId).replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+    const subCatObj = catObj?.subCategories?.find((sc) => sc.id === subCategoryId);
+    return resolveFormatForCategory(categoryId, catName, categoryFormats, subCategoryId, subCatObj?.name);
+  };
+
+  const createCategoryFormat = (
+    formatData: Omit<CategoryListingFormat, 'id' | 'updatedAt'>
+  ) => {
+    if (!formatData.formatTitle.trim()) {
+      return { success: false, message: 'Format title is required.' };
+    }
+    const nowIso = new Date().toISOString();
+    const newFormat: CategoryListingFormat = {
+      ...formatData,
+      id: formatData.subCategoryId
+        ? `fmt_${formatData.categoryId}_${formatData.subCategoryId}_${Date.now().toString().slice(-4)}`
+        : `fmt_${formatData.categoryId}_${Date.now().toString().slice(-4)}`,
+      updatedAt: nowIso,
+    };
+
+    // Ensure the category also exists in categories list if custom
+    if (!categories.some((c) => c.id === formatData.categoryId)) {
+      setCategories((prev) => [
+        ...prev,
+        {
+          id: formatData.categoryId,
+          name: formatData.categoryName,
+          iconName: 'Package',
+          description: formatData.description || `${formatData.categoryName} products`,
+          itemCount: 0,
+        },
+      ]);
+    }
+
+    setCategoryFormats((prev) => {
+      const filtered = prev.filter((f) => {
+        if (formatData.subCategoryId) {
+          return !(f.categoryId === formatData.categoryId && f.subCategoryId === formatData.subCategoryId);
+        }
+        return !(f.categoryId === formatData.categoryId && !f.subCategoryId);
+      });
+      return [newFormat, ...filtered];
+    });
+
+    return {
+      success: true,
+      message: `Category listing format "${newFormat.formatTitle}" created for ${newFormat.categoryName}${newFormat.subCategoryName ? ` (${newFormat.subCategoryName})` : ''}.`,
+      format: newFormat,
+    };
+  };
+
+  const updateCategoryFormat = (
+    formatId: string,
+    updates: Partial<CategoryListingFormat>
+  ) => {
+    const nowIso = new Date().toISOString();
+    const existsInState = categoryFormats.some((f) => f.id === formatId || f.categoryId === updates.categoryId);
+
+    if (existsInState) {
+      setCategoryFormats((prev) =>
+        prev.map((f) => {
+          if (f.id === formatId || (updates.categoryId && f.categoryId === updates.categoryId)) {
+            return {
+              ...f,
+              ...updates,
+              updatedAt: nowIso,
+            };
+          }
+          return f;
+        })
+      );
+    } else if (updates.categoryId) {
+      const base = getFormatForCategory(updates.categoryId);
+      const created: CategoryListingFormat = {
+        ...base,
+        ...updates,
+        id: formatId || `fmt_${updates.categoryId}`,
+        updatedAt: nowIso,
+      };
+      setCategoryFormats((prev) => [created, ...prev]);
+    }
+
+    return {
+      success: true,
+      message: `Category listing format updated successfully.`,
+    };
+  };
+
+  const deleteCategoryFormat = (formatId: string) => {
+    const target = categoryFormats.find((f) => f.id === formatId || f.categoryId === formatId);
+    setCategoryFormats((prev) => prev.filter((f) => f.id !== formatId && f.categoryId !== formatId));
+    return {
+      success: true,
+      message: target
+        ? `${target.categoryName} format deleted.`
+        : 'Format deleted.',
+    };
+  };
+
   return (
     <StoreContext.Provider
       value={{
@@ -4320,9 +9381,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         loginUser,
         verifyAdminOtpAndLogin,
         registerCustomer,
+        initiateCustomerSignupOtp,
+        resendCustomerSignupOtp,
+        verifyCustomerSignupOtp,
         createStoreStaffAccount,
         updateStoreStaffAccount,
         deleteStoreStaffAccount,
+        applyAccountSanction,
+        liftAccountSanction,
         logoutUser,
 
         // Multi-Outlet & Marketplace
@@ -4333,6 +9399,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         createOutlet,
         updateOutlet,
         deleteOutlet,
+        toggleOutletStatus,
+        updateOutletOrderAcceptanceConfig,
 
         ownershipModels,
         updateOwnershipModel,
@@ -4340,6 +9408,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         businessCategories,
         createBusinessCategory,
         updateCategoryApprovalStatus,
+        addCategory,
+        updateCategory,
+        deleteCategory,
+        addSubCategory,
+        updateSubCategory,
+        deleteSubCategory,
+        fullScreenCategory,
+        setFullScreenCategory,
 
         participants,
         payoutItems,
@@ -4364,6 +9440,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setSearchQuery,
         selectedCategory,
         setSelectedCategory,
+        selectedSubCategory,
+        setSelectedSubCategory,
         selectedBrand,
         setSelectedBrand,
         sortBy,
@@ -4393,6 +9471,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         verifyOrderPayment,
         assignDeliveryStaff,
         completeDelivery,
+        submitDeliveryCustomerFeedback,
         reportDeliveryFailure,
         requestOrderCancellation,
         requestOrderReturn,
@@ -4413,10 +9492,48 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         toggleCampaignStatus,
         addCoupon,
         toggleCouponStatus,
+        updateCoupon,
+        deleteCoupon,
+
+        // Referral Program Structure & Operations
+        referralProgramConfig,
+        updateReferralProgramConfig,
+        referralRecords,
+        awardReferralBonus,
+        cancelReferralRecord,
+        adjustCustomerWalletBalance,
+
+        // JE Cash (Store Wallet)
+        jeCashTransactions,
+        refillJeCashBalance,
+        deductJeCashBalance,
+
+        // Promotional Landing Pages & Marketing Spaces
+        promotionalPages,
+        activePromotionalPage,
+        setActivePromotionalPage,
+        addPromotionalPage,
+        updatePromotionalPage,
+        deletePromotionalPage,
+        togglePromotionalPageStatus,
+        openPromotionalPageBySlug,
+
+        // Chatbot AI & Knowledge Base Training
+        chatbotAiSettings,
+        updateChatbotAiSettings,
+        addKnowledgeItem,
+        updateKnowledgeItem,
+        deleteKnowledgeItem,
+        toggleKnowledgeItemStatus,
+        resetKnowledgeBaseToDefaults,
 
         updateSettings,
         toggleWishlist,
         addSavedAddress,
+        updateUserProfile,
+        deleteSavedAddress,
+        setDefaultAddress,
+        redeemReferralCode,
 
         activeModal,
         setActiveModal,
@@ -4435,6 +9552,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         activeUpiSession,
         setActiveUpiSession,
         createUpiCheckoutSession,
+        approveUpiPayment,
+        rejectUpiPayment,
+        updateUpiSettings,
+        updatePaymentChargeSettings,
         paymentTransactions,
         verifyPaymentTransaction,
         initiateOrderRefund,
@@ -4549,6 +9670,91 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         recordCarrierCodSettlement,
         updateDeliveryPartnerConfig,
         addInHouseRider,
+        onboardNewRider,
+        transferRiderStore,
+        requestRiderStoreTransfer,
+        approveRiderStoreTransfer,
+        rejectRiderStoreTransfer,
+        toggleRiderOnlineStatus,
+        autoAssignOrdersToRiders,
+        requestOrderRto,
+        reviewOrderRto,
+
+        // Rider Earning Structure, Slot Management & Payout Module
+        riderEarningStructure,
+        updateRiderEarningStructure,
+        recalculateAllRidersEarningsFromStructure,
+        updateIndividualRiderEarnings,
+        riderSlots,
+        createRiderSlot,
+        updateRiderSlot,
+        deleteRiderSlot,
+        toggleRiderSlotEnrollment,
+        riderPayouts,
+        createRiderPayout,
+        createBatchRiderPayouts,
+        processRiderPayoutStatus,
+
+        // Category-Specific Return, Refund, Replacement & Exchange Module
+        categoryReturnPolicies,
+        returnExchangeRequests,
+        updateCategoryReturnPolicy,
+        resetCategoryReturnPolicies,
+        getCategoryReturnPolicy,
+        submitReturnExchangeRequest,
+        updateReturnRequestStatus,
+        processReturnRefund,
+        dispatchReturnReplacement,
+
+        // Maha Sale Slots & Restructured Participation Module
+        mahaSaleSlots,
+        createMahaSaleSlot,
+        updateMahaSaleSlot,
+        deleteMahaSaleSlot,
+        participateInMahaSaleSlot,
+
+        // Promotion Types, Slots & Store Banners Architecture
+        promotionTypes,
+        createPromotionType,
+        updatePromotionType,
+        deletePromotionType,
+        promotionSlots,
+        createPromotionSlot,
+        updatePromotionSlot,
+        deletePromotionSlot,
+        storeSlotProductBanners,
+        addStoreSlotBanner,
+        updateStoreSlotBanner,
+        deleteStoreSlotBanner,
+
+        // Maha Sale Campaigns, Store Participation & Live Flash Deals
+        mahaSaleParticipations,
+        requestMahaSaleParticipation,
+        adminSuggestMahaSaleDiscount,
+        adminApproveMahaSaleDirectly,
+        adminRejectMahaSale,
+        storeAcceptMahaSaleAndGoLive,
+        storeDeclineAdminSuggestion,
+        endMahaSaleEarly,
+        checkAndExpireMahaSales,
+
+        // JE Assured Badge 4-Pillar SOP Health & Store Promotion Landing Page Requests
+        jeAssuredSopConfig,
+        updateJeAssuredSopConfig,
+        getProductJeAssuredHealth,
+        requestJeAssuredReviewForProduct,
+        adminReviewJeAssuredProduct,
+        toggleProductJeAssuredLive,
+        storePromotionRequests,
+        submitStorePromotionRequest,
+        reviewStorePromotionRequest,
+
+        // Category-Based Product Listing Formats
+        categoryFormats,
+        getFormatForCategory,
+        createCategoryFormat,
+        updateCategoryFormat,
+        deleteCategoryFormat,
       }}
     >
       {children}

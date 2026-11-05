@@ -13,7 +13,7 @@ export const GoogleMapsWrapper: React.FC<GoogleMapsWrapperProps> = ({ children }
       apiKey={apiKey}
       language="en"
       region="IN"
-      libraries={['places', 'geometry', 'marker']}
+      libraries={['places', 'geometry', 'marker', 'routes', 'geocoding']}
     >
       {children}
     </APIProvider>

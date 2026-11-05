@@ -13,6 +13,11 @@ import {
   Coffee,
   Sparkles,
   ArrowRight,
+  Shirt,
+  UserCheck,
+  Heart,
+  Smile,
+  Layers,
 } from 'lucide-react';
 
 interface Props {
@@ -47,6 +52,18 @@ export const FestivalFeaturedCategories: React.FC<Props> = ({ campaign }) => {
         return <Home className="w-5 h-5 text-indigo-600" />;
       case 'small_appliances':
         return <Coffee className="w-5 h-5 text-orange-600" />;
+      case 'clothing':
+        return <Shirt className="w-5 h-5 text-violet-600" />;
+      case 'cosmetics':
+        return <Sparkles className="w-5 h-5 text-rose-500" />;
+      case 'mens_apparel':
+        return <UserCheck className="w-5 h-5 text-cyan-600" />;
+      case 'womens_apparel':
+        return <Heart className="w-5 h-5 text-pink-600" />;
+      case 'kids_apparel':
+        return <Smile className="w-5 h-5 text-amber-600" />;
+      case 'other':
+        return <Layers className="w-5 h-5 text-emerald-600" />;
       default:
         return <Sparkles className="w-5 h-5 text-amber-600" />;
     }
@@ -62,20 +79,10 @@ export const FestivalFeaturedCategories: React.FC<Props> = ({ campaign }) => {
 
   return (
     <section className="w-full max-w-7xl mx-auto px-2.5 sm:px-4 mt-6 sm:mt-8 box-border">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 mb-3">
-        <div>
-          <div className="flex items-center gap-1.5 mb-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-900 px-2 py-0.5 rounded">
-              {campaign.festival_name} HIGHLIGHTS
-            </span>
-          </div>
-          <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-            Featured Festival Categories
-          </h2>
-          <p className="text-xs text-slate-500">
-            Specially discounted categories with official warranty & festive gifts
-          </p>
-        </div>
+      <div className="mb-3">
+        <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
+          Featured Categories
+        </h2>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3">

@@ -46,7 +46,16 @@ import {
   Activity,
   ExternalLink,
   Banknote,
+  Globe,
+  RotateCcw,
+  Gift,
+  Flame,
+  Bot,
 } from 'lucide-react';
+import { SeoMarketingHub } from './SeoMarketingHub';
+import { ReferralAndCouponManager } from './ReferralAndCouponManager';
+import { PromotionalPagesManager } from './PromotionalPagesManager';
+import { ChatbotAiTrainingManager } from './ChatbotAiTrainingManager';
 import { AdminAuthenticatorQrModal } from './AdminAuthenticatorQrModal';
 import { AIProductAssistantModal } from './AIProductAssistantModal';
 import { ProductApprovalsQueueModal } from './ProductApprovalsQueueModal';
@@ -55,6 +64,7 @@ import { UserAccount } from '../../types';
 import { OutletsManager } from './OutletsManager';
 import { OwnershipModelsManager } from './OwnershipModelsManager';
 import { CategoryApprovalManager } from './CategoryApprovalManager';
+import { CategoryMasterManager } from './CategoryMasterManager';
 import { PayoutsLedgerManager } from './PayoutsLedgerManager';
 import { BarcodeCatalogManager } from './BarcodeCatalogManager';
 import { StockTransfersManager } from './StockTransfersManager';
@@ -75,10 +85,15 @@ import { CodCollectionModal } from './CodCollectionModal';
 import { DeliveryPartnerManager } from './DeliveryPartnerManager';
 import { ProductVariantsAndDimensionsModal } from './ProductVariantsAndDimensionsModal';
 import { VolumetricWeightCalculatorModal } from '../common/VolumetricWeightCalculatorModal';
+import { DeliveryRadiusMap } from '../common/DeliveryRadiusMap';
+import { ReturnRefundManager } from './ReturnRefundManager';
+import { MahaSaleCampaignManager } from './MahaSaleCampaignManager';
 
 export const AdminDashboard: React.FC = () => {
   const {
     products,
+    categories,
+    addCategory,
     orders,
     stockMovements,
     campaigns,
@@ -110,7 +125,29 @@ export const AdminDashboard: React.FC = () => {
     updateStoreStaffAccount,
     riderRemittances,
     approveRiderCashRemittance,
+    reviewOrderRto,
+    approveUpiPayment,
+    rejectUpiPayment,
+    updateUpiSettings,
+    updatePaymentChargeSettings,
+    completeDelivery,
   } = useStore();
+
+  // COD Extra Charge & Prepaid Discount Quick Edit State
+  const [quickCodCharge, setQuickCodCharge] = useState<number>(settings.codExtraChargeValue ?? 49);
+  const [quickPrepaidDiscount, setQuickPrepaidDiscount] = useState<number>(
+    settings.prepaidDiscountValue ?? 2
+  );
+
+  // Payment Screenshot Verification Modal state in Store/Admin
+  const [reviewingPaymentOrder, setReviewingPaymentOrder] = useState<Order | null>(null);
+  const [paymentReviewNote, setPaymentReviewNote] = useState('');
+
+  // RTO Review Modal states in Store/Admin
+  const [reviewingRtoOrder, setReviewingRtoOrder] = useState<Order | null>(null);
+  const [rtoReviewDecision, setRtoReviewDecision] = useState<'approved' | 'rejected'>('approved');
+  const [rtoReviewNotes, setRtoReviewNotes] = useState('');
+  const [rtoActionFeedback, setRtoActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Quick 8-Digit Rider Cash Deposit Code state in Admin/Store Overview
   const [riderDepositCodeInput, setRiderDepositCodeInput] = useState('');
@@ -173,6 +210,7 @@ export const AdminDashboard: React.FC = () => {
   const [showVariantsModal, setShowVariantsModal] = useState(false);
   const [productForVariantsEdit, setProductForVariantsEdit] = useState<Product | null>(null);
   const [showStandaloneVolumetricModal, setShowStandaloneVolumetricModal] = useState(false);
+  const [selectedProductForPromoRequest, setSelectedProductForPromoRequest] = useState<string | null>(null);
 
   const pendingApprovalsCount = useMemo(() => {
     return products.filter((p) => p.approvalStatus === 'pending').length;
@@ -190,6 +228,8 @@ export const AdminDashboard: React.FC = () => {
     | 'pos'
     | 'sop_sla'
     | 'express_delivery'
+    | 'returns_refunds'
+    | 'maha_sale_campaigns'
     | 'my_store'
     | 'outlets'
     | 'orders'
@@ -201,15 +241,20 @@ export const AdminDashboard: React.FC = () => {
     | 'approvals_queue'
     | 'volumetric_calc'
     | 'authenticator_qr'
+    | 'categories_master'
     | 'categories_mgmt'
     | 'payouts'
     | 'franchise'
     | 'ownership_models'
     | 'gst_taxation'
     | 'bulk_discounts'
+    | 'coupons_referrals'
+    | 'promotional_pages'
+    | 'chatbot_ai'
     | 'delivery'
     | 'payment_gateways'
     | 'campaigns'
+    | 'seo_marketing'
     | 'homepage_builder'
     | 'store_logins'
     | 'branding'
@@ -228,18 +273,21 @@ export const AdminDashboard: React.FC = () => {
       const storeAllowedTabs = [
         'overview',
         'pos',
-        'sop_sla',
-        'express_delivery',
         'orders',
-        'inventory',
+        'returns_refunds',
         'products',
+        'maha_sale_campaigns',
+        'promotional_pages',
         'ai_assistant',
+        'categories_mgmt',
         'volumetric_calc',
-        'authenticator_qr',
+        'inventory',
         'stock_transfers',
         'barcodes',
         'delivery',
+        'seo_marketing',
         'my_store',
+        'authenticator_qr',
       ];
       if (!storeAllowedTabs.includes(activeTab)) {
         setActiveTab('overview');
@@ -275,6 +323,8 @@ export const AdminDashboard: React.FC = () => {
   const [newProdStock, setNewProdStock] = useState(10);
   const [newProdImage, setNewProdImage] = useState('');
   const [newProdDesc, setNewProdDesc] = useState('');
+  const [showQuickAddCat, setShowQuickAddCat] = useState(false);
+  const [quickNewCatName, setQuickNewCatName] = useState('');
 
   // Add Campaign modal state
   const [showAddCampaign, setShowAddCampaign] = useState(false);
@@ -289,17 +339,40 @@ export const AdminDashboard: React.FC = () => {
   const [phoneEdit, setPhoneEdit] = useState(settings.phone);
   const [upiEdit, setUpiEdit] = useState(settings.upiId);
   const [freeShipEdit, setFreeShipEdit] = useState(settings.freeDeliveryThreshold);
+  const [assuredBadgeNameEdit, setAssuredBadgeNameEdit] = useState(settings.assuredBadgeName || 'JE Assured');
+  const [assuredBadgeEnabledEdit, setAssuredBadgeEnabledEdit] = useState(settings.assuredBadgeEnabled !== false);
+  const [assuredTaglineEdit, setAssuredTaglineEdit] = useState(settings.assuredTagline || '100% Genuine • Tested Quality & Brand Warranty');
+  const [assuredBadgeColorEdit, setAssuredBadgeColorEdit] = useState(settings.assuredBadgeColor || 'linear-gradient(90deg, #c2185b 0%, #e53935 100%)');
   const [settingsSavedMsg, setSettingsSavedMsg] = useState(false);
 
-  // Store-scoped Orders, Stock Movements, Stock Transfers & Barcodes
+  // Store-scoped Orders, Inventory Products, Stock Movements, Stock Transfers & Barcodes
   const scopedOrders = useMemo(() => {
     if (isSuperAdmin) return orders;
     return orders.filter((o) => {
+      // 1. Direct outletId match
       if (o.outletId) return o.outletId === myStoreId;
-      if (myStoreOutlet?.serviceablePincodes?.includes(o.customer.pincode)) return true;
-      return myStoreId === 'out_hazratganj';
+      // 2. Dispatch details outletId match
+      if (o.dispatchDetails?.outletId) return o.dispatchDetails.outletId === myStoreId;
+      // 3. Serviceable pincode match if order has no explicit outlet
+      if (myStoreOutlet?.serviceablePincodes?.includes(o.customer?.pincode)) return true;
+      return false;
     });
   }, [orders, isSuperAdmin, myStoreId, myStoreOutlet]);
+
+  const pendingRtoOrders = useMemo(() => {
+    return scopedOrders.filter(
+      (o) =>
+        o.rtoRequest?.status === 'pending_store_approval' ||
+        o.rtoRequest?.status === 'pending' ||
+        o.orderStatus === 'return_requested'
+    );
+  }, [scopedOrders]);
+
+  const verifyingPaymentOrders = useMemo(() => {
+    return scopedOrders.filter(
+      (o) => o.paymentStatus === 'verifying' || o.orderStatus === 'payment_verifying'
+    );
+  }, [scopedOrders]);
 
   const scopedStockMovements = useMemo(() => {
     if (isSuperAdmin) return stockMovements;
@@ -321,6 +394,23 @@ export const AdminDashboard: React.FC = () => {
     if (isSuperAdmin) return barcodeRecords;
     return barcodeRecords.filter((b) => b.outletAvailability.includes(myStoreId));
   }, [barcodeRecords, isSuperAdmin, myStoreId]);
+
+  // Store-scoped Products & Inventory Catalog
+  const scopedProducts = useMemo(() => {
+    if (isSuperAdmin) return products;
+    return products.filter((p) => {
+      // 1. Direct seller listing for this store outlet
+      if (p.sellerListings?.some((sl) => sl.outletId === myStoreId)) return true;
+      // 2. Staff submission belonging to this store
+      if (p.submittedBy?.storeName && myStoreOutlet?.name && p.submittedBy.storeName.toLowerCase().includes(myStoreOutlet.name.toLowerCase())) return true;
+      if (p.submittedBy?.userId === currentUser?.id) return true;
+      // 3. Listed in barcode availability for this store
+      if (scopedBarcodes.some((b) => b.productId === p.id)) return true;
+      // 4. Products in this store's order history
+      if (scopedOrders.some((o) => o.items.some((item) => item.productId === p.id))) return true;
+      return false;
+    });
+  }, [products, isSuperAdmin, myStoreId, myStoreOutlet, scopedBarcodes, scopedOrders, currentUser]);
 
   // High-level Financial KPIs (Scoped to Store for Store Managers)
   const metrics = useMemo(() => {
@@ -393,8 +483,19 @@ export const AdminDashboard: React.FC = () => {
   // Filtered Orders
   const filteredOrders = useMemo(() => {
     return scopedOrders.filter((o) => {
-      if (orderStatusFilter !== 'all' && o.orderStatus !== orderStatusFilter) {
-        return false;
+      if (orderStatusFilter !== 'all') {
+        if (orderStatusFilter === 'rto_pending') {
+          const isRto =
+            o.rtoRequest?.status === 'pending_store_approval' ||
+            o.rtoRequest?.status === 'pending' ||
+            o.orderStatus === 'return_requested';
+          if (!isRto) return false;
+        } else if (orderStatusFilter === 'payment_verifying') {
+          const isVerifying = o.paymentStatus === 'verifying' || o.orderStatus === 'payment_verifying';
+          if (!isVerifying) return false;
+        } else if (o.orderStatus !== orderStatusFilter) {
+          return false;
+        }
       }
       if (orderSearch.trim()) {
         const q = orderSearch.toLowerCase().trim();
@@ -522,7 +623,12 @@ export const AdminDashboard: React.FC = () => {
       phone: phoneEdit,
       upiId: upiEdit,
       freeDeliveryThreshold: Number(freeShipEdit),
+      assuredBadgeName: assuredBadgeNameEdit,
+      assuredBadgeEnabled: assuredBadgeEnabledEdit,
+      assuredTagline: assuredTaglineEdit,
+      assuredBadgeColor: assuredBadgeColorEdit,
     });
+    updateUpiSettings(upiEdit);
     setSettingsSavedMsg(true);
     setTimeout(() => setSettingsSavedMsg(false), 2000);
   };
@@ -532,12 +638,15 @@ export const AdminDashboard: React.FC = () => {
         { id: 'overview', label: 'Overview & Analytics', group: 'operations', icon: <BarChart3 className="w-3.5 h-3.5 shrink-0" /> },
         { id: 'pos', label: 'POS Register', group: 'operations', icon: <Scan className="w-3.5 h-3.5 shrink-0 text-emerald-500" /> },
         { id: 'orders', label: `Orders (${orders.length})`, group: 'operations', icon: <Package className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'returns_refunds', label: 'Returns & Refunds Master', group: 'operations', icon: <RotateCcw className="w-3.5 h-3.5 shrink-0 text-amber-500" /> },
         { id: 'sop_sla', label: 'SOP & SLA Matrix', group: 'operations', icon: <Activity className="w-3.5 h-3.5 shrink-0 text-amber-500" /> },
         { id: 'products', label: `Products (${products.length})`, group: 'catalog', icon: <DollarSign className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'categories_master', label: `Categories (${categories.length})`, group: 'catalog', icon: <Layers className="w-3.5 h-3.5 shrink-0 text-indigo-600" /> },
+        { id: 'categories_mgmt', label: `Category Formats`, group: 'catalog', icon: <FolderTree className="w-3.5 h-3.5 shrink-0 text-indigo-500" /> },
+        { id: 'maha_sale_campaigns', label: 'Maha Sale Slots & Deals', group: 'catalog', icon: <Flame className="w-3.5 h-3.5 shrink-0 text-rose-500" /> },
         { id: 'ai_assistant', label: 'AI Product Assistant & Add', group: 'catalog', icon: <Sparkles className="w-3.5 h-3.5 shrink-0 text-purple-500" /> },
         { id: 'approvals_queue', label: `Approvals Queue (${pendingApprovalsCount})`, group: 'catalog', icon: <ShieldCheck className="w-3.5 h-3.5 shrink-0 text-amber-500" /> },
         { id: 'volumetric_calc', label: 'Volumetric Calculator', group: 'catalog', icon: <Layers className="w-3.5 h-3.5 shrink-0 text-blue-500" /> },
-        { id: 'categories_mgmt', label: `Categories (${businessCategories.length})`, group: 'catalog', icon: <FolderTree className="w-3.5 h-3.5 shrink-0" /> },
         { id: 'inventory', label: 'Inventory & Stock', group: 'logistics', icon: <Layers className="w-3.5 h-3.5 shrink-0" /> },
         { id: 'stock_transfers', label: `Stock Transfers (${stockTransfers.length})`, group: 'logistics', icon: <ArrowLeftRight className="w-3.5 h-3.5 shrink-0" /> },
         { id: 'barcodes', label: `Barcodes & GTIN (${barcodeRecords.length})`, group: 'logistics', icon: <Scan className="w-3.5 h-3.5 shrink-0" /> },
@@ -547,12 +656,16 @@ export const AdminDashboard: React.FC = () => {
         { id: 'payouts', label: 'Payouts & Ledger', group: 'finance', icon: <CreditCard className="w-3.5 h-3.5 shrink-0" /> },
         { id: 'gst_taxation', label: 'GST & Taxations', group: 'finance', icon: <Receipt className="w-3.5 h-3.5 shrink-0" /> },
         { id: 'bulk_discounts', label: 'Bulk Discounts', group: 'finance', icon: <Percent className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'coupons_referrals', label: `Coupons & Referrals (${coupons.length})`, group: 'finance', icon: <Gift className="w-3.5 h-3.5 shrink-0 text-pink-500" /> },
+        { id: 'promotional_pages', label: 'Promotion Sale', group: 'catalog', icon: <Flame className="w-3.5 h-3.5 shrink-0 text-amber-500" /> },
         { id: 'payment_gateways', label: 'Payment Gateways', group: 'finance', icon: <CreditCard className="w-3.5 h-3.5 shrink-0" /> },
         { id: 'franchise', label: `Franchise Contracts (${franchiseAgreements.length})`, group: 'finance', icon: <FileText className="w-3.5 h-3.5 shrink-0" /> },
         { id: 'ownership_models', label: 'Ownership Models', group: 'finance', icon: <Briefcase className="w-3.5 h-3.5 shrink-0" /> },
         { id: 'campaigns', label: 'Festive Campaigns', group: 'settings', icon: <Sparkles className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'chatbot_ai', label: 'Chatbot AI & Training', group: 'settings', icon: <Bot className="w-3.5 h-3.5 shrink-0 text-blue-500" /> },
+        { id: 'seo_marketing', label: 'SEO, Crawler & Marketing', group: 'settings', icon: <Globe className="w-3.5 h-3.5 shrink-0 text-indigo-500" /> },
         { id: 'homepage_builder', label: 'Homepage Builder', group: 'settings', icon: <LayoutTemplate className="w-3.5 h-3.5 shrink-0" /> },
-        { id: 'store_logins', label: `Staff Logins (${accounts.length})`, group: 'settings', icon: <KeyRound className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'store_logins', label: `User & Staff Governance (${accounts.length})`, group: 'settings', icon: <KeyRound className="w-3.5 h-3.5 shrink-0" /> },
         { id: 'authenticator_qr', label: 'Google Authenticator QR', group: 'settings', icon: <QrCode className="w-3.5 h-3.5 shrink-0 text-emerald-500" /> },
         { id: 'branding', label: 'Branding & Theme', group: 'settings', icon: <Palette className="w-3.5 h-3.5 shrink-0" /> },
         { id: 'settings', label: 'Store Settings', group: 'settings', icon: <Settings className="w-3.5 h-3.5 shrink-0" /> },
@@ -561,15 +674,19 @@ export const AdminDashboard: React.FC = () => {
         { id: 'overview', label: 'Store Overview', group: 'operations', icon: <BarChart3 className="w-3.5 h-3.5 shrink-0" /> },
         { id: 'pos', label: 'POS Register', group: 'operations', icon: <Scan className="w-3.5 h-3.5 shrink-0 text-emerald-500" /> },
         { id: 'orders', label: `Store Orders (${scopedOrders.length})`, group: 'operations', icon: <Package className="w-3.5 h-3.5 shrink-0" /> },
-        { id: 'sop_sla', label: 'Store SOP & SLA', group: 'operations', icon: <Activity className="w-3.5 h-3.5 shrink-0 text-amber-500" /> },
+        { id: 'returns_refunds', label: 'Store Returns & Exchanges', group: 'operations', icon: <RotateCcw className="w-3.5 h-3.5 shrink-0 text-amber-500" /> },
         { id: 'products', label: `Store Catalogue (${products.length})`, group: 'catalog', icon: <Tag className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'categories_master', label: `Categories (${categories.length})`, group: 'catalog', icon: <Layers className="w-3.5 h-3.5 shrink-0 text-indigo-600" /> },
+        { id: 'maha_sale_campaigns', label: 'Maha Sale Slots & Deals', group: 'catalog', icon: <Flame className="w-3.5 h-3.5 shrink-0 text-rose-500" /> },
+        { id: 'promotional_pages', label: 'Promotion Sale', group: 'catalog', icon: <Flame className="w-3.5 h-3.5 shrink-0 text-amber-500" /> },
         { id: 'ai_assistant', label: 'AI Product Assistant & Add', group: 'catalog', icon: <Sparkles className="w-3.5 h-3.5 shrink-0 text-purple-500" /> },
+        { id: 'categories_mgmt', label: 'Category Listing Formats', group: 'catalog', icon: <FolderTree className="w-3.5 h-3.5 shrink-0 text-indigo-500" /> },
         { id: 'volumetric_calc', label: 'Volumetric Calculator', group: 'catalog', icon: <Layers className="w-3.5 h-3.5 shrink-0 text-blue-500" /> },
         { id: 'inventory', label: 'Store Inventory & Stock', group: 'logistics', icon: <Layers className="w-3.5 h-3.5 shrink-0" /> },
         { id: 'stock_transfers', label: `Stock Transfers (${scopedStockTransfers.length})`, group: 'logistics', icon: <ArrowLeftRight className="w-3.5 h-3.5 shrink-0" /> },
         { id: 'barcodes', label: `Store Barcodes (${scopedBarcodes.length})`, group: 'logistics', icon: <Scan className="w-3.5 h-3.5 shrink-0" /> },
-        { id: 'express_delivery', label: 'Express Delivery (Shiprocket)', group: 'logistics', icon: <Truck className="w-3.5 h-3.5 shrink-0 text-indigo-500" /> },
         { id: 'delivery', label: 'Store Delivery Pincodes', group: 'logistics', icon: <MapPin className="w-3.5 h-3.5 shrink-0" /> },
+        { id: 'seo_marketing', label: 'SEO & Store Backlinks', group: 'settings', icon: <Globe className="w-3.5 h-3.5 shrink-0 text-indigo-500" /> },
         { id: 'my_store', label: 'My Store Details', group: 'settings', icon: <Store className="w-3.5 h-3.5 shrink-0" /> },
         { id: 'authenticator_qr', label: 'Google Authenticator QR', group: 'settings', icon: <QrCode className="w-3.5 h-3.5 shrink-0 text-emerald-500" /> },
       ];
@@ -615,28 +732,32 @@ export const AdminDashboard: React.FC = () => {
       {
         id: 'operations' as const,
         label: 'Operations & POS',
-        summary: 'Overview · POS · Orders · SLA',
+        summary: isSuperAdmin
+          ? 'Overview · POS · Orders · SLA'
+          : 'Overview · POS · Orders · Returns',
         icon: <Scan className="w-4 h-4 text-emerald-600 shrink-0" />,
-        activeBg: 'bg-linear-to-br from-emerald-50/90 via-white to-teal-50/60 border-emerald-300 ring-1 ring-emerald-200/70',
-        badgeColor: 'text-emerald-700',
+        activeBg: 'bg-emerald-50/70 border-2 border-emerald-600 ring-2 ring-emerald-500/20 text-slate-900',
+        badgeColor: 'text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-full',
       },
       {
         id: 'catalog' as const,
         label: 'Products & AI Studio',
         summary: isSuperAdmin
-          ? 'Catalogue · AI Assist · Approvals · Volumetric'
-          : 'Catalogue · AI Assist · Volumetric Calc',
+          ? 'Catalogue · Maha Sale · AI Assist · Approvals · Volumetric'
+          : 'Catalogue · Maha Sale · Promotions · AI Assist · Volumetric',
         icon: <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />,
-        activeBg: 'bg-linear-to-br from-indigo-50/90 via-white to-violet-50/60 border-indigo-300 ring-1 ring-indigo-200/70',
-        badgeColor: 'text-indigo-700',
+        activeBg: 'bg-indigo-50/70 border-2 border-indigo-600 ring-2 ring-indigo-500/20 text-slate-900',
+        badgeColor: 'text-indigo-800 bg-indigo-100/80 px-2 py-0.5 rounded-full',
       },
       {
         id: 'logistics' as const,
         label: 'Stock & Logistics',
-        summary: 'Inventory · Transfers · Barcodes · Shiprocket',
+        summary: isSuperAdmin
+          ? 'Inventory · Transfers · Barcodes · Shiprocket'
+          : 'Inventory · Transfers · Barcodes · Pincodes',
         icon: <Truck className="w-4 h-4 text-sky-600 shrink-0" />,
-        activeBg: 'bg-linear-to-br from-sky-50/90 via-white to-blue-50/60 border-sky-300 ring-1 ring-sky-200/70',
-        badgeColor: 'text-sky-700',
+        activeBg: 'bg-sky-50/70 border-2 border-sky-600 ring-2 ring-sky-500/20 text-slate-900',
+        badgeColor: 'text-sky-800 bg-sky-100/80 px-2 py-0.5 rounded-full',
       },
       ...(isSuperAdmin
         ? [
@@ -644,9 +765,9 @@ export const AdminDashboard: React.FC = () => {
               id: 'finance' as const,
               label: 'Finance & Tax',
               summary: 'Payouts · GST · Discounts · Gateways',
-              icon: <Receipt className="w-4 h-4 text-amber-600 shrink-0" />,
-              activeBg: 'bg-linear-to-br from-amber-50/90 via-white to-orange-50/60 border-amber-300 ring-1 ring-amber-200/70',
-              badgeColor: 'text-amber-700',
+              icon: <Receipt className="w-4 h-4 text-emerald-600 shrink-0" />,
+              activeBg: 'bg-emerald-50/70 border-2 border-emerald-600 ring-2 ring-emerald-500/20 text-slate-900',
+              badgeColor: 'text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-full',
             },
           ]
         : []),
@@ -655,10 +776,10 @@ export const AdminDashboard: React.FC = () => {
         label: isSuperAdmin ? 'Storefront & Security' : 'Store & Security',
         summary: isSuperAdmin
           ? 'Campaigns · CMS · Logins · 2FA QR · Settings'
-          : 'My Store Details · 2FA Authenticator QR',
+          : 'My Store Details · 2FA Authenticator QR · SEO',
         icon: <Settings className="w-4 h-4 text-slate-700 shrink-0" />,
-        activeBg: 'bg-linear-to-br from-slate-100/90 via-white to-blue-50/50 border-slate-300 ring-1 ring-slate-200/80',
-        badgeColor: 'text-slate-700',
+        activeBg: 'bg-slate-100/90 border-2 border-slate-800 ring-2 ring-slate-700/20 text-slate-900',
+        badgeColor: 'text-slate-800 bg-slate-200/80 px-2 py-0.5 rounded-full',
       },
     ],
     [isSuperAdmin]
@@ -831,10 +952,10 @@ export const AdminDashboard: React.FC = () => {
                 }}
                 className={`group text-left p-2.5 sm:p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
                   isCatSelected
-                    ? `${cat.activeBg} shadow-xs`
+                    ? `${cat.activeBg} shadow-sm`
                     : hasActiveTabInside
-                    ? 'bg-white/95 border-blue-200/90 shadow-2xs hover:bg-white'
-                    : 'bg-white/75 hover:bg-white border-slate-200/75 shadow-2xs'
+                    ? 'bg-white border-slate-300 shadow-2xs hover:bg-slate-50'
+                    : 'bg-white hover:bg-slate-50 border-slate-200/90 shadow-2xs'
                 }`}
               >
                 <div className="flex items-center justify-between gap-1.5 w-full">
@@ -896,10 +1017,10 @@ export const AdminDashboard: React.FC = () => {
                             setActiveTab(tab.id as any);
                             setMenuGroupFilter(cat.id);
                           }}
-                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer border ${
+                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer border ${
                             isTabActive
-                              ? 'bg-linear-to-r from-blue-600 to-indigo-600 text-white border-blue-600 shadow-xs font-semibold'
-                              : 'bg-slate-50/70 hover:bg-white text-slate-700 hover:text-slate-900 border-slate-200/75 shadow-2xs'
+                              ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                              : 'bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border-slate-200/90 shadow-2xs font-medium'
                           }`}
                         >
                           {tab.icon}
@@ -913,7 +1034,7 @@ export const AdminDashboard: React.FC = () => {
             })}
           </div>
         ) : (
-          <div className="bg-slate-100/70 p-1.5 rounded-xl border border-slate-200/70 flex flex-wrap items-center gap-1.5">
+          <div className="bg-slate-100/80 p-1.5 rounded-xl border border-slate-200/90 flex flex-wrap items-center gap-1.5">
             {displayedMenuTabs.map((tab) => {
               const isTabActive = activeTab === tab.id;
               return (
@@ -921,10 +1042,10 @@ export const AdminDashboard: React.FC = () => {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs transition-all cursor-pointer min-h-[36px] border ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer min-h-[34px] border ${
                     isTabActive
-                      ? 'bg-white text-blue-700 border-blue-200/90 shadow-xs font-bold ring-1 ring-blue-500/10'
-                      : 'bg-white/60 hover:bg-white text-slate-600 hover:text-slate-900 border-transparent hover:border-slate-200/80 font-medium'
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-sm font-bold ring-1 ring-slate-900/10'
+                      : 'bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border-slate-200/90 shadow-2xs font-medium'
                   }`}
                 >
                   {tab.icon}
@@ -936,203 +1057,323 @@ export const AdminDashboard: React.FC = () => {
         )}
       </div>
 
+      {/* PENDING RIDER RTO ALERT BANNER FOR ADMIN & STORE MANAGERS */}
+      {pendingRtoOrders.length > 0 && (
+        <div className="mb-4 bg-gradient-to-r from-rose-600 via-rose-700 to-red-800 text-white rounded-2xl p-4 shadow-lg border border-rose-400/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-start md:items-center gap-3">
+            <div className="p-2.5 bg-white/20 rounded-xl shrink-0 mt-0.5 md:mt-0">
+              <RotateCcw className="w-5 h-5 text-white animate-spin" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="font-bold text-sm sm:text-base tracking-tight">
+                  {pendingRtoOrders.length} Rider RTO Return Request{pendingRtoOrders.length > 1 ? 's' : ''} Received
+                </h4>
+                <span className="text-[10px] bg-rose-200 text-rose-950 font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  Store Action Required
+                </span>
+              </div>
+              <p className="text-rose-100 text-xs mt-0.5 max-w-2xl">
+                Rider reported delivery failure for order{pendingRtoOrders.length > 1 ? 's' : ''}{' '}
+                <strong className="text-white font-mono">{pendingRtoOrders.map((o) => o.id).join(', ')}</strong>.
+                Verify reason, accept returned package to store shelf, or reject to instruct re-delivery.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 self-end md:self-auto flex-wrap">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('orders');
+                setOrderStatusFilter('rto_pending');
+              }}
+              className="px-3.5 py-2 bg-white text-rose-700 hover:bg-rose-50 font-bold text-xs rounded-xl shadow-xs cursor-pointer transition-colors"
+            >
+              Filter in Orders ({pendingRtoOrders.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setReviewingRtoOrder(pendingRtoOrders[0]);
+                setRtoReviewDecision('approved');
+                setRtoReviewNotes('RTO approved. Package received back into store shelf inventory.');
+              }}
+              className="px-3.5 py-2 bg-rose-950/70 hover:bg-rose-950 text-white font-bold text-xs rounded-xl border border-rose-400/60 cursor-pointer transition-colors flex items-center gap-1.5"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-rose-300" />
+              <span>Review Now</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* TAB 1: OVERVIEW & ANALYTICS */}
       {activeTab === 'overview' && (
         <div className="space-y-4 sm:space-y-6">
-          {/* Rider Cash Deposit (8-Digit Code) Verification & Approval Card for Store & Admin */}
-          <div className="bg-linear-to-r from-emerald-50/90 via-white to-indigo-50/50 rounded-2xl border border-emerald-200/90 p-4 sm:p-5 shadow-2xs space-y-3">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-              <div className="flex items-start sm:items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 font-mono font-black text-xs shadow-xs">
-                  8#
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-sm font-black text-slate-900">
-                      Rider Cash Deposit — Enter 8-Digit Code &amp; Approve Cash Collected
-                    </h3>
-                    {pendingRiderDeposits.length > 0 && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
-                        {pendingRiderDeposits.length} Pending Code{pendingRiderDeposits.length > 1 ? 's' : ''}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-600 mt-0.5">
-                    Riders generate an 8-digit code for any specific amount in the Rider Portal. Enter the 8-digit code below to verify and approve cash collected.
-                  </p>
-                </div>
-              </div>
-
-              <form
-                onSubmit={(e) => handleApproveRiderDepositByCode(e)}
-                className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0"
-              >
-                <input
-                  type="text"
-                  value={riderDepositCodeInput}
-                  onChange={(e) => setRiderDepositCodeInput(e.target.value)}
-                  placeholder="Enter 8-digit code (e.g. 83921056)"
-                  className="w-full sm:w-56 px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-black text-slate-900 tracking-wider focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                />
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold rounded-xl shadow-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Approve Cash Collected</span>
-                </button>
-              </form>
-            </div>
-
-            {riderDepositFeedback && (
-              <div
-                className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between ${
-                  riderDepositFeedback.type === 'success'
-                    ? 'bg-emerald-100/90 border-emerald-300 text-emerald-950'
-                    : 'bg-rose-50 border-rose-200 text-rose-900'
-                }`}
-              >
-                <span>{riderDepositFeedback.message}</span>
-                <button
-                  type="button"
-                  onClick={() => setRiderDepositFeedback(null)}
-                  className="text-slate-500 hover:text-slate-900 ml-2 cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-
-            {/* Quick Pending 8-Digit Codes Pills */}
-            {pendingRiderDeposits.length > 0 && (
-              <div className="pt-2 border-t border-emerald-200/60 flex items-center gap-2 flex-wrap text-xs">
-                <span className="text-[11px] font-bold text-slate-500">
-                  Active Pending Rider Codes:
+          {/* Financial Performance Section */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs sm:text-sm font-bold text-slate-800 tracking-tight flex items-center gap-2">
+                <span>Financial Performance</span>
+                <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                  Real-time
                 </span>
-                {pendingRiderDeposits.map((sub) => (
-                  <div
-                    key={sub.id}
-                    className="inline-flex items-center gap-2 bg-white px-2.5 py-1 rounded-xl border border-slate-200/90 shadow-2xs"
-                  >
-                    <span className="font-bold text-slate-800">{sub.riderName}:</span>
-                    <span className="font-mono font-black text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
-                      {sub.remittanceCode}
-                    </span>
-                    <span className="font-mono font-extrabold text-emerald-700">
-                      {formatINR(sub.amount)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        setRiderDepositCodeInput(sub.remittanceCode);
-                        handleApproveRiderDepositByCode(e, sub.remittanceCode);
-                      }}
-                      className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold cursor-pointer"
-                    >
-                      Approve
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Top KPI Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-xs">
-              <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                Gross Sales (All Orders)
-              </span>
-              <div className="text-xl md:text-2xl font-extrabold text-slate-900 font-mono mt-1">
-                {formatINR(metrics.totalRevenue)}
-              </div>
-              <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-0.5 mt-1">
-                <TrendingUp className="w-3.5 h-3.5" />
-                <span>{metrics.totalOrdersCount} orders placed</span>
+              </h3>
+              <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
+                {metrics.totalOrdersCount} Total Orders
               </span>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                Collected Payments
-              </span>
-              <div className="text-xl md:text-2xl font-extrabold text-emerald-700 font-mono mt-1">
-                {formatINR(metrics.cashCollected)}
-              </div>
-              <span className="text-[11px] text-slate-500 mt-1 block">
-                Pending: {formatINR(metrics.totalRevenue - metrics.cashCollected)}
-              </span>
-            </div>
-
-            {/* Super Admin Financial Visibility */}
-            {isSuperAdmin && (
-              <>
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                    Estimated Gross Profit
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
+              {/* Gross Sales */}
+              <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-colors">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[11px] sm:text-xs font-semibold text-slate-500 truncate">
+                    Gross Sales
                   </span>
-                  <div className="text-xl md:text-2xl font-extrabold text-purple-700 font-mono mt-1">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                    <DollarSign className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div className="text-lg sm:text-2xl font-bold text-slate-900 font-mono tracking-tight mt-1 tabular-nums truncate">
+                  {formatINR(metrics.totalRevenue)}
+                </div>
+                <div className="text-[10px] sm:text-[11px] text-emerald-600 font-semibold flex items-center gap-1 mt-1 truncate">
+                  <TrendingUp className="w-3 h-3 shrink-0" />
+                  <span>{metrics.totalOrdersCount} orders placed</span>
+                </div>
+              </div>
+
+              {/* Collected Payments */}
+              <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-colors">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[11px] sm:text-xs font-semibold text-slate-500 truncate">
+                    Collected Payments
+                  </span>
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                    <CreditCard className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div className="text-lg sm:text-2xl font-bold text-emerald-700 font-mono tracking-tight mt-1 tabular-nums truncate">
+                  {formatINR(metrics.cashCollected)}
+                </div>
+                <div className="text-[10px] sm:text-[11px] text-slate-500 font-medium mt-1 truncate">
+                  Pending: <span className="font-mono text-slate-700 font-semibold">{formatINR(metrics.totalRevenue - metrics.cashCollected)}</span>
+                </div>
+              </div>
+
+              {/* Super Admin: Gross Profit / Store Manager: Avg Order */}
+              {isSuperAdmin ? (
+                <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-colors">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[11px] sm:text-xs font-semibold text-slate-500 truncate">
+                      Gross Profit
+                    </span>
+                    <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                      <TrendingUp className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+                  <div className="text-lg sm:text-2xl font-bold text-purple-700 font-mono tracking-tight mt-1 tabular-nums truncate">
                     {formatINR(metrics.grossProfit)}
                   </div>
-                  <span className="text-[11px] text-slate-500 mt-1 block font-mono">
-                    COGS: {formatINR(metrics.cogs)}
-                  </span>
+                  <div className="text-[10px] sm:text-[11px] text-slate-500 font-medium mt-1 truncate">
+                    COGS: <span className="font-mono">{formatINR(metrics.cogs)}</span>
+                  </div>
                 </div>
+              ) : (
+                <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-colors">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[11px] sm:text-xs font-semibold text-slate-500 truncate">
+                      Avg Order Value
+                    </span>
+                    <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                      <Receipt className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+                  <div className="text-lg sm:text-2xl font-bold text-slate-900 font-mono tracking-tight mt-1 tabular-nums truncate">
+                    {metrics.totalOrdersCount > 0
+                      ? formatINR(Math.round(metrics.totalRevenue / metrics.totalOrdersCount))
+                      : '₹0'}
+                  </div>
+                  <div className="text-[10px] sm:text-[11px] text-slate-500 font-medium mt-1 truncate">
+                    Per completed order
+                  </div>
+                </div>
+              )}
 
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                    Stock Valuation
-                  </span>
-                  <div className="text-xl md:text-2xl font-extrabold text-blue-700 font-mono mt-1">
+              {/* Super Admin: Stock Valuation / Store Manager: Total SKUs */}
+              {isSuperAdmin ? (
+                <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-colors">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[11px] sm:text-xs font-semibold text-slate-500 truncate">
+                      Stock Valuation
+                    </span>
+                    <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                      <Package className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+                  <div className="text-lg sm:text-2xl font-bold text-indigo-700 font-mono tracking-tight mt-1 tabular-nums truncate">
                     {formatINR(metrics.valuationAtSelling)}
                   </div>
-                  <span className="text-[11px] text-slate-500 mt-1 block font-mono">
-                    Cost Basis: {formatINR(metrics.valuationAtCost)}
-                  </span>
+                  <div className="text-[10px] sm:text-[11px] text-slate-500 font-medium mt-1 truncate">
+                    Cost: <span className="font-mono">{formatINR(metrics.valuationAtCost)}</span>
+                  </div>
                 </div>
-              </>
-            )}
+              ) : (
+                <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-colors">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[11px] sm:text-xs font-semibold text-slate-500 truncate">
+                      Catalog Products
+                    </span>
+                    <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                      <Package className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+                  <div className="text-lg sm:text-2xl font-bold text-slate-900 font-mono tracking-tight mt-1 tabular-nums truncate">
+                    {products.length} Items
+                  </div>
+                  <div className="text-[10px] sm:text-[11px] text-slate-500 font-medium mt-1 truncate">
+                    {metrics.lowStockCount} low stock alerts
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Operational Queue Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-amber-900 uppercase">
-                  Awaiting Confirmation
+          {/* Operational Fulfillment Pipeline Section */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs sm:text-sm font-bold text-slate-800 tracking-tight flex items-center gap-2">
+                <span>Order Fulfillment Pipeline</span>
+                <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                  Tap to filter
                 </span>
-                <div className="text-2xl font-black text-amber-900 mt-1 font-mono">
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('orders');
+                  setOrderStatusFilter('all');
+                }}
+                className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer flex items-center gap-0.5"
+              >
+                <span>View All Orders</span>
+                <ArrowUpRight className="w-3 h-3" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
+              {/* Awaiting Confirmation */}
+              <div
+                onClick={() => {
+                  setActiveTab('orders');
+                  setOrderStatusFilter('awaiting_whatsapp_confirmation');
+                }}
+                className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200/90 shadow-2xs hover:border-amber-300 hover:shadow-xs transition-all cursor-pointer group"
+                title="Filter orders awaiting WhatsApp / admin confirmation"
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[11px] sm:text-xs font-semibold text-slate-600 group-hover:text-amber-800 transition-colors truncate">
+                    Awaiting Confirm
+                  </span>
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-amber-50 text-amber-600 group-hover:bg-amber-100 flex items-center justify-center shrink-0 transition-colors">
+                    <Clock className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div className="text-xl sm:text-2xl font-black text-amber-900 font-mono tracking-tight mt-1 tabular-nums">
                   {metrics.pendingConfirmationsCount}
                 </div>
-                <span className="text-[11px] text-amber-700">WhatsApp and pending checks</span>
+                <div className="text-[10px] sm:text-[11px] text-amber-700/80 font-medium mt-1 truncate">
+                  WhatsApp & checks
+                </div>
               </div>
-              <Clock className="w-8 h-8 text-amber-600" />
-            </div>
 
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-blue-900 uppercase">
-                  Packing & Staging Queue
-                </span>
-                <div className="text-2xl font-black text-blue-900 mt-1 font-mono">
+              {/* Packing & Staging Queue */}
+              <div
+                onClick={() => {
+                  setActiveTab('orders');
+                  setOrderStatusFilter('packed');
+                }}
+                className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200/90 shadow-2xs hover:border-blue-300 hover:shadow-xs transition-all cursor-pointer group"
+                title="Filter orders ready to pack or dispatch"
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[11px] sm:text-xs font-semibold text-slate-600 group-hover:text-blue-800 transition-colors truncate">
+                    Packing Queue
+                  </span>
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-blue-50 text-blue-600 group-hover:bg-blue-100 flex items-center justify-center shrink-0 transition-colors">
+                    <Package className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div className="text-xl sm:text-2xl font-black text-blue-900 font-mono tracking-tight mt-1 tabular-nums">
                   {metrics.packingQueueCount}
                 </div>
-                <span className="text-[11px] text-blue-700">Ready to pack & dispatch</span>
+                <div className="text-[10px] sm:text-[11px] text-blue-700/80 font-medium mt-1 truncate">
+                  Ready to dispatch
+                </div>
               </div>
-              <Package className="w-8 h-8 text-blue-600" />
-            </div>
 
-            <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-purple-900 uppercase">
-                  Active Courier Dispatches
-                </span>
-                <div className="text-2xl font-black text-purple-900 mt-1 font-mono">
+              {/* Active Courier Dispatches */}
+              <div
+                onClick={() => {
+                  setActiveTab('orders');
+                  setOrderStatusFilter('out_for_delivery');
+                }}
+                className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200/90 shadow-2xs hover:border-purple-300 hover:shadow-xs transition-all cursor-pointer group"
+                title="Filter orders currently out for delivery"
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[11px] sm:text-xs font-semibold text-slate-600 group-hover:text-purple-800 transition-colors truncate">
+                    Out for Delivery
+                  </span>
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-purple-50 text-purple-600 group-hover:bg-purple-100 flex items-center justify-center shrink-0 transition-colors">
+                    <Truck className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div className="text-xl sm:text-2xl font-black text-purple-900 font-mono tracking-tight mt-1 tabular-nums">
                   {metrics.outForDeliveryCount}
                 </div>
-                <span className="text-[11px] text-purple-700">Out for delivery in Lucknow</span>
+                <div className="text-[10px] sm:text-[11px] text-purple-700/80 font-medium mt-1 truncate">
+                  Courier / Rider
+                </div>
               </div>
-              <Truck className="w-8 h-8 text-purple-600" />
+
+              {/* RTO Return Requests */}
+              <div
+                onClick={() => {
+                  setActiveTab('orders');
+                  setOrderStatusFilter('rto_pending');
+                }}
+                className={`p-3 sm:p-4 rounded-xl border shadow-2xs transition-all cursor-pointer group ${
+                  pendingRtoOrders.length > 0
+                    ? 'bg-rose-50/70 border-rose-300 hover:border-rose-400 hover:bg-rose-50'
+                    : 'bg-white border-slate-200/90 hover:border-slate-300'
+                }`}
+                title="Filter pending RTO and return review requests"
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className={`text-[11px] sm:text-xs font-semibold truncate ${
+                    pendingRtoOrders.length > 0 ? 'text-rose-900' : 'text-slate-600 group-hover:text-slate-800'
+                  }`}>
+                    RTO & Returns
+                  </span>
+                  <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                    pendingRtoOrders.length > 0 ? 'bg-rose-200 text-rose-800' : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    <RotateCcw className={`w-3.5 h-3.5 ${pendingRtoOrders.length > 0 ? 'animate-spin' : ''}`} />
+                  </div>
+                </div>
+                <div className={`text-xl sm:text-2xl font-black font-mono tracking-tight mt-1 tabular-nums ${
+                  pendingRtoOrders.length > 0 ? 'text-rose-700' : 'text-slate-900'
+                }`}>
+                  {pendingRtoOrders.length}
+                </div>
+                <div className={`text-[10px] sm:text-[11px] font-medium mt-1 truncate ${
+                  pendingRtoOrders.length > 0 ? 'text-rose-600 font-semibold' : 'text-slate-400'
+                }`}>
+                  {pendingRtoOrders.length > 0 ? 'Action required' : 'No pending returns'}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1190,348 +1431,625 @@ export const AdminDashboard: React.FC = () => {
 
       {/* TAB 2: ORDERS MANAGEMENT */}
       {activeTab === 'orders' && (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
-          {/* Filter Bar */}
-          <div className="p-4 border-b border-slate-200 bg-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div className="flex items-center gap-2 flex-1 max-w-md">
-              <Search className="w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                value={orderSearch}
-                onChange={(e) => setOrderSearch(e.target.value)}
-                placeholder="Search orders by ID, customer name, mobile..."
-                className="w-full text-xs px-3 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
-              />
+        <div className="space-y-4">
+          {isSuperAdmin && (
+            <>
+              {/* Clean Dynamic QR UPI ID Configuration Bar (Admin Only) */}
+              <div className="bg-white rounded-xl border border-slate-200 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                    <QrCode className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 block">
+                      Dynamic QR Payment — Receive UPI ID
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      Checkout QR code auto-updates with cart/product value
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={upiEdit}
+                    onChange={(e) => setUpiEdit(e.target.value)}
+                    placeholder="Enter UPI ID (e.g. store@upi)"
+                    className="text-xs font-mono px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 w-56 sm:w-64"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const res = updateUpiSettings(upiEdit);
+                      setRtoActionFeedback({
+                        type: res.success ? 'success' : 'error',
+                        message: res.message,
+                      });
+                      setTimeout(() => setRtoActionFeedback(null), 3500);
+                    }}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shrink-0 flex items-center gap-1"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Save UPI ID</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick COD Extra Charge & Prepaid Discount Bar (Admin Only) */}
+              <div className="bg-white rounded-xl border border-slate-200 p-3.5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                    <Tag className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 block">
+                      COD Extra Charge & Prepaid Order Discount
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      Extra handling fee on COD orders & instant savings on Prepaid orders
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5 text-xs">
+                  <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
+                    <span className="text-[11px] font-semibold text-amber-900">COD Charge (₹):</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={quickCodCharge}
+                      onChange={(e) => setQuickCodCharge(Number(e.target.value))}
+                      className="w-16 px-2 py-0.5 bg-white border border-amber-300 rounded font-mono font-bold text-slate-900 text-xs"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                    <span className="text-[11px] font-semibold text-emerald-900">Prepaid Discount (%):</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={quickPrepaidDiscount}
+                      onChange={(e) => setQuickPrepaidDiscount(Number(e.target.value))}
+                      className="w-14 px-2 py-0.5 bg-white border border-emerald-300 rounded font-mono font-bold text-slate-900 text-xs"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const res = updatePaymentChargeSettings({
+                        codExtraChargeEnabled: quickCodCharge > 0,
+                        codExtraChargeType: settings.codExtraChargeType || 'fixed',
+                        codExtraChargeValue: quickCodCharge,
+                        prepaidDiscountEnabled: quickPrepaidDiscount > 0,
+                        prepaidDiscountType: settings.prepaidDiscountType || 'percentage',
+                        prepaidDiscountValue: quickPrepaidDiscount,
+                        prepaidMaxDiscountAmount: settings.prepaidMaxDiscountAmount ?? 500,
+                      });
+                      setRtoActionFeedback({
+                        type: res.success ? 'success' : 'error',
+                        message: res.message,
+                      });
+                      setTimeout(() => setRtoActionFeedback(null), 3500);
+                    }}
+                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shrink-0 flex items-center gap-1"
+                  >
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Save Rules</span>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+            {/* Filter Bar */}
+            <div className="p-4 border-b border-slate-200 bg-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-1 max-w-md">
+                <Search className="w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={orderSearch}
+                  onChange={(e) => setOrderSearch(e.target.value)}
+                  placeholder="Search orders by ID, customer name, mobile..."
+                  className="w-full text-xs px-3 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {verifyingPaymentOrders.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOrderStatusFilter(orderStatusFilter === 'payment_verifying' ? 'all' : 'payment_verifying')
+                    }
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer flex items-center gap-1.5 border transition-all ${
+                      orderStatusFilter === 'payment_verifying'
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
+                        : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300'
+                    }`}
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Verifying Payment ({verifyingPaymentOrders.length})</span>
+                  </button>
+                )}
+
+                {pendingRtoOrders.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setOrderStatusFilter(orderStatusFilter === 'rto_pending' ? 'all' : 'rto_pending')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black cursor-pointer flex items-center gap-1.5 border transition-all ${
+                      orderStatusFilter === 'rto_pending'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                        : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-300 animate-pulse'
+                    }`}
+                    title="Filter and review pending RTO failure return requests"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>⚠️ RTO Requests ({pendingRtoOrders.length})</span>
+                  </button>
+                )}
+
+                <span className="text-xs text-slate-500">Status:</span>
+                <select
+                  value={orderStatusFilter}
+                  onChange={(e) => setOrderStatusFilter(e.target.value)}
+                  className="text-xs px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 cursor-pointer font-medium"
+                >
+                  <option value="all">All Statuses ({scopedOrders.length})</option>
+                  <option value="payment_verifying">Verifying Payment ({verifyingPaymentOrders.length})</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="rto_pending">⚠️ RTO Pending Store Approval ({pendingRtoOrders.length})</option>
+                  <option value="awaiting_whatsapp_confirmation">Awaiting WhatsApp</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="packed">Packed</option>
+                  <option value="assigned_to_delivery">Assigned to Rider</option>
+                  <option value="out_for_delivery">Out for Delivery</option>
+                  <option value="delivered">Delivered</option>
+                  <option value="returned">Returned to Store (RTO Completed)</option>
+                  <option value="partially_cancelled">Partially Cancelled (Shortage/Damage)</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+
+                <button
+                  type="button"
+                  onClick={handleExportOrdersCsv}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Export CSV</span>
+                </button>
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-slate-500">Status:</span>
-              <select
-                value={orderStatusFilter}
-                onChange={(e) => setOrderStatusFilter(e.target.value)}
-                className="text-xs px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 cursor-pointer"
-              >
-                <option value="all">All Statuses ({scopedOrders.length})</option>
-                <option value="awaiting_whatsapp_confirmation">Awaiting WhatsApp</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="packed">Packed</option>
-                <option value="assigned_to_delivery">Assigned to Rider</option>
-                <option value="out_for_delivery">Out for Delivery</option>
-                <option value="delivered">Delivered</option>
-                <option value="partially_cancelled">Partially Cancelled (Shortage/Damage)</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-
-              <button
-                type="button"
-                onClick={handleExportOrdersCsv}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Export CSV</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Orders Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-100 text-slate-600 font-bold uppercase text-[10px] border-b border-slate-200">
-                  <th className="py-3 px-3">Order ID</th>
-                  <th className="py-3 px-3">Date</th>
-                  <th className="py-3 px-3">Customer</th>
-                  <th className="py-3 px-3">Items & Fulfillment</th>
-                  <th className="py-3 px-3">Total & Refund</th>
-                  <th className="py-3 px-3">Payment</th>
-                  <th className="py-3 px-3">Status</th>
-                  <th className="py-3 px-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {filteredOrders.map((order) => (
-                  <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-3 font-mono font-bold text-slate-900">{order.id}</td>
-                    <td className="py-3 px-3 text-slate-500">
-                      {new Date(order.createdAt).toLocaleDateString('en-IN', {
-                        day: '2-digit',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="font-semibold text-slate-900 block">{order.customer.name}</span>
-                      <span className="text-[11px] text-slate-500">{order.customer.phone}</span>
-                      <span className="text-[10px] text-slate-400 block">{order.customer.area}</span>
-                    </td>
-                    <td className="py-3 px-3 max-w-xs">
-                      <div className="space-y-1">
-                        {order.items.map((i, idx) => {
-                          const active = i.activeQuantity !== undefined ? i.activeQuantity : i.quantity;
-                          const hasCancelled = (i.cancelledQuantity || 0) > 0;
-                          return (
-                            <div key={idx} className="flex items-center gap-1.5 flex-wrap text-xs">
-                              <span
-                                className={`font-medium ${
-                                  active === 0 ? 'line-through text-slate-400' : 'text-slate-800'
-                                }`}
-                              >
-                                {i.productName} ({active > 0 ? `x${active}` : '0 active'})
-                              </span>
-                              {hasCancelled && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 border border-rose-200">
-                                  -{i.cancelledQuantity} {i.cancellationReason ? `(${i.cancellationReason.replace('_', ' ')})` : 'cancelled'}
-                                </span>
-                              )}
-                            </div>
-                          );
+            {/* Orders Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-600 font-bold uppercase text-[10px] border-b border-slate-200">
+                    <th className="py-3 px-3">Order ID</th>
+                    <th className="py-3 px-3">Date</th>
+                    <th className="py-3 px-3">Customer</th>
+                    <th className="py-3 px-3">Items & Fulfillment</th>
+                    <th className="py-3 px-3">Total & Refund</th>
+                    <th className="py-3 px-3">Payment</th>
+                    <th className="py-3 px-3">Status</th>
+                    <th className="py-3 px-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {filteredOrders.map((order) => (
+                    <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-3 font-mono font-bold text-slate-900">{order.id}</td>
+                      <td className="py-3 px-3 text-slate-500">
+                        {new Date(order.createdAt).toLocaleDateString('en-IN', {
+                          day: '2-digit',
+                          month: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit',
                         })}
-                      </div>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="font-mono font-bold text-slate-900 block">
-                        {formatINR(order.finalTotal)}
-                      </span>
-                      {order.originalTotal && order.originalTotal !== order.finalTotal && (
-                        <span className="text-[10px] text-slate-400 line-through font-mono block">
-                          Orig: {formatINR(order.originalTotal)}
-                        </span>
-                      )}
-                      {order.refundedAmount && order.refundedAmount > 0 && (
-                        <span className="text-[10px] text-rose-700 font-bold bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200 inline-block mt-0.5">
-                          Refund: {formatINR(order.refundedAmount)}
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="uppercase text-[10px] font-semibold block text-slate-700">
-                        {order.paymentMethod.replace(/_/g, ' ')}
-                      </span>
-                      <span
-                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded inline-block ${
-                          order.paymentStatus === 'verified_paid'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {order.paymentStatus === 'verified_paid' ? 'PAID' : 'PENDING'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span
-                        className={`text-[11px] font-bold px-2 py-0.5 rounded uppercase ${
-                          order.orderStatus === 'delivered'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : order.orderStatus === 'cancelled'
-                            ? 'bg-rose-100 text-rose-800'
-                            : order.orderStatus === 'partially_cancelled'
-                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                            : order.orderStatus === 'awaiting_whatsapp_confirmation'
-                            ? 'bg-amber-100 text-amber-800'
-                            : order.orderStatus === 'out_for_delivery'
-                            ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
-                            : 'bg-blue-100 text-blue-800'
-                        }`}
-                      >
-                        {order.orderStatus.replace(/_/g, ' ')}
-                      </span>
-
-                      {/* Express Courier / Shiprocket or In-House Rider Badge & AWB */}
-                      {order.dispatchDetails ? (
-                        <div className="mt-1 space-y-1 text-[10px]">
-                          {order.dispatchDetails.fulfillmentType === 'express_partner' ? (
-                            <div className="bg-indigo-50/80 border border-indigo-200 text-indigo-900 rounded-md p-1.5 shadow-2xs">
-                              <div className="font-bold flex items-center justify-between text-[10px]">
-                                <span className="flex items-center gap-1">
-                                  <Truck className="w-3 h-3 text-indigo-600" />
-                                  {order.dispatchDetails.carrier} Express
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="font-semibold text-slate-900 block">{order.customer.name}</span>
+                        <span className="text-[11px] text-slate-500">{order.customer.phone}</span>
+                        <span className="text-[10px] text-slate-400 block">{order.customer.area}</span>
+                      </td>
+                      <td className="py-3 px-3 max-w-xs">
+                        <div className="space-y-1">
+                          {order.items.map((i, idx) => {
+                            const active = i.activeQuantity !== undefined ? i.activeQuantity : i.quantity;
+                            const hasCancelled = (i.cancelledQuantity || 0) > 0;
+                            return (
+                              <div key={idx} className="flex items-center gap-1.5 flex-wrap text-xs">
+                                <span
+                                  className={`font-medium ${
+                                    active === 0 ? 'line-through text-slate-400' : 'text-slate-800'
+                                  }`}
+                                >
+                                  {i.productName} ({active > 0 ? `x${active}` : '0 active'})
                                 </span>
-                                {order.dispatchDetails.trackingUrl && (
-                                  <a
-                                    href={order.dispatchDetails.trackingUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5 font-semibold text-[9px]"
-                                    title="Open Live Courier Tracking"
-                                  >
-                                    Track <ExternalLink className="w-2.5 h-2.5" />
-                                  </a>
-                                )}
-                              </div>
-                              <div className="font-mono text-[9px] text-slate-700 mt-0.5">
-                                AWB: <span className="font-bold text-slate-900">{order.dispatchDetails.awbNumber}</span>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="bg-emerald-50/80 border border-emerald-200 text-emerald-900 rounded-md p-1.5 shadow-2xs">
-                              <div className="font-bold flex items-center justify-between text-[10px]">
-                                <span className="flex items-center gap-1">
-                                  <Truck className="w-3 h-3 text-emerald-600" />
-                                  Rider: {order.dispatchDetails.riderName}
-                                </span>
-                                {order.dispatchDetails.riderOtp && (
-                                  <span className="font-mono font-bold text-amber-800 bg-amber-100 px-1 py-0.2 rounded text-[9px]">
-                                    OTP: {order.dispatchDetails.riderOtp}
+                                {hasCancelled && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 border border-rose-200">
+                                    -{i.cancelledQuantity} {i.cancellationReason ? `(${i.cancellationReason.replace('_', ' ')})` : 'cancelled'}
                                   </span>
                                 )}
                               </div>
-                              <div className="text-[9px] text-slate-600 mt-0.5">
-                                Phone: {order.dispatchDetails.riderPhone}
-                              </div>
-                            </div>
-                          )}
-
-                          {order.dispatchDetails.isCod && (
-                            <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center justify-between ${
-                              order.dispatchDetails.codCollectedStatus === 'settled_to_admin'
-                                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
-                                : order.dispatchDetails.codCollectedStatus === 'remitted'
-                                ? 'bg-blue-100 text-blue-900 border border-blue-300'
-                                : order.dispatchDetails.codCollectedStatus === 'collected'
-                                ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                                : 'bg-slate-100 text-slate-700 border border-slate-300'
-                            }`}>
-                              <span>COD: {formatINR(order.dispatchDetails.codAmountToCollect || order.finalTotal)}</span>
-                              <span>
-                                {order.dispatchDetails.codCollectedStatus === 'settled_to_admin'
-                                  ? '✓ Bank Settled'
-                                  : order.dispatchDetails.codCollectedStatus === 'remitted'
-                                  ? '✓ Remitted to Store'
-                                  : order.dispatchDetails.codCollectedStatus === 'collected'
-                                  ? '✓ In Rider Hand'
-                                  : '⏳ Pending Doorstep'}
-                              </span>
-                            </div>
-                          )}
+                            );
+                          })}
                         </div>
-                      ) : order.deliveryStaffName ? (
-                        <span className="text-[10px] text-slate-500 block mt-0.5">
-                          Rider: {order.deliveryStaffName}
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="font-mono font-bold text-slate-900 block">
+                          {formatINR(order.finalTotal)}
                         </span>
-                      ) : null}
-
-                      {order.cancellationDetails && (
-                        <span className="text-[10px] text-rose-700 font-semibold block mt-0.5">
-                          {order.cancellationDetails.primaryReason.replace('_', ' ')}
+                        {order.prepaidDiscount && order.prepaidDiscount > 0 && (
+                          <span className="text-[10px] text-emerald-700 font-semibold block">
+                            Prepaid Disc: -{formatINR(order.prepaidDiscount)}
+                          </span>
+                        )}
+                        {order.codExtraCharge && order.codExtraCharge > 0 && (
+                          <span className="text-[10px] text-amber-800 font-semibold block">
+                            COD Charge: +{formatINR(order.codExtraCharge)}
+                          </span>
+                        )}
+                        {order.originalTotal && order.originalTotal !== order.finalTotal && (
+                          <span className="text-[10px] text-slate-400 line-through font-mono block">
+                            Orig: {formatINR(order.originalTotal)}
+                          </span>
+                        )}
+                        {order.refundedAmount && order.refundedAmount > 0 && (
+                          <span className="text-[10px] text-rose-700 font-bold bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200 inline-block mt-0.5">
+                            Refund: {formatINR(order.refundedAmount)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="uppercase text-[10px] font-semibold block text-slate-700">
+                          {order.paymentMethod.replace(/_/g, ' ')}
                         </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                        {/* Quick state transitions */}
-                        {order.orderStatus === 'awaiting_whatsapp_confirmation' && (
-                          <button
-                            onClick={() =>
-                              updateOrderStatus(
-                                order.id,
-                                'confirmed',
-                                'WhatsApp inquiry confirmed by store manager',
-                                'Store Manager'
-                              )
-                            }
-                            className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-[11px] cursor-pointer"
+                        <span
+                          className={`text-[10px] font-bold px-1.5 py-0.2 rounded inline-block ${
+                            order.paymentStatus === 'verified_paid' || order.paymentStatus === 'paid'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : order.paymentStatus === 'verifying' || order.orderStatus === 'payment_verifying'
+                              ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                              : order.paymentStatus === 'failed'
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {order.paymentStatus === 'verified_paid' || order.paymentStatus === 'paid'
+                            ? 'PAID'
+                            : order.paymentStatus === 'verifying' || order.orderStatus === 'payment_verifying'
+                            ? 'VERIFYING PAYMENT'
+                            : order.paymentStatus === 'failed'
+                            ? 'REJECTED'
+                            : 'PENDING'}
+                        </span>
+
+                        {order.paymentDetails?.screenshotUrl && (
+                          <div className="mt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReviewingPaymentOrder(order);
+                                setPaymentReviewNote('');
+                              }}
+                              className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-[10px] font-bold cursor-pointer"
+                            >
+                              <img
+                                src={order.paymentDetails.screenshotUrl}
+                                alt="Proof"
+                                className="w-4 h-4 rounded object-cover border border-blue-300"
+                              />
+                              <span>View Proof</span>
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 px-3">
+                        {(order.rtoRequest?.status === 'pending_store_approval' ||
+                          order.rtoRequest?.status === 'pending' ||
+                          order.orderStatus === 'return_requested') ? (
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 animate-pulse block">
+                              ⚠️ RTO PENDING STORE APPROVAL
+                            </span>
+                            <span className="text-[10px] text-rose-700 font-semibold block">
+                              Rider: {order.rtoRequest?.riderName || order.deliveryStaffName || 'Rider'}
+                            </span>
+                            <span className="text-[9px] text-slate-500 block truncate max-w-[180px] italic" title={order.rtoRequest?.reasonText || order.rtoRequest?.reason}>
+                              {order.rtoRequest?.reasonText || order.rtoRequest?.reason}
+                            </span>
+                          </div>
+                        ) : (
+                          <span
+                            className={`text-[11px] font-bold px-2 py-0.5 rounded uppercase ${
+                              order.orderStatus === 'delivered'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : order.orderStatus === 'returned'
+                                ? 'bg-rose-100 text-rose-900 border border-rose-300 font-black'
+                                : order.orderStatus === 'cancelled'
+                                ? 'bg-rose-100 text-rose-800'
+                                : order.orderStatus === 'partially_cancelled'
+                                ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                : order.orderStatus === 'payment_verifying'
+                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                : order.orderStatus === 'in_progress'
+                                ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                : order.orderStatus === 'awaiting_whatsapp_confirmation'
+                                ? 'bg-amber-100 text-amber-800'
+                                : order.orderStatus === 'out_for_delivery'
+                                ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}
                           >
-                            Confirm Order
-                          </button>
+                            {order.orderStatus === 'payment_verifying'
+                              ? 'VERIFYING PAYMENT'
+                              : order.orderStatus.replace(/_/g, ' ')}
+                          </span>
                         )}
 
-                        {order.orderStatus === 'confirmed' && (
-                          <button
-                            onClick={() =>
-                              updateOrderStatus(
-                                order.id,
-                                'packed',
-                                'Invoice printed & item packed in warehouse',
-                                'Store Manager'
-                              )
-                            }
-                            className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-[11px] cursor-pointer"
-                          >
-                            Mark Packed
-                          </button>
-                        )}
+                        {/* Express Courier / Shiprocket or In-House Rider Badge & AWB */}
+                        {order.dispatchDetails ? (
+                          <div className="mt-1 space-y-1 text-[10px]">
+                            {order.dispatchDetails.fulfillmentType === 'express_partner' ? (
+                              <div className="bg-indigo-50/80 border border-indigo-200 text-indigo-900 rounded-md p-1.5 shadow-2xs">
+                                <div className="font-bold flex items-center justify-between text-[10px]">
+                                  <span className="flex items-center gap-1">
+                                    <Truck className="w-3 h-3 text-indigo-600" />
+                                    {order.dispatchDetails.carrier} Express
+                                  </span>
+                                  {order.dispatchDetails.trackingUrl && (
+                                    <a
+                                      href={order.dispatchDetails.trackingUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5 font-semibold text-[9px]"
+                                      title="Open Live Courier Tracking"
+                                    >
+                                      Track <ExternalLink className="w-2.5 h-2.5" />
+                                    </a>
+                                  )}
+                                </div>
+                                <div className="font-mono text-[9px] text-slate-700 mt-0.5">
+                                  AWB: <span className="font-bold text-slate-900">{order.dispatchDetails.awbNumber}</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="bg-emerald-50/80 border border-emerald-200 text-emerald-900 rounded-md p-1.5 shadow-2xs">
+                                <div className="font-bold flex items-center justify-between text-[10px]">
+                                  <span className="flex items-center gap-1">
+                                    <Truck className="w-3 h-3 text-emerald-600" />
+                                    Rider: {order.dispatchDetails.riderName}
+                                  </span>
+                                  {order.dispatchDetails.riderOtp && (
+                                    <span className="font-mono font-bold text-amber-800 bg-amber-100 px-1 py-0.2 rounded text-[9px]">
+                                      OTP: {order.dispatchDetails.riderOtp}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[9px] text-slate-600 mt-0.5">
+                                  Phone: {order.dispatchDetails.riderPhone}
+                                </div>
+                              </div>
+                            )}
 
-                        {/* Dispatch Button: Rider vs Shiprocket Express Partner */}
-                        {(order.orderStatus === 'packed' || order.orderStatus === 'confirmed') && (
-                          <button
-                            onClick={() => setDispatchingOrder(order)}
-                            className="px-2.5 py-1 bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded font-bold text-[11px] cursor-pointer flex items-center gap-1 shadow-xs"
-                            title="Choose Option 1 (In-House Rider) or Option 2 (Express Shiprocket Delivery with AWB)"
-                          >
-                            <Truck className="w-3.5 h-3.5" />
-                            <span>Dispatch (Rider / Shiprocket)</span>
-                          </button>
-                        )}
+                            {order.dispatchDetails.isCod && (
+                              <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center justify-between ${
+                                order.dispatchDetails.codCollectedStatus === 'settled_to_admin'
+                                  ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                  : order.dispatchDetails.codCollectedStatus === 'remitted'
+                                  ? 'bg-blue-100 text-blue-900 border border-blue-300'
+                                  : order.dispatchDetails.codCollectedStatus === 'collected'
+                                  ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                  : 'bg-slate-100 text-slate-700 border border-slate-300'
+                              }`}>
+                                <span>COD: {formatINR(order.dispatchDetails.codAmountToCollect || order.finalTotal)}</span>
+                                <span>
+                                  {order.dispatchDetails.codCollectedStatus === 'settled_to_admin'
+                                    ? '✓ Bank Settled'
+                                    : order.dispatchDetails.codCollectedStatus === 'remitted'
+                                    ? '✓ Remitted to Store'
+                                    : order.dispatchDetails.codCollectedStatus === 'collected'
+                                    ? '✓ In Rider Hand'
+                                    : '⏳ Pending Doorstep'}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ) : order.deliveryStaffName ? (
+                          <span className="text-[10px] text-slate-500 block mt-0.5">
+                            Rider: {order.deliveryStaffName}
+                          </span>
+                        ) : null}
 
-                        {/* Out for delivery actions */}
-                        {order.orderStatus === 'out_for_delivery' && (
-                          <>
-                            {/* Courier/AWB details button */}
+                        {order.cancellationDetails && (
+                          <span className="text-[10px] text-rose-700 font-semibold block mt-0.5">
+                            {order.cancellationDetails.primaryReason.replace('_', ' ')}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                          {/* Approve Dynamic UPI Payment & Move to In Progress */}
+                          {(order.paymentStatus === 'verifying' || order.orderStatus === 'payment_verifying') && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (order.paymentDetails?.screenshotUrl) {
+                                  setReviewingPaymentOrder(order);
+                                  setPaymentReviewNote('');
+                                } else {
+                                  const res = approveUpiPayment(order.id);
+                                  setRtoActionFeedback({
+                                    type: res.success ? 'success' : 'error',
+                                    message: res.message,
+                                  });
+                                  setTimeout(() => setRtoActionFeedback(null), 3500);
+                                }
+                              }}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-[11px] cursor-pointer flex items-center gap-1 shadow-xs"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Approve &amp; Confirm</span>
+                            </button>
+                          )}
+
+                          {/* Quick state transitions */}
+                          {order.orderStatus === 'awaiting_whatsapp_confirmation' && (
+                            <button
+                              onClick={() =>
+                                updateOrderStatus(
+                                  order.id,
+                                  'confirmed',
+                                  'WhatsApp inquiry confirmed by store manager',
+                                  'Store Manager'
+                                )
+                              }
+                              className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-[11px] cursor-pointer"
+                            >
+                              Confirm Order
+                            </button>
+                          )}
+
+                          {(order.orderStatus === 'confirmed' || order.orderStatus === 'in_progress') && (
+                            <button
+                              onClick={() =>
+                                updateOrderStatus(
+                                  order.id,
+                                  'packed',
+                                  'Invoice printed & item packed in warehouse',
+                                  'Store Manager'
+                                )
+                              }
+                              className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-[11px] cursor-pointer"
+                            >
+                              Mark Packed
+                            </button>
+                          )}
+
+                          {/* Dispatch Button: Rider vs Shiprocket Express Partner */}
+                          {(order.orderStatus === 'packed' ||
+                            order.orderStatus === 'confirmed' ||
+                            order.orderStatus === 'in_progress') && (
                             <button
                               onClick={() => setDispatchingOrder(order)}
-                              className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded font-semibold text-[10px] cursor-pointer flex items-center gap-1"
-                              title="Update Courier / AWB tracking info"
+                              className="px-2.5 py-1 bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded font-bold text-[11px] cursor-pointer flex items-center gap-1 shadow-xs"
+                              title="Choose Option 1 (In-House Rider) or Option 2 (Express Shiprocket Delivery with AWB)"
                             >
-                              <Truck className="w-3 h-3 text-blue-600" />
-                              <span>AWB / Rider</span>
+                              <Truck className="w-3.5 h-3.5" />
+                              <span>Dispatch (Rider / Shiprocket)</span>
                             </button>
+                          )}
 
-                            {/* Collect COD Button for Doorstep Cash/UPI */}
-                            {(order.paymentMethod === 'cod' || order.dispatchDetails?.isCod) &&
-                              order.paymentStatus !== 'verified_paid' && (
+                          {/* Out for delivery & Manual Mark Delivered actions for Admin and Store */}
+                          {(order.orderStatus === 'out_for_delivery' ||
+                            order.orderStatus === 'assigned_to_delivery' ||
+                            order.orderStatus === 'packed') && (
+                            <>
+                              {order.orderStatus === 'out_for_delivery' && (
                                 <button
-                                  onClick={() => setCollectingCodOrder(order)}
-                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-bold text-[11px] cursor-pointer flex items-center gap-1 shadow-xs"
-                                  title="Record Cash on Delivery collection by rider or courier partner"
+                                  onClick={() => setDispatchingOrder(order)}
+                                  className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded font-semibold text-[10px] cursor-pointer flex items-center gap-1"
+                                  title="Update Courier / AWB tracking info"
                                 >
-                                  <Banknote className="w-3.5 h-3.5" />
-                                  <span>Collect COD</span>
+                                  <Truck className="w-3 h-3 text-blue-600" />
+                                  <span>AWB / Rider</span>
                                 </button>
                               )}
 
-                            {/* Mark Delivered if not COD or COD already received */}
-                            {order.paymentStatus === 'verified_paid' && (
+                              {/* Collect COD Button for Doorstep Cash/UPI */}
+                              {order.orderStatus === 'out_for_delivery' &&
+                                (order.paymentMethod === 'cod' || order.dispatchDetails?.isCod) &&
+                                order.paymentStatus !== 'verified_paid' && (
+                                  <button
+                                    onClick={() => setCollectingCodOrder(order)}
+                                    className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded font-bold text-[11px] cursor-pointer flex items-center gap-1"
+                                    title="Record Cash on Delivery collection by rider or courier partner"
+                                  >
+                                    <Banknote className="w-3.5 h-3.5 text-amber-600" />
+                                    <span>Collect COD</span>
+                                  </button>
+                                )}
+
+                              {/* Manual Mark Delivered Button for Admin & Store */}
                               <button
-                                onClick={() =>
-                                  updateOrderStatus(
-                                    order.id,
-                                    'delivered',
-                                    'Order successfully handed over and completed',
-                                    'Delivery System'
-                                  )
-                                }
-                                className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-[10px] cursor-pointer"
+                                type="button"
+                                onClick={() => {
+                                  const isCod =
+                                    order.paymentMethod === 'cod' || order.dispatchDetails?.isCod;
+                                  const actorLabel = isSuperAdmin
+                                    ? `Admin (${currentUser.name})`
+                                    : `Store (${currentUser.name})`;
+                                  completeDelivery(order.id, {
+                                    collectedAmount: isCod ? order.finalTotal : 0,
+                                    paymentMethodCollected: 'cash',
+                                    receiverName: order.customer.name,
+                                    note: `Manually marked Delivered by ${actorLabel}`,
+                                    deliveryPinEntered: 'MANUAL_ADMIN_STORE',
+                                    verifiedOtp: false,
+                                  });
+                                  setRtoActionFeedback({
+                                    type: 'success',
+                                    message: `Order ${order.id} manually marked as Delivered by ${actorLabel}.`,
+                                  });
+                                  setTimeout(() => setRtoActionFeedback(null), 3500);
+                                }}
+                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-[11px] cursor-pointer flex items-center gap-1 shadow-xs"
+                                title="Manually mark this order as Delivered (Admin / Store Override)"
                               >
-                                Mark Delivered
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Mark Delivered</span>
                               </button>
-                            )}
-                          </>
-                        )}
+                            </>
+                          )}
 
-                        {/* Store Full / Partial Item & Quantity Cancellation (Shortage/Damage/Expiry) */}
-                        {order.orderStatus !== 'cancelled' && order.orderStatus !== 'delivered' && (
-                          <button
-                            onClick={() => setCancellingOrder(order)}
-                            className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded font-bold text-[10px] cursor-pointer flex items-center gap-1 shadow-2xs transition-colors"
-                            title="Cancel whole order or specific SKU/quantity (Shortage, Damage, or Expiry)"
-                          >
-                            <PackageX className="w-3.5 h-3.5 text-rose-600" />
-                            <span>Cancel / Short</span>
-                          </button>
-                        )}
-
-                        {order.paymentStatus !== 'verified_paid' &&
-                          order.paymentMethod !== 'cod' &&
-                          !order.dispatchDetails?.isCod && (
+                          {/* Review RTO Request Action Button */}
+                          {(order.rtoRequest?.status === 'pending_store_approval' ||
+                            order.rtoRequest?.status === 'pending' ||
+                            order.orderStatus === 'return_requested') && (
                             <button
-                              onClick={() => verifyOrderPayment(order.id)}
-                              className="px-2 py-1 bg-slate-800 hover:bg-slate-900 text-white rounded font-bold text-[10px] cursor-pointer"
-                              title="Verify Payment"
+                              type="button"
+                              onClick={() => {
+                                setReviewingRtoOrder(order);
+                                setRtoReviewDecision('approved');
+                                setRtoReviewNotes('RTO approved. Package received back into store shelf inventory.');
+                              }}
+                              className="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded font-bold text-[11px] cursor-pointer shadow-xs flex items-center gap-1 animate-pulse"
+                              title="Review RTO failure reason and approve package return or instruct re-delivery"
                             >
-                              Mark Paid
+                              <RotateCcw className="w-3 h-3" />
+                              <span>Review RTO</span>
                             </button>
                           )}
+
+                          {/* Store Full / Partial Item & Quantity Cancellation (Shortage/Damage/Expiry) */}
+                          {order.orderStatus !== 'cancelled' && order.orderStatus !== 'delivered' && (
+                            <button
+                              onClick={() => setCancellingOrder(order)}
+                              className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded font-bold text-[10px] cursor-pointer flex items-center gap-1 shadow-2xs transition-colors"
+                              title="Cancel whole order or specific SKU/quantity (Shortage, Damage, or Expiry)"
+                            >
+                              <PackageX className="w-3.5 h-3.5 text-rose-600" />
+                              <span>Cancel / Short</span>
+                            </button>
+                          )}
+
+                          {order.paymentStatus !== 'verified_paid' &&
+                            order.paymentStatus !== 'verifying' &&
+                            order.orderStatus !== 'payment_verifying' &&
+                            order.paymentMethod !== 'cod' &&
+                            !order.dispatchDetails?.isCod && (
+                              <button
+                                onClick={() => verifyOrderPayment(order.id)}
+                                className="px-2 py-1 bg-slate-800 hover:bg-slate-900 text-white rounded font-bold text-[10px] cursor-pointer"
+                                title="Verify Payment"
+                              >
+                                Mark Paid
+                              </button>
+                            )}
 
                         {/* Print Invoice */}
                         <button
@@ -1551,7 +2069,13 @@ export const AdminDashboard: React.FC = () => {
               </tbody>
             </table>
           </div>
+          </div>
         </div>
+      )}
+
+      {/* TAB: RETURNS, REFUNDS & EXCHANGES */}
+      {activeTab === 'returns_refunds' && (
+        <ReturnRefundManager />
       )}
 
       {/* TAB 3: INVENTORY & STOCK MOVEMENTS */}
@@ -1583,8 +2107,11 @@ export const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {products.map((p) => {
-                    const available = p.stock.onHand - p.stock.reserved;
+                  {scopedProducts.map((p) => {
+                    const storeListing = p.sellerListings?.find((sl) => sl.outletId === myStoreId);
+                    const onHandStock = (!isSuperAdmin && storeListing) ? storeListing.stock : p.stock.onHand;
+                    const reservedStock = (!isSuperAdmin && storeListing) ? Math.min(storeListing.stock, p.stock.reserved) : p.stock.reserved;
+                    const available = onHandStock - reservedStock;
                     const isLow = available <= p.stock.minStockLevel;
 
                     return (
@@ -1594,9 +2121,9 @@ export const AdminDashboard: React.FC = () => {
                           <span className="text-[10px] text-slate-400 block">{p.brand}</span>
                         </td>
                         <td className="py-3 px-3 font-mono text-slate-600">{p.sku}</td>
-                        <td className="py-3 px-3 text-center font-mono font-semibold">{p.stock.onHand}</td>
+                        <td className="py-3 px-3 text-center font-mono font-semibold">{onHandStock}</td>
                         <td className="py-3 px-3 text-center font-mono text-amber-600 font-semibold">
-                          {p.stock.reserved}
+                          {reservedStock}
                         </td>
                         <td className="py-3 px-3 text-center font-mono">
                           <span
@@ -1730,6 +2257,16 @@ export const AdminDashboard: React.FC = () => {
 
               <button
                 type="button"
+                onClick={() => setActiveTab('categories_mgmt')}
+                className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
+                title="Open Category-Based Product Listing Formats to upload by category format or manage templates"
+              >
+                <FolderTree className="w-3.5 h-3.5 text-indigo-600" />
+                <span>📋 Category Formats</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setShowStandaloneVolumetricModal(true)}
                 className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
                 title="Open Volumetric (Dimensional) Weight Calculator for couriers"
@@ -1768,7 +2305,7 @@ export const AdminDashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {products.map((p) => {
+                {scopedProducts.map((p) => {
                   const currentPrice = p.dealPrice || p.regularPrice;
                   const margin = currentPrice - p.purchaseCost;
                   const marginPct = Math.round((margin / currentPrice) * 100);
@@ -1930,6 +2467,20 @@ export const AdminDashboard: React.FC = () => {
                             <Sparkles className="w-3 h-3 text-indigo-600" />
                             <span>AI Edit</span>
                           </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedProductForPromoRequest(p.id);
+                              setMenuGroupFilter('catalog');
+                              setActiveTab('promotional_pages');
+                            }}
+                            className="px-2.5 py-1 bg-gradient-to-r from-amber-500 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-white rounded-lg text-[11px] font-bold cursor-pointer transition-colors inline-flex items-center gap-1 shadow-2xs"
+                            title="Request a dedicated Promotional Landing Page and JE Assured Review for this product"
+                          >
+                            <Flame className="w-3 h-3 fill-amber-200 text-amber-200" />
+                            <span>Request Promo</span>
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1946,8 +2497,29 @@ export const AdminDashboard: React.FC = () => {
         <DeliveryZoneManager />
       )}
 
+      {/* TAB: COUPONS & REFER & EARN HUB (SUPER ADMIN ONLY) */}
+      {activeTab === 'coupons_referrals' && isSuperAdmin && <ReferralAndCouponManager />}
+
+      {/* TAB: PROMOTIONS & DEDICATED LANDING PAGES + JE ASSURED SOP (STORE + SUPER ADMIN) */}
+      {activeTab === 'promotional_pages' && (
+        <PromotionalPagesManager
+          preselectedProductId={selectedProductForPromoRequest}
+          initialOpenRequestModal={Boolean(selectedProductForPromoRequest)}
+          onClearPreselectedProduct={() => setSelectedProductForPromoRequest(null)}
+        />
+      )}
+
+      {/* TAB: MAHA SALE PARTICIPATION & FLASH DEALS CAMPAIGNS (STORE + SUPER ADMIN) */}
+      {activeTab === 'maha_sale_campaigns' && <MahaSaleCampaignManager />}
+
       {/* TAB 6: FESTIVE CAMPAIGNS (SUPER ADMIN ONLY) */}
       {activeTab === 'campaigns' && isSuperAdmin && <FestivalCampaignManager />}
+
+      {/* TAB: SEO, GOOGLE CRAWLER, SITEMAPS & MARKETING */}
+      {activeTab === 'seo_marketing' && <SeoMarketingHub />}
+
+      {/* TAB: CHATBOT AI & KNOWLEDGE BASE TRAINING (SUPER ADMIN ONLY) */}
+      {activeTab === 'chatbot_ai' && isSuperAdmin && <ChatbotAiTrainingManager />}
 
       {/* TAB 7: SETTINGS (SUPER ADMIN ONLY) */}
       {activeTab === 'settings' && isSuperAdmin && (
@@ -2003,6 +2575,71 @@ export const AdminDashboard: React.FC = () => {
                 onChange={(e) => setFreeShipEdit(Number(e.target.value))}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono"
               />
+            </div>
+
+            {/* Quality Guarantee & Assured Badge Settings (Formerly Value 365) */}
+            <div className="pt-3 border-t border-slate-200">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Store Quality Badge (Renamed from "Value 365" to "JE Assured")</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Displayed on verified genuine products, category filters, and landing pages.
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={assuredBadgeEnabledEdit}
+                    onChange={(e) => setAssuredBadgeEnabledEdit(e.target.checked)}
+                    className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 border-slate-300"
+                  />
+                  <span className="text-xs font-semibold text-slate-700">Enable Badge</span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Badge Title / Name:</label>
+                  <input
+                    type="text"
+                    value={assuredBadgeNameEdit}
+                    onChange={(e) => setAssuredBadgeNameEdit(e.target.value)}
+                    placeholder="e.g. JE Assured"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg font-bold"
+                  />
+                  <span className="text-[10px] text-slate-400">Replaced legacy "Value 365"</span>
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Assurance Tagline:</label>
+                  <input
+                    type="text"
+                    value={assuredTaglineEdit}
+                    onChange={(e) => setAssuredTaglineEdit(e.target.value)}
+                    placeholder="e.g. 100% Genuine • Tested Quality & Brand Warranty"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Badge Preview */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-3">
+                <span className="text-[11px] text-slate-500 font-medium">Customer View Preview:</span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-black text-white shadow-xs tracking-wide uppercase"
+                    style={{ background: assuredBadgeColorEdit }}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                    <span>{assuredBadgeNameEdit || 'JE Assured'}</span>
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-medium hidden sm:inline">
+                    {assuredTaglineEdit}
+                  </span>
+                </div>
+              </div>
             </div>
 
             <div className="pt-2">
@@ -2078,6 +2715,11 @@ export const AdminDashboard: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {/* Store Delivery Radius & Coverage Zone Map inside Settings */}
+          <div className="mt-8 pt-6 border-t border-slate-200">
+            <DeliveryRadiusMap />
+          </div>
         </div>
       )}
 
@@ -2139,6 +2781,11 @@ export const AdminDashboard: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Interactive Store Delivery Radius Configuration for Store Manager */}
+          <div className="pt-4 border-t border-slate-200">
+            <DeliveryRadiusMap />
+          </div>
         </div>
       )}
 
@@ -2151,8 +2798,18 @@ export const AdminDashboard: React.FC = () => {
       {/* TAB: BARCODES & GTIN LOOKUP */}
       {activeTab === 'barcodes' && <BarcodeCatalogManager />}
 
-      {/* TAB: BUSINESS CATEGORY APPROVALS (SUPER ADMIN) */}
-      {activeTab === 'categories_mgmt' && isSuperAdmin && <CategoryApprovalManager />}
+      {/* TAB: SEPARATE CATEGORY & SUBCATEGORY MASTER SECTION */}
+      {activeTab === 'categories_master' && <CategoryMasterManager />}
+
+      {/* TAB: BUSINESS CATEGORY APPROVALS & CATEGORY LISTING FORMATS (ADMIN & STORE) */}
+      {activeTab === 'categories_mgmt' && (
+        <CategoryApprovalManager
+          onOpenProductStudioWithCategory={() => {
+            setProductForAiEdit(null);
+            setShowAiProductModal(true);
+          }}
+        />
+      )}
 
       {/* TAB: PAYOUTS & FINANCIAL SUBLEDGER (SUPER ADMIN) */}
       {activeTab === 'payouts' && isSuperAdmin && <PayoutsLedgerManager />}
@@ -2182,13 +2839,13 @@ export const AdminDashboard: React.FC = () => {
       {activeTab === 'payment_gateways' && isSuperAdmin && <PaymentGatewaysManager />}
 
       {/* TAB: STORE POS COUNTER TERMINAL */}
-      {activeTab === 'pos' && <POSTerminal />}
+      {activeTab === 'pos' && <POSTerminal onClose={() => setActiveTab('overview')} isFullScreenMode={true} />}
 
-      {/* TAB: SOP & SLA OPERATIONS MATRIX */}
-      {activeTab === 'sop_sla' && <SopSlaMatrixSection />}
+      {/* TAB: SOP & SLA OPERATIONS MATRIX (SUPER ADMIN ONLY) */}
+      {activeTab === 'sop_sla' && isSuperAdmin && <SopSlaMatrixSection />}
 
-      {/* TAB: EXPRESS DELIVERY & SHIPROCKET PARTNER MANAGER */}
-      {activeTab === 'express_delivery' && <DeliveryPartnerManager />}
+      {/* TAB: EXPRESS DELIVERY & SHIPROCKET PARTNER MANAGER (SUPER ADMIN ONLY) */}
+      {activeTab === 'express_delivery' && isSuperAdmin && <DeliveryPartnerManager />}
 
       {/* TAB: AI PRODUCT ASSISTANT & ADD PRODUCT */}
       {activeTab === 'ai_assistant' && (
@@ -2317,7 +2974,7 @@ export const AdminDashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {products.map((p) => (
+                {scopedProducts.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50">
                     <td className="py-3 px-3 font-bold text-slate-900">
                       {p.name}
@@ -2593,23 +3250,81 @@ export const AdminDashboard: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Category</label>
-                  <select
-                    value={newProdCategory}
-                    onChange={(e) => setNewProdCategory(e.target.value as any)}
-                    className="w-full p-2 border rounded bg-white"
-                  >
-                    <option value="smartphones">Smartphones</option>
-                    <option value="audio">Audio & Headphones</option>
-                    <option value="chargers_cables">Chargers & Cables</option>
-                    <option value="smartwatches">Smartwatches</option>
-                    <option value="tvs_accessories">Smart TVs</option>
-                    <option value="computer_accessories">Computer Accessories</option>
-                    <option value="home_electronics">Home Electronics</option>
-                    <option value="small_appliances">Small Appliances</option>
-                  </select>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-semibold text-slate-700">Category *</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowQuickAddCat((p) => !p)}
+                      className="text-[11px] font-bold text-blue-600 hover:underline cursor-pointer"
+                    >
+                      {showQuickAddCat ? 'Cancel' : '+ Write Custom Category'}
+                    </button>
+                  </div>
+                    <select
+                      value={newProdCategory}
+                      onChange={(e) => {
+                        if (e.target.value === '__add_new__' || e.target.value === 'other') {
+                          setShowQuickAddCat(true);
+                          setNewProdCategory('other');
+                        } else {
+                          setNewProdCategory(e.target.value as ProductCategory);
+                        }
+                      }}
+                      className="w-full p-2 border rounded bg-white text-xs font-semibold"
+                    >
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </option>
+                      ))}
+                      <option value="__add_new__">✍️ Other (Write Your Category Name)...</option>
+                    </select>
+
+                    {(showQuickAddCat || newProdCategory === 'other') && (
+                      <div className="mt-2 p-2.5 bg-indigo-50 border border-indigo-200 rounded-lg space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-indigo-900">
+                            ✍️ Enter Custom Category Name:
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setShowQuickAddCat(false)}
+                            className="text-[10px] text-slate-500 hover:text-slate-700"
+                          >
+                            Hide
+                          </button>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <input
+                            type="text"
+                            value={quickNewCatName}
+                            onChange={(e) => setQuickNewCatName(e.target.value)}
+                            placeholder="e.g. Footwear, Luggage, Sports & Fitness..."
+                            className="flex-1 px-2 py-1.5 bg-white border border-indigo-300 rounded text-xs font-medium text-slate-900"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!quickNewCatName.trim()) return;
+                              const res = addCategory({
+                                name: quickNewCatName.trim(),
+                                defaultGstRate: newProdGstRate || 18,
+                              });
+                              if (res.success && res.category) {
+                                setNewProdCategory(res.category.id);
+                                setQuickNewCatName('');
+                                setShowQuickAddCat(false);
+                              }
+                            }}
+                            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[11px] font-bold cursor-pointer"
+                          >
+                            Add &amp; Select
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
 
               <div className={`grid ${isSuperAdmin ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
                 <div>
@@ -2894,6 +3609,283 @@ export const AdminDashboard: React.FC = () => {
           isOpen={showStandaloneVolumetricModal}
           onClose={() => setShowStandaloneVolumetricModal(false)}
         />
+      )}
+
+      {/* RTO Review Modal for Store Manager & Admin */}
+      {reviewingRtoOrder && (
+        <div
+          onClick={() => setReviewingRtoOrder(null)}
+          className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 my-auto"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
+              <div className="flex items-center gap-2">
+                <RotateCcw className="w-5 h-5 text-rose-600" />
+                <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                  Store Review: RTO Return Request ({reviewingRtoOrder.id})
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReviewingRtoOrder(null)}
+                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="bg-rose-50 border border-rose-200 rounded-xl p-3.5 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-rose-950 uppercase text-[11px] tracking-wider">
+                    Reported RTO Reason:
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-500">
+                    {reviewingRtoOrder.rtoRequest?.requestedAt
+                      ? new Date(reviewingRtoOrder.rtoRequest.requestedAt).toLocaleString()
+                      : 'Just now'}
+                  </span>
+                </div>
+                <p className="text-rose-900 font-bold text-xs">
+                  {reviewingRtoOrder.rtoRequest?.reasonText || reviewingRtoOrder.rtoRequest?.reason}
+                </p>
+                {reviewingRtoOrder.rtoRequest?.riderNotes && (
+                  <p className="text-slate-700 text-[11px] bg-white p-2.5 rounded-lg border border-rose-100 italic">
+                    <strong>Rider Note:</strong> &quot;{reviewingRtoOrder.rtoRequest.riderNotes}&quot;
+                  </p>
+                )}
+                <p className="text-slate-500 text-[11px]">
+                  <strong>Assigned Rider:</strong> {reviewingRtoOrder.rtoRequest?.riderName || reviewingRtoOrder.deliveryStaffName || 'In-House Rider'}
+                </p>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1">
+                <p><strong>Customer:</strong> {reviewingRtoOrder.customer.name} ({reviewingRtoOrder.shippingAddress?.phone || reviewingRtoOrder.customer.phone})</p>
+                <p className="text-slate-500"><strong>Address:</strong> {reviewingRtoOrder.shippingAddress?.addressLine || reviewingRtoOrder.customer.address}, {reviewingRtoOrder.shippingAddress?.city || 'Nalasopara'}</p>
+                <p><strong>Total:</strong> <span className="font-mono font-bold text-slate-900">{formatINR(reviewingRtoOrder.finalTotal)}</span> ({reviewingRtoOrder.paymentMethod.toUpperCase()})</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="font-bold text-slate-800 block">Store Decision:</label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRtoReviewDecision('approved');
+                      setRtoReviewNotes('RTO approved. Package received back into store shelf inventory.');
+                    }}
+                    className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                      rtoReviewDecision === 'approved'
+                        ? 'bg-emerald-50 border-emerald-400 text-emerald-950 font-bold shadow-2xs'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Approve & Restock</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1 font-normal leading-relaxed">
+                      Accept package return. Automatically restocks product units into store shelf inventory.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRtoReviewDecision('rejected');
+                      setRtoReviewNotes('Store contacted customer and customer is reachable. Please re-attempt doorstep delivery immediately!');
+                    }}
+                    className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                      rtoReviewDecision === 'rejected'
+                        ? 'bg-rose-50 border-rose-400 text-rose-950 font-bold shadow-2xs'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-rose-800">
+                      <X className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>Reject & Re-deliver</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1 font-normal leading-relaxed">
+                      Decline RTO. Sends an urgent instruction popup to the rider to re-attempt doorstep delivery.
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  Manager Review Notes / Instruction to Rider:
+                </label>
+                <textarea
+                  rows={2}
+                  value={rtoReviewNotes}
+                  onChange={(e) => setRtoReviewNotes(e.target.value)}
+                  className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setReviewingRtoOrder(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const res = reviewOrderRto(reviewingRtoOrder.id, rtoReviewDecision, rtoReviewNotes);
+                    setRtoActionFeedback({
+                      type: res.success ? 'success' : 'error',
+                      message: res.message,
+                    });
+                    setReviewingRtoOrder(null);
+                    setTimeout(() => setRtoActionFeedback(null), 4000);
+                  }}
+                  className={`px-5 py-2 text-white rounded-xl font-bold cursor-pointer shadow-sm transition-colors ${
+                    rtoReviewDecision === 'approved'
+                      ? 'bg-emerald-600 hover:bg-emerald-500'
+                      : 'bg-rose-600 hover:bg-rose-500'
+                  }`}
+                >
+                  Confirm {rtoReviewDecision === 'approved' ? 'Approval & Restock' : 'Rejection & Re-attempt'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* UPI Payment Screenshot Review & Approval Modal */}
+      {reviewingPaymentOrder && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 max-w-md w-full overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-4 border-b border-slate-200 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <QrCode className="w-5 h-5 text-emerald-400" />
+                <div>
+                  <h3 className="text-sm font-black">Verify UPI Payment</h3>
+                  <p className="text-[11px] text-slate-300 font-mono">
+                    {reviewingPaymentOrder.id} • {formatINR(reviewingPaymentOrder.finalTotal)}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setReviewingPaymentOrder(null)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4 text-xs">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                <div>
+                  <div className="font-bold text-slate-900">{reviewingPaymentOrder.customer.name}</div>
+                  <div className="text-[11px] text-slate-500">{reviewingPaymentOrder.customer.phone}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-black text-emerald-700">
+                    {formatINR(reviewingPaymentOrder.finalTotal)}
+                  </div>
+                  {reviewingPaymentOrder.paymentDetails?.utrNumber && (
+                    <div className="text-[10px] font-mono text-slate-600">
+                      UTR: {reviewingPaymentOrder.paymentDetails.utrNumber}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {reviewingPaymentOrder.paymentDetails?.screenshotUrl ? (
+                <div className="rounded-xl border border-slate-200 overflow-hidden bg-slate-100">
+                  <img
+                    src={reviewingPaymentOrder.paymentDetails.screenshotUrl}
+                    alt="Payment Screenshot"
+                    className="w-full max-h-80 object-contain mx-auto"
+                  />
+                </div>
+              ) : (
+                <div className="p-6 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-500">
+                  No payment screenshot uploaded.
+                </div>
+              )}
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  Note (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={paymentReviewNote}
+                  onChange={(e) => setPaymentReviewNote(e.target.value)}
+                  placeholder="Optional verification note..."
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
+                {reviewingPaymentOrder.paymentStatus !== 'verified_paid' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      rejectUpiPayment(
+                        reviewingPaymentOrder.id,
+                        paymentReviewNote || 'Payment not received'
+                      );
+                      setRtoActionFeedback({
+                        type: 'error',
+                        message: `Order ${reviewingPaymentOrder.id} payment rejected.`,
+                      });
+                      setReviewingPaymentOrder(null);
+                      setTimeout(() => setRtoActionFeedback(null), 4000);
+                    }}
+                    className="px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl font-bold cursor-pointer transition-colors"
+                  >
+                    Reject
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    approveUpiPayment(reviewingPaymentOrder.id, paymentReviewNote);
+                    setRtoActionFeedback({
+                      type: 'success',
+                      message: `Payment approved! Order ${reviewingPaymentOrder.id} moved to In Progress.`,
+                    });
+                    setReviewingPaymentOrder(null);
+                    setTimeout(() => setRtoActionFeedback(null), 4000);
+                  }}
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold cursor-pointer shadow-xs transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Approve Payment & Confirm Order</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RTO Action Toast Notification */}
+      {rtoActionFeedback && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 p-4 rounded-xl shadow-xl border text-xs font-bold flex items-center gap-2 animate-in slide-in-from-bottom duration-200 ${
+            rtoActionFeedback.type === 'success'
+              ? 'bg-emerald-900 text-white border-emerald-700'
+              : 'bg-rose-900 text-white border-rose-700'
+          }`}
+        >
+          {rtoActionFeedback.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          ) : (
+            <AlertTriangle className="w-4 h-4 text-rose-400" />
+          )}
+          <span>{rtoActionFeedback.message}</span>
+        </div>
       )}
     </div>
   );

@@ -62,7 +62,7 @@ export const CartDrawer: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/60 backdrop-blur-xs flex justify-end">
-      <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-300">
+      <div className="w-full max-w-md bg-white h-full pb-14 shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-300">
         {/* Header */}
         <div className="p-4 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -329,15 +329,10 @@ export const CartDrawer: React.FC = () => {
               </div>
             </div>
 
-            {/* Express Delivery & COD Guarantee Info */}
-            <div className="bg-indigo-50/70 border border-indigo-100 rounded-lg p-2.5 text-[11px] space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-indigo-950">
-                <Truck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                <span>Express Shiprocket & Local Rider Delivery</span>
-              </div>
-              <p className="text-[10px] text-indigo-800 leading-tight">
-                Live AWB tracking on order confirmation. Both <strong>Prepaid</strong> &amp; <strong>Cash on Delivery (COD)</strong> supported with OTP verification.
-              </p>
+            {/* Discreet Trust Note */}
+            <div className="flex items-center justify-center gap-2 text-[11px] text-slate-500 py-1">
+              <Truck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Doorstep Delivery &amp; COD Available</span>
             </div>
 
             {/* Proceed Actions */}

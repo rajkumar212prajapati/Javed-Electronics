@@ -3,11 +3,13 @@ import { useStore } from '../../context/StoreContext';
 import { ProductCard } from './ProductCard';
 import { Product } from '../../types';
 import { SlidersHorizontal, ArrowUpDown, X, Tag } from 'lucide-react';
+import { matchProductSearch } from '../../utils/searchUtils';
 
 export const ProductGrid: React.FC = () => {
   const {
     products,
     selectedCategory,
+    selectedSubCategory,
     searchQuery,
     setSearchQuery,
     selectedBrand,
@@ -18,6 +20,7 @@ export const ProductGrid: React.FC = () => {
     setActiveBudgetFilter,
     activeActivityFilter,
     setActiveActivityFilter,
+    settings,
   } = useStore();
 
   const [activeQuickFilter, setActiveQuickFilter] = useState<
@@ -37,8 +40,15 @@ export const ProductGrid: React.FC = () => {
       // 1. Published only
       if (p.status !== 'published') return false;
 
-      // 2. Category
+      // 2. Category & Subcategory
       if (selectedCategory !== 'all' && p.categoryId !== selectedCategory) {
+        return false;
+      }
+      if (
+        selectedSubCategory !== 'all' &&
+        p.subCategoryId &&
+        p.subCategoryId !== selectedSubCategory
+      ) {
         return false;
       }
 
@@ -58,14 +68,10 @@ export const ProductGrid: React.FC = () => {
       // 4b. Budget filter from Price Sale Base
       if (activeBudgetFilter !== null && price > activeBudgetFilter) return false;
 
-      // 5. Search query
+      // 5. Smart Fuzzy & Multi-Token Search query (matches half words, similar terms, category/brand)
       if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
-        const matchName = p.name.toLowerCase().includes(query);
-        const matchBrand = p.brand.toLowerCase().includes(query);
-        const matchSku = p.sku.toLowerCase().includes(query);
-        const matchDesc = p.description.toLowerCase().includes(query);
-        if (!matchName && !matchBrand && !matchSku && !matchDesc) {
+        const matchResult = matchProductSearch(p, searchQuery);
+        if (!matchResult.matches) {
           return false;
         }
       }
@@ -83,9 +89,17 @@ export const ProductGrid: React.FC = () => {
         const discB = b.mrp > priceB ? (b.mrp - priceB) / b.mrp : 0;
         return discB - discA;
       }
+
+      // Default featured sort: if search is active, prioritize highest search match score
+      if (searchQuery.trim()) {
+        const scoreA = matchProductSearch(a, searchQuery).score;
+        const scoreB = matchProductSearch(b, searchQuery).score;
+        if (scoreB !== scoreA) return scoreB - scoreA;
+      }
+
       return 0; // featured default
     });
-  }, [products, selectedCategory, selectedBrand, activeQuickFilter, searchQuery, sortBy]);
+  }, [products, selectedCategory, selectedSubCategory, selectedBrand, activeQuickFilter, searchQuery, sortBy, activeBudgetFilter]);
 
   const quickFilterTabs: {
     id: 'all' | 'trending' | 'bestsellers' | 'deals' | 'under2000' | 'new_arrivals';
@@ -114,10 +128,10 @@ export const ProductGrid: React.FC = () => {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveQuickFilter(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
                   activeQuickFilter === tab.id
-                    ? 'bg-blue-600 text-white shadow-2xs'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    ? 'bg-slate-900 text-white shadow-xs border-slate-900'
+                    : 'bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900 border-slate-200/90 shadow-2xs font-semibold'
                 }`}
               >
                 {tab.label}
@@ -162,7 +176,7 @@ export const ProductGrid: React.FC = () => {
                 Showing <strong>{filteredProducts.length}</strong> items
                 {searchQuery && <> for &ldquo;<strong>{searchQuery}</strong>&rdquo;</>}
                 {selectedBrand !== 'all' && <> in <strong>{selectedBrand}</strong></>}
-                {activeBudgetFilter !== null && <> in <strong>Value 365</strong></>}
+                {activeBudgetFilter !== null && <> in <strong>{settings.assuredBadgeName || 'JE Assured'}</strong></>}
               </span>
             </div>
 

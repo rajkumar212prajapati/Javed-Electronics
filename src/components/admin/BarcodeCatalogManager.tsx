@@ -154,22 +154,42 @@ export const BarcodeCatalogManager: React.FC = () => {
                     </span>
                   </div>
                 </div>
-                <div className="text-right">
-                  <span className="text-[10px] text-emerald-300 block">
-                    {isSuperAdmin ? 'Available Across' : 'Store Status'}
-                  </span>
-                  <span className="font-bold text-white font-mono">
-                    {isSuperAdmin ? `${scannedResult.outletAvailability.length} Branches` : `${myStoreOutlet?.name || 'In Store'}`}
-                  </span>
+                <div className="flex items-center justify-between sm:justify-end gap-3">
+                  <div className="text-left sm:text-right">
+                    <span className="text-[10px] text-emerald-300 block">
+                      {isSuperAdmin ? 'Available Across' : 'Store Status'}
+                    </span>
+                    <span className="font-bold text-white font-mono">
+                      {isSuperAdmin ? `${scannedResult.outletAvailability.length} Branches` : `${myStoreOutlet?.name || 'In Store'}`}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setScannedResult(undefined)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-900/90 hover:bg-rose-600 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer shrink-0"
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                    <span>Close Preview</span>
+                  </button>
                 </div>
               </div>
             ) : (
-              <div className="bg-rose-950/80 border border-rose-500/40 rounded-xl p-3.5 flex items-center gap-3 text-xs text-rose-200">
-                <AlertTriangle className="w-6 h-6 text-rose-400 shrink-0" />
-                <div>
-                  <span className="font-bold">Barcode Not Found: </span>
-                  No registered product matching barcode &quot;{scanInput}&quot; was found. Click below to register it.
+              <div className="bg-rose-950/80 border border-rose-500/40 rounded-xl p-3.5 flex items-center justify-between gap-3 text-xs text-rose-200">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="w-6 h-6 text-rose-400 shrink-0" />
+                  <div>
+                    <span className="font-bold">Barcode Not Found: </span>
+                    No registered product matching barcode &quot;{scanInput}&quot; was found. Click below to register it.
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setScannedResult(undefined)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-900/90 hover:bg-rose-600 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer shrink-0"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  <span>Close</span>
+                </button>
               </div>
             )}
           </div>

@@ -26,7 +26,7 @@ export const RoleSwitcherBanner: React.FC = () => {
       shortLabel: 'Customer',
       icon: <User className="w-3.5 h-3.5 shrink-0" />,
       desc: 'Browse, Cart, Dynamic QR & WhatsApp Checkout',
-      badgeColor: 'bg-blue-600 text-white',
+      badgeColor: 'bg-blue-600 text-white shadow-xs',
     },
     {
       role: 'store_manager',
@@ -34,7 +34,7 @@ export const RoleSwitcherBanner: React.FC = () => {
       shortLabel: 'Manager',
       icon: <Store className="w-3.5 h-3.5 shrink-0" />,
       desc: 'Process Orders, Packing, Stock Adjustments',
-      badgeColor: 'bg-emerald-600 text-white',
+      badgeColor: 'bg-emerald-600 text-white shadow-xs',
     },
     {
       role: 'super_admin',
@@ -42,7 +42,7 @@ export const RoleSwitcherBanner: React.FC = () => {
       shortLabel: 'Admin',
       icon: <ShieldCheck className="w-3.5 h-3.5 shrink-0" />,
       desc: 'Financials, Margins, Valuation, Settings',
-      badgeColor: 'bg-purple-600 text-white',
+      badgeColor: 'bg-indigo-600 text-white shadow-xs ring-1 ring-white/30',
     },
     {
       role: 'delivery_staff',
@@ -50,7 +50,7 @@ export const RoleSwitcherBanner: React.FC = () => {
       shortLabel: 'Rider',
       icon: <Bike className="w-3.5 h-3.5 shrink-0" />,
       desc: 'Assigned Orders, COD Collection & Proof',
-      badgeColor: 'bg-amber-600 text-white',
+      badgeColor: 'bg-teal-600 text-white shadow-xs',
     },
   ];
 
